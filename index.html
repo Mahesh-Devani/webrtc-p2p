@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Connect — Serverless WebRTC</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ─── HEADER ─── -->
+    <header>
+      <h1>P2P Connect</h1>
+      <p class="subtitle">Serverless WebRTC Communication</p>
+      <div id="connection-badge" class="badge badge--idle">
+        <span class="badge__dot"></span>
+        <span id="connection-label">Idle</span>
+      </div>
+    </header>
+
+    <!-- ─── TURN CONFIG (collapsible) ─── -->
+    <details id="turn-panel" class="panel">
+      <summary>TURN Server Configuration <span class="hint">(fallback relay)</span></summary>
+      <div class="panel__body">
+        <p class="help-text">
+          Direct connections work on most networks. If you're behind a strict NAT/firewall,
+          configure a TURN server so traffic can be relayed.
+        </p>
+        <div class="form-row">
+          <label for="turn-url">TURN URL</label>
+          <input id="turn-url" type="text" placeholder="turn:your-server.com:3478">
+        </div>
+        <div class="form-row">
+          <label for="turn-user">Username</label>
+          <input id="turn-user" type="text" placeholder="username">
+        </div>
+        <div class="form-row">
+          <label for="turn-cred">Credential</label>
+          <input id="turn-cred" type="password" placeholder="credential">
+        </div>
+        <button id="btn-save-turn" class="btn btn--secondary">Save TURN Config</button>
+      </div>
+    </details>
+
+    <!-- ─── SESSION SETUP ─── -->
+    <section id="session-section" class="section">
+      <h2>Session Setup</h2>
+
+      <div id="role-chooser" class="role-chooser">
+        <button id="btn-create" class="btn btn--primary btn--large">
+          <span class="btn__icon">➕</span>
+          Create Session
+          <span class="btn__sub">Generate invite for the other peer</span>
+        </button>
+        <button id="btn-join" class="btn btn--primary btn--large">
+          <span class="btn__icon">🔗</span>
+          Join Session
+          <span class="btn__sub">Paste an invite you received</span>
+        </button>
+      </div>
+
+      <!-- CREATE FLOW -->
+      <div id="flow-create" class="flow hidden">
+        <div class="stepper">
+          <div class="step" data-step="1">
+            <div class="step__header">
+              <span class="step__num">1</span>
+              <span class="step__title">Copy your invite token &amp; send it to the other peer</span>
+            </div>
+            <div class="step__body">
+              <textarea id="offer-out" readonly rows="5" placeholder="Generating invite token…"></textarea>
+              <div class="btn-row">
+                <button id="btn-copy-offer" class="btn btn--secondary" disabled>Copy Token</button>
+              </div>
+            </div>
+          </div>
+          <div class="step" data-step="2">
+            <div class="step__header">
+              <span class="step__num">2</span>
+              <span class="step__title">Paste the answer token you received back</span>
+            </div>
+            <div class="step__body">
+              <textarea id="answer-in" rows="5" placeholder="Paste answer token here…"></textarea>
+              <div class="btn-row">
+                <button id="btn-accept-answer" class="btn btn--primary">Accept Answer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JOIN FLOW -->
+      <div id="flow-join" class="flow hidden">
+        <div class="stepper">
+          <div class="step" data-step="1">
+            <div class="step__header">
+              <span class="step__num">1</span>
+              <span class="step__title">Paste the invite token you received</span>
+            </div>
+            <div class="step__body">
+              <textarea id="offer-in" rows="5" placeholder="Paste invite token here…"></textarea>
+              <div class="btn-row">
+                <button id="btn-accept-offer" class="btn btn--primary">Generate Answer</button>
+              </div>
+            </div>
+          </div>
+          <div class="step" data-step="2">
+            <div class="step__header">
+              <span class="step__num">2</span>
+              <span class="step__title">Copy your answer token &amp; send it back</span>
+            </div>
+            <div class="step__body">
+              <textarea id="answer-out" readonly rows="5" placeholder="Answer token will appear here…"></textarea>
+              <div class="btn-row">
+                <button id="btn-copy-answer" class="btn btn--secondary" disabled>Copy Token</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── ICE EXCHANGE (shown when needed) ─── -->
+    <section id="ice-section" class="section hidden">
+      <h2>ICE Candidate Exchange</h2>
+      <p class="help-text">
+        If the connection doesn't establish after exchanging offer/answer, you may need to
+        manually exchange additional ICE candidates. This is common behind complex NATs.
+      </p>
+      <div class="ice-grid">
+        <div>
+          <h3>Your ICE Candidates</h3>
+          <textarea id="ice-out" readonly rows="4" placeholder="Gathering candidates…"></textarea>
+          <div class="btn-row">
+            <button id="btn-copy-ice" class="btn btn--secondary">Copy ICE</button>
+          </div>
+        </div>
+        <div>
+          <h3>Remote ICE Candidates</h3>
+          <textarea id="ice-in" rows="4" placeholder="Paste remote ICE candidates here…"></textarea>
+          <div class="btn-row">
+            <button id="btn-import-ice" class="btn btn--primary">Import ICE</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── MEDIA CALL ─── -->
+    <section id="media-section" class="section hidden">
+      <h2>Audio / Video Call</h2>
+      <div class="media-grid">
+        <div class="media-cell">
+          <video id="local-video" autoplay muted playsinline></video>
+          <span class="media-label">You</span>
+        </div>
+        <div class="media-cell">
+          <video id="remote-video" autoplay playsinline></video>
+          <span class="media-label">Peer</span>
+          <div id="remote-no-video" class="media-placeholder">Waiting for peer video…</div>
+        </div>
+      </div>
+      <div class="call-controls">
+        <button id="btn-start-call" class="btn btn--primary" title="Start call">📞 Start Call</button>
+        <button id="btn-toggle-audio" class="btn btn--secondary" title="Mute / unmute microphone" disabled>🎤 Mic On</button>
+        <button id="btn-toggle-video" class="btn btn--secondary" title="Enable / disable camera" disabled>📷 Cam On</button>
+        <button id="btn-screenshare" class="btn btn--secondary" title="Share screen" disabled>🖥️ Screen</button>
+        <button id="btn-end-call" class="btn btn--warning" title="End call" disabled>📕 End Call</button>
+      </div>
+      <p class="help-text media-help">
+        Start a call after the P2P connection is established. Both audio and video are optional —
+        you can toggle them independently. All media is DTLS/SRTP encrypted end‑to‑end.
+      </p>
+    </section>
+
+    <!-- ─── CHAT ─── -->
+    <section id="chat-section" class="section hidden">
+      <h2>Secure P2P Chat</h2>
+      <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off" disabled>
+        <button type="submit" id="btn-send" class="btn btn--primary" disabled>Send</button>
+      </form>
+    </section>
+
+    <!-- ─── CONNECTION LOG ─── -->
+    <details id="log-panel" class="panel">
+      <summary>Connection Log</summary>
+      <div id="log-body" class="log-body"></div>
+    </details>
+
+    <!-- ─── RETRY BAR ─── -->
+    <div id="retry-bar" class="retry-bar hidden">
+      <span id="retry-msg">Connection failed.</span>
+      <button id="btn-retry" class="btn btn--warning">Retry</button>
+      <button id="btn-suggest-turn" class="btn btn--secondary">Configure TURN</button>
+    </div>
+  </div>
+
+  <script src="token-codec.js"></script>
+  <script src="webrtc-core.js"></script>
+  <script src="ui-controller.js"></script>
+</body>
+</html>
