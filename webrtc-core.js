@@ -7,7 +7,7 @@
 
 'use strict';
 
-const PeerSession = (() => {
+export const PeerSession = (() => {
 
   // ── Default ICE servers (STUN only) ──────────────────────────
   const DEFAULT_ICE_SERVERS = [
@@ -25,6 +25,8 @@ const PeerSession = (() => {
    * @property {function():void}                [onChannelOpen]
    * @property {function():void}                [onChannelClose]
    * @property {function(string):void}          [onMessage]
+   * @property {function(File|Blob, string):void} [onFileReceived]
+   * @property {function(number, string):void}  [onFileProgress]
    * @property {function(string):void}          [onError]
    * @property {function(MediaStream):void}     [onRemoteStream] – remote media stream
    * @property {function():void}                [onRemoteStreamEnded]
@@ -35,10 +37,10 @@ const PeerSession = (() => {
    * @param {SessionConfig} cfg
    */
   function create(cfg = {}) {
-    const iceServers  = cfg.iceServers && cfg.iceServers.length ? cfg.iceServers : DEFAULT_ICE_SERVERS;
-    const log         = cfg.onLog         || (() => {});
-    const stateChange = cfg.onStateChange || (() => {});
-    const onError     = cfg.onError       || (() => {});
+    const iceServers = cfg.iceServers && cfg.iceServers.length ? cfg.iceServers : DEFAULT_ICE_SERVERS;
+    const log = cfg.onLog || (() => { });
+    const stateChange = cfg.onStateChange || (() => { });
+    const onError = cfg.onError || (() => { });
 
     /** @type {RTCIceCandidate[]} */
     const localCandidates = [];
@@ -51,7 +53,11 @@ const PeerSession = (() => {
     });
 
     /** @type {RTCDataChannel|null} */
-    let dc = null;
+    let dcSig = null;
+    /** @type {RTCDataChannel|null} */
+    let dcChat = null;
+    /** @type {RTCDataChannel|null} */
+    let dcFiles = null;
 
     /** @type {MediaStream|null} */
     let localStream = null;
@@ -63,9 +69,10 @@ const PeerSession = (() => {
     const remoteStream = new MediaStream();
 
     // ── Renegotiation state (perfect negotiation pattern) ──────
-    let isPolite     = false;  // set in createOffer / acceptOffer
-    let makingOffer  = false;
-    let ignoreOffer  = false;
+    let isPolite = false;  // set in createOffer / acceptOffer
+    let makingOffer = false;
+    let ignoreOffer = false;
+    let initialSignalingDone = false; // true only after DC opens (initial manual exchange complete)
 
     // ── ICE handling ───────────────────────────────────────────
     pc.onicecandidate = (e) => {
@@ -73,14 +80,14 @@ const PeerSession = (() => {
         localCandidates.push(e.candidate);
         log(`ICE candidate gathered: ${e.candidate.candidate.split(' ')[7] || 'unknown'} (${e.candidate.type || ''})`);
         if (cfg.onIceCandidate) cfg.onIceCandidate(e.candidate);
-        // Forward via DataChannel when open (renegotiation ICE)
-        if (dc && dc.readyState === 'open') {
+        // Forward via Signaling DataChannel when open (renegotiation ICE)
+        if (dcSig && dcSig.readyState === 'open') {
           try {
-            dc.send(JSON.stringify({
+            dcSig.send(JSON.stringify({
               _sig: 'ice',
               candidate: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex }
             }));
-          } catch {}
+          } catch { }
         }
       }
     };
@@ -110,7 +117,7 @@ const PeerSession = (() => {
     };
 
     function mapState() {
-      const ice  = pc.iceConnectionState;
+      const ice = pc.iceConnectionState;
       const conn = pc.connectionState;
       if (conn === 'connected' || ice === 'connected') {
         stateChange('connected');
@@ -138,7 +145,9 @@ const PeerSession = (() => {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          dc.send(JSON.stringify({ _sig: 'answer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }));
+          if (dcSig && dcSig.readyState === 'open') {
+            dcSig.send(JSON.stringify({ _sig: 'answer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }));
+          }
           log('Renegotiation: answered remote offer via DataChannel');
         } else if (data._sig === 'answer') {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -157,8 +166,14 @@ const PeerSession = (() => {
 
     // ── Negotiation needed (fires when tracks are added/removed) ─
     pc.onnegotiationneeded = async () => {
-      if (!dc || dc.readyState !== 'open') {
-        log('Negotiation needed but DataChannel not open — will negotiate on manual exchange');
+      // Suppress during manual signaling phase — only auto-renegotiate
+      // after the initial manual offer/answer exchange is complete
+      if (!initialSignalingDone) {
+        log('Negotiation needed — deferred (initial manual signaling in progress)');
+        return;
+      }
+      if (!dcSig || dcSig.readyState !== 'open') {
+        log('Negotiation needed but Signaling DataChannel not open');
         return;
       }
       try {
@@ -169,7 +184,9 @@ const PeerSession = (() => {
           return;
         }
         await pc.setLocalDescription(offer);
-        dc.send(JSON.stringify({ _sig: 'offer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }));
+        if (dcSig && dcSig.readyState === 'open') {
+          dcSig.send(JSON.stringify({ _sig: 'offer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }));
+        }
         log('Renegotiation: sent offer via DataChannel');
       } catch (err) {
         log(`Renegotiation offer failed: ${err.message}`, 'error');
@@ -178,46 +195,99 @@ const PeerSession = (() => {
       }
     };
 
+    // ── File Reception State ──
+    let incomingFileChunks = [];
+    let incomingFileMeta = null;
+    let incomingFileBytesReceived = 0;
+
     // ── DataChannel wiring helper ──────────────────────────────
     function wireChannel(channel) {
-      dc = channel;
-      dc.binaryType = 'arraybuffer';
-      dc.onopen = () => {
-        log('DataChannel open', 'success');
-        if (cfg.onChannelOpen) cfg.onChannelOpen();
-      };
-      dc.onclose = () => {
-        log('DataChannel closed');
-        if (cfg.onChannelClose) cfg.onChannelClose();
-      };
-      dc.onerror = (err) => {
-        log(`DataChannel error: ${err.error?.message || err}`, 'error');
-        onError(`DataChannel error: ${err.error?.message || err}`);
-      };
-      dc.onmessage = (e) => {
-        // Intercept internal signaling messages
-        if (typeof e.data === 'string') {
-          try {
-            const parsed = JSON.parse(e.data);
-            if (parsed._sig) {
-              handleDcSignaling(parsed);
-              return;
+      if (channel.label === 'p2p-sig') {
+        dcSig = channel;
+        dcSig.onopen = () => {
+          initialSignalingDone = true;
+          log('Signaling DataChannel open — auto-renegotiation enabled', 'success');
+        };
+        dcSig.onclose = () => log('Signaling DataChannel closed');
+        dcSig.onerror = (err) => log(`Signaling DC error: ${err.error?.message || err}`, 'error');
+        dcSig.onmessage = (e) => {
+          if (typeof e.data === 'string') {
+            try {
+              const parsed = JSON.parse(e.data);
+              if (parsed._sig) handleDcSignaling(parsed);
+            } catch { }
+          }
+        };
+      } else if (channel.label === 'p2p-chat') {
+        dcChat = channel;
+        dcChat.onopen = () => {
+          log('Chat DataChannel open', 'success');
+          if (cfg.onChannelOpen) cfg.onChannelOpen();
+        };
+        dcChat.onclose = () => {
+          log('Chat DataChannel closed');
+          if (cfg.onChannelClose) cfg.onChannelClose();
+        };
+        dcChat.onerror = (err) => {
+          onError(`Chat DataChannel error: ${err.error?.message || err}`);
+        };
+        dcChat.onmessage = (e) => {
+          if (cfg.onMessage) cfg.onMessage(e.data);
+        };
+      } else if (channel.label === 'p2p-files') {
+        dcFiles = channel;
+        dcFiles.binaryType = 'arraybuffer';
+        dcFiles.onopen = () => log('Files DataChannel open', 'success');
+        dcFiles.onclose = () => log('Files DataChannel closed');
+        dcFiles.onmessage = (e) => {
+          if (typeof e.data === 'string') {
+            try {
+              const meta = JSON.parse(e.data);
+              if (meta._fileStart) {
+                incomingFileMeta = meta;
+                incomingFileChunks = [];
+                incomingFileBytesReceived = 0;
+                log(`Incoming file started: ${meta.name} (${meta.size} bytes)`);
+              } else if (meta._fileEnd) {
+                if (!incomingFileMeta) return;
+                const blob = new Blob(incomingFileChunks, { type: incomingFileMeta.type });
+                log(`Incoming file complete: ${incomingFileMeta.name}`);
+                if (cfg.onFileReceived) cfg.onFileReceived(blob, incomingFileMeta.name);
+                incomingFileMeta = null;
+                incomingFileChunks = [];
+                incomingFileBytesReceived = 0;
+              }
+            } catch { }
+          } else {
+            // Binary chunk
+            if (!incomingFileMeta) return;
+            incomingFileChunks.push(e.data);
+            incomingFileBytesReceived += e.data.byteLength;
+            if (cfg.onFileProgress) {
+              const pct = Math.round((incomingFileBytesReceived / incomingFileMeta.size) * 100);
+              cfg.onFileProgress(pct, 'receiving');
             }
-          } catch {}
-        }
-        if (cfg.onMessage) cfg.onMessage(e.data);
-      };
+          }
+        };
+      }
     }
 
-    // Answerer receives DataChannel from offerer
+    // Answerer receives DataChannels from offerer
     pc.ondatachannel = (e) => {
-      log('Remote DataChannel received');
+      log(`Remote DataChannel received: ${e.channel.label}`);
       wireChannel(e.channel);
     };
 
     // ── Remote media tracks ────────────────────────────────────
     pc.ontrack = (e) => {
       log(`Remote track received: ${e.track.kind}`);
+
+      // Crucial fix: Clean up any existing tracks of the same kind (e.g. dead tracks from a previous call)
+      const existingTracks = remoteStream.getTracks().filter(t => t.kind === e.track.kind);
+      for (const t of existingTracks) {
+        remoteStream.removeTrack(t);
+      }
+
       remoteStream.addTrack(e.track);
       if (cfg.onRemoteStream) cfg.onRemoteStream(remoteStream);
       e.track.onended = () => {
@@ -270,7 +340,7 @@ const PeerSession = (() => {
         screenStream = null;
       }
       for (const [kind, sender] of senders) {
-        try { pc.removeTrack(sender); } catch {}
+        try { pc.removeTrack(sender); } catch { }
       }
       senders.clear();
       log('All local media removed');
@@ -363,13 +433,22 @@ const PeerSession = (() => {
      */
     async function createOffer() {
       isPolite = false; // creator is the impolite peer
-      const channel = pc.createDataChannel('p2p-chat', {
-        ordered: true,
-      });
-      wireChannel(channel);
+
+      const sigChannel = pc.createDataChannel('p2p-sig', { negotiated: false });
+      wireChannel(sigChannel);
+
+      const chatChannel = pc.createDataChannel('p2p-chat', { negotiated: false, ordered: true });
+      wireChannel(chatChannel);
+
+      const fileChannel = pc.createDataChannel('p2p-files', { negotiated: false, ordered: true });
+      wireChannel(fileChannel);
+
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      log('Local offer created');
+      log(`Local offer created (signaling state: ${pc.signalingState})`);
+      if (pc.signalingState !== 'have-local-offer') {
+        log(`WARNING: Expected have-local-offer but got ${pc.signalingState}`, 'error');
+      }
       stateChange('gathering');
       return pc.localDescription;
     }
@@ -395,6 +474,23 @@ const PeerSession = (() => {
      * @param {RTCSessionDescriptionInit} answerSdp
      */
     async function acceptAnswer(answerSdp) {
+      const state = pc.signalingState;
+      if (state === 'stable') {
+        // Connection may have already been negotiated via another path
+        log('Signaling state already stable — connection may be established, adding remote description as informational');
+        // Still try — some browsers allow re-setting in stable state
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
+          log('Remote answer accepted (from stable state)');
+        } catch {
+          log('Remote description skipped (already stable) — waiting for ICE connectivity');
+        }
+        stateChange('connecting');
+        return;
+      }
+      if (state !== 'have-local-offer') {
+        throw new Error(`Cannot accept answer in signaling state "${state}" (expected "have-local-offer"). Try creating a new session.`);
+      }
       await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
       log('Remote answer accepted');
       stateChange('connecting');
@@ -423,9 +519,58 @@ const PeerSession = (() => {
      * @returns {boolean} true if sent
      */
     function send(msg) {
-      if (!dc || dc.readyState !== 'open') return false;
-      dc.send(msg);
+      if (!dcChat || dcChat.readyState !== 'open') return false;
+      dcChat.send(msg);
       return true;
+    }
+
+    /**
+     * Send a file via the p2p-files DataChannel.
+     * @param {File} file
+     */
+    async function sendFile(file) {
+      if (!dcFiles || dcFiles.readyState !== 'open') throw new Error('File channel not open');
+
+      dcFiles.send(JSON.stringify({
+        _fileStart: true,
+        name: file.name,
+        size: file.size,
+        type: file.type
+      }));
+
+      const chunkSize = 16 * 1024; // 16KB max for broad compatibility
+      const buffer = await file.arrayBuffer();
+      let offset = 0;
+
+      return new Promise((resolve, reject) => {
+        const sendBlock = () => {
+          while (offset < buffer.byteLength) {
+            // Respect buffer limits
+            if (dcFiles.bufferedAmount > 16 * 1024 * 1024) { // Don't queue more than 16MB
+              // Wait for buffer to drain
+              setTimeout(sendBlock, 50);
+              return;
+            }
+            const chunk = buffer.slice(offset, offset + chunkSize);
+            try {
+              dcFiles.send(chunk);
+            } catch (e) {
+              reject(e);
+              return;
+            }
+            offset += chunk.byteLength;
+            if (cfg.onFileProgress) {
+              const pct = Math.round((offset / file.size) * 100);
+              cfg.onFileProgress(pct, 'sending');
+            }
+          }
+
+          dcFiles.send(JSON.stringify({ _fileEnd: true }));
+          log(`Sent file: ${file.name}`, 'success');
+          resolve();
+        };
+        sendBlock();
+      });
     }
 
     /**
@@ -444,7 +589,9 @@ const PeerSession = (() => {
     /** Close peer connection and channel. */
     function close() {
       removeMedia();
-      if (dc) { try { dc.close(); } catch {} }
+      if (dcChat) { try { dcChat.close(); } catch { } }
+      if (dcSig) { try { dcSig.close(); } catch { } }
+      if (dcFiles) { try { dcFiles.close(); } catch { } }
       pc.close();
       log('Session closed');
       stateChange('closed');
@@ -459,6 +606,7 @@ const PeerSession = (() => {
       acceptAnswer,
       addIceCandidates,
       send,
+      sendFile,
       getLocalCandidates,
       isIceComplete,
       close,

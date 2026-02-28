@@ -1,0 +1,23 @@
+{
+  "name": "webrtc-p2p",
+  "version": "1.0.0",
+  "description": "",
+  "main": "token-codec.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mahesh-Devani/webrtc-p2p.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Mahesh-Devani/webrtc-p2p/issues"
+  },
+  "homepage": "https://github.com/Mahesh-Devani/webrtc-p2p#readme",
+  "devDependencies": {
+    "serve": "^14.2.5"
+  }
+}

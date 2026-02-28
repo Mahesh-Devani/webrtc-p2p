@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>P2P Connect — Serverless WebRTC</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div id="app">
     <!-- ─── HEADER ─── -->
@@ -69,8 +71,13 @@
             </div>
             <div class="step__body">
               <textarea id="offer-out" readonly rows="5" placeholder="Generating invite token…"></textarea>
+              <canvas id="qr-offer-out" class="qr-canvas hidden"></canvas>
               <div class="btn-row">
                 <button id="btn-copy-offer" class="btn btn--secondary" disabled>Copy Token</button>
+                <button id="btn-copy-offer-qr" class="btn btn--secondary" disabled
+                  title="Copy QR image to clipboard">Copy QR</button>
+                <button id="btn-share-offer-qr" class="btn btn--secondary" disabled
+                  title="Share QR image via device share">Share QR</button>
               </div>
             </div>
           </div>
@@ -82,6 +89,11 @@
             <div class="step__body">
               <textarea id="answer-in" rows="5" placeholder="Paste answer token here…"></textarea>
               <div class="btn-row">
+                <button id="btn-scan-answer" class="btn btn--secondary" title="Scan QR Code by Camera">📷 Scan</button>
+                <label for="import-answer" class="btn btn--secondary" title="Upload QR Image">
+                  📤 Import
+                  <input type="file" id="import-answer" class="hidden-file-input" accept="image/*">
+                </label>
                 <button id="btn-accept-answer" class="btn btn--primary">Accept Answer</button>
               </div>
             </div>
@@ -100,6 +112,11 @@
             <div class="step__body">
               <textarea id="offer-in" rows="5" placeholder="Paste invite token here…"></textarea>
               <div class="btn-row">
+                <button id="btn-scan-offer" class="btn btn--secondary" title="Scan QR Code by Camera">📷 Scan</button>
+                <label for="import-offer" class="btn btn--secondary" title="Upload QR Image">
+                  📤 Import
+                  <input type="file" id="import-offer" class="hidden-file-input" accept="image/*">
+                </label>
                 <button id="btn-accept-offer" class="btn btn--primary">Generate Answer</button>
               </div>
             </div>
@@ -111,8 +128,13 @@
             </div>
             <div class="step__body">
               <textarea id="answer-out" readonly rows="5" placeholder="Answer token will appear here…"></textarea>
+              <canvas id="qr-answer-out" class="qr-canvas hidden"></canvas>
               <div class="btn-row">
                 <button id="btn-copy-answer" class="btn btn--secondary" disabled>Copy Token</button>
+                <button id="btn-copy-answer-qr" class="btn btn--secondary" disabled
+                  title="Copy QR image to clipboard">Copy QR</button>
+                <button id="btn-share-answer-qr" class="btn btn--secondary" disabled
+                  title="Share QR image via device share">Share QR</button>
               </div>
             </div>
           </div>
@@ -161,8 +183,10 @@
       </div>
       <div class="call-controls">
         <button id="btn-start-call" class="btn btn--primary" title="Start call">📞 Start Call</button>
-        <button id="btn-toggle-audio" class="btn btn--secondary" title="Mute / unmute microphone" disabled>🎤 Mic On</button>
-        <button id="btn-toggle-video" class="btn btn--secondary" title="Enable / disable camera" disabled>📷 Cam On</button>
+        <button id="btn-toggle-audio" class="btn btn--secondary" title="Mute / unmute microphone" disabled>🎤 Mic
+          On</button>
+        <button id="btn-toggle-video" class="btn btn--secondary" title="Enable / disable camera" disabled>📷 Cam
+          On</button>
         <button id="btn-screenshare" class="btn btn--secondary" title="Share screen" disabled>🖥️ Screen</button>
         <button id="btn-end-call" class="btn btn--warning" title="End call" disabled>📕 End Call</button>
       </div>
@@ -177,14 +201,25 @@
       <h2>Secure P2P Chat</h2>
       <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
       <form id="chat-form" class="chat-form">
+        <label for="file-input" class="btn btn--secondary file-btn" title="Send a file">
+          📎
+          <input type="file" id="file-input" class="hidden-file-input" disabled>
+        </label>
         <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off" disabled>
         <button type="submit" id="btn-send" class="btn btn--primary" disabled>Send</button>
       </form>
+      <div id="file-progress" class="file-progress hidden">
+        <span id="file-progress-label">Sending file...</span>
+        <progress id="file-progress-bar" value="0" max="100"></progress>
+      </div>
     </section>
 
     <!-- ─── CONNECTION LOG ─── -->
     <details id="log-panel" class="panel">
-      <summary>Connection Log</summary>
+      <summary style="display: flex; justify-content: space-between; align-items: center;">
+        Connection Log
+        <button id="btn-copy-log" class="btn btn--secondary" style="padding: 4px 8px; font-size: 0.75rem;">Copy</button>
+      </summary>
       <div id="log-body" class="log-body"></div>
     </details>
 
@@ -194,10 +229,29 @@
       <button id="btn-retry" class="btn btn--warning">Retry</button>
       <button id="btn-suggest-turn" class="btn btn--secondary">Configure TURN</button>
     </div>
+
+    <!-- ─── QR SCANNER MODAL ─── -->
+    <div id="qr-modal" class="modal hidden">
+      <div class="modal__content">
+        <h3>Scan QR Code</h3>
+        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; background: #fff; color: #1a1d27;">
+        </div>
+        <button id="btn-close-scanner" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Hidden element for decoding pasted images -->
+    <div id="hidden-qr-reader" class="hidden"></div>
   </div>
 
-  <script src="token-codec.js"></script>
-  <script src="webrtc-core.js"></script>
-  <script src="ui-controller.js"></script>
+  <!-- QrCode generator CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <!-- HTML5 QR Code Scanner -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- Pako for compression -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <!-- Load main app module -->
+  <script type="module" src="ui-controller.js"></script>
 </body>
+
 </html>

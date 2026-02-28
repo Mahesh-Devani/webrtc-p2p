@@ -7,87 +7,110 @@
 
 'use strict';
 
+import { TokenCodec } from './token-codec.js';
+import { PeerSession } from './webrtc-core.js';
+
 (() => {
   // ── DOM refs ──────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
 
   const dom = {
-    badge:          $('#connection-badge'),
-    badgeLabel:     $('#connection-label'),
+    badge: $('#connection-badge'),
+    badgeLabel: $('#connection-label'),
 
     // TURN
-    turnUrl:        $('#turn-url'),
-    turnUser:       $('#turn-user'),
-    turnCred:       $('#turn-cred'),
-    btnSaveTurn:    $('#btn-save-turn'),
-    turnPanel:      $('#turn-panel'),
+    turnUrl: $('#turn-url'),
+    turnUser: $('#turn-user'),
+    turnCred: $('#turn-cred'),
+    btnSaveTurn: $('#btn-save-turn'),
+    turnPanel: $('#turn-panel'),
 
     // Role
-    roleChooser:    $('#role-chooser'),
-    btnCreate:      $('#btn-create'),
-    btnJoin:        $('#btn-join'),
+    roleChooser: $('#role-chooser'),
+    btnCreate: $('#btn-create'),
+    btnJoin: $('#btn-join'),
 
     // Create flow
-    flowCreate:     $('#flow-create'),
-    offerOut:       $('#offer-out'),
-    btnCopyOffer:   $('#btn-copy-offer'),
-    answerIn:       $('#answer-in'),
-    btnAcceptAnswer:$('#btn-accept-answer'),
+    flowCreate: $('#flow-create'),
+    offerOut: $('#offer-out'),
+    qrOfferOut: $('#qr-offer-out'),
+    btnCopyOffer: $('#btn-copy-offer'),
+    btnCopyOfferQr: $('#btn-copy-offer-qr'),
+    btnShareOfferQr: $('#btn-share-offer-qr'),
+    answerIn: $('#answer-in'),
+    btnScanAnswer: $('#btn-scan-answer'),
+    importAnswer: $('#import-answer'),
+    btnAcceptAnswer: $('#btn-accept-answer'),
 
     // Join flow
-    flowJoin:       $('#flow-join'),
-    offerIn:        $('#offer-in'),
+    flowJoin: $('#flow-join'),
+    offerIn: $('#offer-in'),
+    btnScanOffer: $('#btn-scan-offer'),
+    importOffer: $('#import-offer'),
     btnAcceptOffer: $('#btn-accept-offer'),
-    answerOut:      $('#answer-out'),
-    btnCopyAnswer:  $('#btn-copy-answer'),
+    answerOut: $('#answer-out'),
+    qrAnswerOut: $('#qr-answer-out'),
+    btnCopyAnswer: $('#btn-copy-answer'),
+    btnCopyAnswerQr: $('#btn-copy-answer-qr'),
+    btnShareAnswerQr: $('#btn-share-answer-qr'),
+
+    // QR Scanner
+    qrModal: $('#qr-modal'),
+    btnCloseScanner: $('#btn-close-scanner'),
 
     // ICE
-    iceSection:     $('#ice-section'),
-    iceOut:         $('#ice-out'),
-    btnCopyIce:     $('#btn-copy-ice'),
-    iceIn:          $('#ice-in'),
-    btnImportIce:   $('#btn-import-ice'),
+    iceSection: $('#ice-section'),
+    iceOut: $('#ice-out'),
+    btnCopyIce: $('#btn-copy-ice'),
+    iceIn: $('#ice-in'),
+    btnImportIce: $('#btn-import-ice'),
 
-    // Chat
-    chatSection:    $('#chat-section'),
-    chatLog:        $('#chat-log'),
-    chatForm:       $('#chat-form'),
-    chatInput:      $('#chat-input'),
-    btnSend:        $('#btn-send'),
+    // Chat & Files
+    chatSection: $('#chat-section'),
+    chatLog: $('#chat-log'),
+    chatForm: $('#chat-form'),
+    chatInput: $('#chat-input'),
+    btnSend: $('#btn-send'),
+    fileInput: $('#file-input'),
+    fileProgress: $('#file-progress'),
+    fileProgressLabel: $('#file-progress-label'),
+    fileProgressBar: $('#file-progress-bar'),
 
     // Media
-    mediaSection:   $('#media-section'),
-    localVideo:     $('#local-video'),
-    remoteVideo:    $('#remote-video'),
-    remoteNoVideo:  $('#remote-no-video'),
-    btnStartCall:   $('#btn-start-call'),
+    mediaSection: $('#media-section'),
+    localVideo: $('#local-video'),
+    remoteVideo: $('#remote-video'),
+    remoteNoVideo: $('#remote-no-video'),
+    btnStartCall: $('#btn-start-call'),
     btnToggleAudio: $('#btn-toggle-audio'),
     btnToggleVideo: $('#btn-toggle-video'),
     btnScreenShare: $('#btn-screenshare'),
-    btnEndCall:     $('#btn-end-call'),
+    btnEndCall: $('#btn-end-call'),
 
     // Log
-    logBody:        $('#log-body'),
+    logPanel: $('#log-panel'),
+    logBody: $('#log-body'),
+    btnCopyLog: $('#btn-copy-log'),
 
     // Retry
-    retryBar:       $('#retry-bar'),
-    retryMsg:       $('#retry-msg'),
-    btnRetry:       $('#btn-retry'),
+    retryBar: $('#retry-bar'),
+    retryMsg: $('#retry-msg'),
+    btnRetry: $('#btn-retry'),
     btnSuggestTurn: $('#btn-suggest-turn'),
   };
 
   // ── State ────────────────────────────────────────────────────
-  let session       = null;
-  let role          = null;   // 'creator' | 'joiner'
-  let turnConfig    = null;   // { urls, username, credential } | null
-  let connState     = 'idle';
-  let iceExported   = false;
+  let session = null;
+  let role = null;   // 'creator' | 'joiner'
+  let turnConfig = null;   // { urls, username, credential } | null
+  let connState = 'idle';
+  let iceExported = false;
   let messageIdCounter = 0;
-  let mediaActive   = false;
+  let mediaActive = false;
 
   // ── Helpers ──────────────────────────────────────────────────
-  function show(el)  { el.classList.remove('hidden'); }
-  function hide(el)  { el.classList.add('hidden'); }
+  function show(el) { el.classList.remove('hidden'); }
+  function hide(el) { el.classList.add('hidden'); }
   function toast(msg) {
     const t = document.createElement('div');
     t.className = 'toast';
@@ -158,8 +181,8 @@
     ];
     if (turnConfig) {
       servers.push({
-        urls:       turnConfig.urls,
-        username:   turnConfig.username,
+        urls: turnConfig.urls,
+        username: turnConfig.username,
         credential: turnConfig.credential,
       });
       appendLog('TURN server configured as fallback relay');
@@ -206,6 +229,33 @@
         }
       },
       onError: (err) => appendLog(err, 'error'),
+      onFileProgress: (pct, dir) => {
+        show(dom.fileProgress);
+        dom.fileProgressLabel.textContent = dir === 'sending' ? 'Sending file...' : 'Receiving file...';
+        dom.fileProgressBar.value = pct;
+        if (pct >= 100) {
+          setTimeout(() => hide(dom.fileProgress), 1000);
+        }
+      },
+      onFileReceived: (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.textContent = `Download: ${filename}`;
+        a.className = 'btn btn--secondary';
+        a.style.display = 'inline-block';
+        a.style.marginTop = '4px';
+
+        const msg = document.createElement('div');
+        msg.className = `chat-msg chat-msg--peer`;
+        msg.innerHTML = `<div>Received file: <strong>${escapeHtml(filename)}</strong></div>`;
+        msg.appendChild(a);
+
+        dom.chatLog.appendChild(msg);
+        dom.chatLog.scrollTop = dom.chatLog.scrollHeight;
+        systemMsg(`File received: ${filename}`);
+      },
       onRemoteStream: (stream) => {
         dom.remoteVideo.srcObject = stream;
         // Explicit play() to handle Chrome autoplay policy for unmuted media
@@ -213,7 +263,7 @@
           appendLog(`Remote video autoplay blocked: ${err.message} — click anywhere to resume`, 'warn');
           // One-time click handler to resume playback
           const resume = () => {
-            dom.remoteVideo.play().catch(() => {});
+            dom.remoteVideo.play().catch(() => { });
             document.removeEventListener('click', resume);
           };
           document.addEventListener('click', resume);
@@ -263,10 +313,10 @@
   }
 
   // ── ICE output refresh ───────────────────────────────────────
-  function refreshIceOutput() {
+  async function refreshIceOutput() {
     const candidates = session.getLocalCandidates();
     if (candidates.length === 0) return;
-    const token = TokenCodec.encode('ice', null, candidates);
+    const token = await TokenCodec.encode('ice', null, candidates);
     dom.iceOut.value = token;
     show(dom.iceSection);
   }
@@ -275,13 +325,15 @@
   function enableChat() {
     show(dom.chatSection);
     dom.chatInput.disabled = false;
-    dom.btnSend.disabled   = false;
+    dom.btnSend.disabled = false;
+    dom.fileInput.disabled = false;
     dom.chatInput.focus();
   }
 
   function disableChat() {
     dom.chatInput.disabled = true;
-    dom.btnSend.disabled   = true;
+    dom.btnSend.disabled = true;
+    dom.fileInput.disabled = true;
   }
 
   /** Track pending messages for delivery status. */
@@ -300,7 +352,7 @@
 
   // TURN config
   dom.btnSaveTurn.addEventListener('click', () => {
-    const url  = dom.turnUrl.value.trim();
+    const url = dom.turnUrl.value.trim();
     const user = dom.turnUser.value.trim();
     const cred = dom.turnCred.value.trim();
     if (!url) {
@@ -311,6 +363,171 @@
     toast('TURN configuration saved.');
     appendLog(`TURN saved: ${url}`);
     dom.turnPanel.removeAttribute('open');
+  });
+
+  // Copy Log
+  dom.btnCopyLog.addEventListener('click', (e) => {
+    e.stopPropagation(); // prevent panel toggle
+    copyText(dom.logBody.innerText, 'Connection Log');
+  });
+
+  // ── QR SCANNER ───────────────────────────────────────────────
+  let html5QrcodeScanner = null;
+
+  function openQrScanner(onSuccess) {
+    show(dom.qrModal);
+    if (!window.Html5QrcodeScanner) {
+      toast('Scanner library loading. Try again in a moment.');
+      hide(dom.qrModal);
+      return;
+    }
+
+    html5QrcodeScanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      /* verbose= */ false
+    );
+
+    html5QrcodeScanner.render((decodedText) => {
+      onSuccess(decodedText);
+      closeQrScanner();
+    }, (error) => {
+      // Ignore routine frame read errors
+    });
+  }
+
+  function closeQrScanner() {
+    if (html5QrcodeScanner) {
+      html5QrcodeScanner.clear().catch(err => console.error('Failed to clear scanner', err));
+      html5QrcodeScanner = null;
+    }
+    hide(dom.qrModal);
+  }
+
+  dom.btnCloseScanner.addEventListener('click', closeQrScanner);
+
+  dom.btnScanOffer?.addEventListener('click', () => {
+    openQrScanner((text) => {
+      dom.offerIn.value = text;
+      toast('Invite token scanned successfully!');
+    });
+  });
+
+  dom.btnScanAnswer?.addEventListener('click', () => {
+    openQrScanner((text) => {
+      dom.answerIn.value = text;
+      toast('Answer token scanned successfully!');
+    });
+  });
+
+  // ── QR IMAGE COPY / SHARE ───────────────────────────────────────
+  async function copyQrImage(canvas, label) {
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const htmlString = `<img src="${dataUrl}" alt="QR Code">`;
+      const htmlBlob = new Blob([htmlString], { type: 'text/html' });
+
+      canvas.toBlob(async (pngBlob) => {
+        try {
+          const clipboardItem = new ClipboardItem({
+            'text/html': htmlBlob,
+            'image/png': pngBlob
+          });
+          await navigator.clipboard.write([clipboardItem]);
+          toast(`${label} QR code copied to clipboard! Paste it anywhere (like Teams)`);
+        } catch (err) {
+          console.error(err);
+          // Fallback if writing both types fails
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+            toast(`${label} QR code copied to clipboard! (PNG only)`);
+          } catch (e) {
+            toast('Failed to copy QR image. (Requires HTTPS/Localhost permissions)');
+          }
+        }
+      });
+    } catch {
+      toast('Failed to generate QR image for copy.');
+    }
+  }
+
+  async function shareQrImage(canvas, title) {
+    if (!navigator.share) {
+      toast('Share not supported on this browser.');
+      return;
+    }
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], 'qr-code.png', { type: 'image/png' });
+      try {
+        await navigator.share({
+          title: title,
+          text: 'Join my P2P Connect session using this QR code or scan it directly.',
+          files: [file]
+        });
+      } catch (err) {
+        console.warn('Share intent failed or was cancelled', err);
+      }
+    });
+  }
+
+  dom.btnCopyOfferQr?.addEventListener('click', () => copyQrImage(dom.qrOfferOut, 'Invite'));
+  dom.btnShareOfferQr?.addEventListener('click', () => shareQrImage(dom.qrOfferOut, 'P2P Connect Invite'));
+  dom.btnCopyAnswerQr?.addEventListener('click', () => copyQrImage(dom.qrAnswerOut, 'Answer'));
+  dom.btnShareAnswerQr?.addEventListener('click', () => shareQrImage(dom.qrAnswerOut, 'P2P Connect Answer'));
+
+  // ── PASTING IMAGES TO DECODE QR ──────────────────────────────
+  async function handlePasteEvent(e, textArea) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          scanQrFile(file, textArea);
+        }
+        break;
+      }
+    }
+  }
+
+  async function scanQrFile(file, textArea) {
+    if (!window.Html5Qrcode) {
+      toast('Scanner library not loaded.');
+      return;
+    }
+    toast('Scanning pasted image for QR code...');
+    let html5QrCode;
+    try {
+      html5QrCode = new Html5Qrcode("hidden-qr-reader");
+      const decodedText = await html5QrCode.scanFile(file, true);
+      textArea.value = decodedText;
+      toast('QR code decoded successfully from image!');
+    } catch (err) {
+      console.warn('QR decode failed', err);
+      toast('Could not find a valid QR code in the pasted image.');
+    } finally {
+      if (html5QrCode) {
+        html5QrCode.clear().catch(e => console.error(e));
+      }
+    }
+  }
+
+  dom.offerIn?.addEventListener('paste', (e) => handlePasteEvent(e, dom.offerIn));
+  dom.answerIn?.addEventListener('paste', (e) => handlePasteEvent(e, dom.answerIn));
+
+  dom.importOffer?.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      scanQrFile(e.target.files[0], dom.offerIn);
+      e.target.value = ''; // reset
+    }
+  });
+
+  dom.importAnswer?.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      scanQrFile(e.target.files[0], dom.answerIn);
+      e.target.value = ''; // reset
+    }
   });
 
   // ── ROLE: CREATE ─────────────────────────────────────────────
@@ -325,8 +542,20 @@
       // Wait briefly for some ICE candidates to accumulate
       await waitForIceOrTimeout(3000);
       const candidates = session.getLocalCandidates();
-      const token = TokenCodec.encode('offer', offer, candidates);
+      const token = await TokenCodec.encode('offer', offer, candidates);
       dom.offerOut.value = token;
+
+      // Generate QR
+      if (window.QRCode) {
+        QRCode.toCanvas(dom.qrOfferOut, token, { width: 300, margin: 4, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
+          if (!err) {
+            show(dom.qrOfferOut);
+            dom.btnCopyOfferQr.disabled = false;
+            if (navigator.share) dom.btnShareOfferQr.disabled = false;
+          }
+        });
+      }
+
       dom.btnCopyOffer.disabled = false;
       appendLog(`Offer token generated (${token.length} chars, ${candidates.length} ICE candidates bundled)`);
     } catch (err) {
@@ -341,7 +570,7 @@
     const raw = dom.answerIn.value.trim();
     if (!raw) { toast('Please paste the answer token.'); return; }
     try {
-      const data = TokenCodec.decode(raw);
+      const data = await TokenCodec.decode(raw);
       if (data.type !== 'answer') throw new Error(`Expected answer token, got "${data.type}".`);
       await session.acceptAnswer(data.sdp);
       if (data.candidates.length) {
@@ -366,7 +595,7 @@
     const raw = dom.offerIn.value.trim();
     if (!raw) { toast('Please paste the invite token.'); return; }
     try {
-      const data = TokenCodec.decode(raw);
+      const data = await TokenCodec.decode(raw);
       if (data.type !== 'offer') throw new Error(`Expected offer token, got "${data.type}".`);
       const answer = await session.acceptOffer(data.sdp);
       if (data.candidates.length) {
@@ -375,8 +604,20 @@
       // Wait briefly for some ICE candidates
       await waitForIceOrTimeout(3000);
       const candidates = session.getLocalCandidates();
-      const token = TokenCodec.encode('answer', answer, candidates);
+      const token = await TokenCodec.encode('answer', answer, candidates);
       dom.answerOut.value = token;
+
+      // Generate QR
+      if (window.QRCode) {
+        QRCode.toCanvas(dom.qrAnswerOut, token, { width: 300, margin: 4, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
+          if (!err) {
+            show(dom.qrAnswerOut);
+            dom.btnCopyAnswerQr.disabled = false;
+            if (navigator.share) dom.btnShareAnswerQr.disabled = false;
+          }
+        });
+      }
+
       dom.btnCopyAnswer.disabled = false;
       appendLog(`Answer token generated (${token.length} chars, ${candidates.length} ICE candidates bundled)`);
     } catch (err) {
@@ -397,7 +638,7 @@
     const raw = dom.iceIn.value.trim();
     if (!raw) { toast('Paste remote ICE candidates first.'); return; }
     try {
-      const data = TokenCodec.decode(raw);
+      const data = await TokenCodec.decode(raw);
       if (data.type !== 'ice') throw new Error(`Expected ICE token, got "${data.type}".`);
       if (!data.candidates.length) throw new Error('Token contains no ICE candidates.');
       await session.addIceCandidates(data.candidates);
@@ -428,7 +669,49 @@
     }
   });
 
+  dom.fileInput.addEventListener('change', async (e) => {
+    if (!session) return;
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // reset input
+    e.target.value = '';
+
+    try {
+      appendChat(`Sending file: ${file.name}...`, 'self');
+      dom.fileInput.disabled = true;
+      await session.sendFile(file);
+      appendChat(`File sent completely: ${file.name}`, 'self', 'Delivered ✓');
+    } catch (err) {
+      appendLog(`File send error: ${err.message}`, 'error');
+      toast('Failed to send file. See log.');
+    } finally {
+      dom.fileInput.disabled = false;
+    }
+  });
+
   // ── MEDIA CALL CONTROLS ──────────────────────────────────────
+
+  // Video double-click controls
+  function handleVideoDblClick(videoEl) {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { });
+    } else if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => { });
+    } else {
+      // Try fullscreen first, fallback to PiP
+      if (videoEl.requestFullscreen) {
+        videoEl.requestFullscreen().catch(() => {
+          if (videoEl.requestPictureInPicture) videoEl.requestPictureInPicture().catch(() => { });
+        });
+      } else if (videoEl.requestPictureInPicture) {
+        videoEl.requestPictureInPicture().catch(() => { });
+      }
+    }
+  }
+
+  dom.localVideo.addEventListener('dblclick', () => handleVideoDblClick(dom.localVideo));
+  dom.remoteVideo.addEventListener('dblclick', () => handleVideoDblClick(dom.remoteVideo));
 
   dom.btnStartCall.addEventListener('click', async () => {
     if (!session) { toast('No active session.'); return; }
@@ -437,11 +720,11 @@
       session.addLocalStream(stream);
       dom.localVideo.srcObject = stream;
       mediaActive = true;
-      dom.btnStartCall.disabled   = true;
+      dom.btnStartCall.disabled = true;
       dom.btnToggleAudio.disabled = false;
       dom.btnToggleVideo.disabled = false;
       dom.btnScreenShare.disabled = false;
-      dom.btnEndCall.disabled     = false;
+      dom.btnEndCall.disabled = false;
       updateMediaButtons(true, true);
       appendLog('Local media started (audio + video)', 'success');
       systemMsg('Audio/video call started.');
@@ -452,11 +735,11 @@
         session.addLocalStream(stream);
         dom.localVideo.srcObject = stream;
         mediaActive = true;
-        dom.btnStartCall.disabled   = true;
+        dom.btnStartCall.disabled = true;
         dom.btnToggleAudio.disabled = false;
         dom.btnToggleVideo.disabled = true;
         dom.btnScreenShare.disabled = false;
-        dom.btnEndCall.disabled     = false;
+        dom.btnEndCall.disabled = false;
         updateMediaButtons(true, false);
         appendLog('Camera unavailable — audio-only call started', 'warn');
         systemMsg('Audio-only call started (camera not available).');
@@ -517,15 +800,15 @@
 
   function endMediaCall() {
     if (session) session.removeMedia();
-    dom.localVideo.srcObject  = null;
+    dom.localVideo.srcObject = null;
     dom.remoteVideo.srcObject = null;
     show(dom.remoteNoVideo);
     mediaActive = false;
-    dom.btnStartCall.disabled   = false;
+    dom.btnStartCall.disabled = false;
     dom.btnToggleAudio.disabled = true;
     dom.btnToggleVideo.disabled = true;
     dom.btnScreenShare.disabled = true;
-    dom.btnEndCall.disabled     = true;
+    dom.btnEndCall.disabled = true;
     dom.btnToggleAudio.textContent = '🎤 Mic On';
     dom.btnToggleVideo.textContent = '📷 Cam On';
     dom.btnScreenShare.textContent = '🖥️ Screen';
@@ -581,7 +864,13 @@
     dom.iceOut.value = '';
     dom.iceIn.value = '';
     dom.btnCopyOffer.disabled = true;
+    dom.btnCopyOfferQr.disabled = true;
+    dom.btnShareOfferQr.disabled = true;
     dom.btnCopyAnswer.disabled = true;
+    dom.btnCopyAnswerQr.disabled = true;
+    dom.btnShareAnswerQr.disabled = true;
+    hide(dom.qrOfferOut);
+    hide(dom.qrAnswerOut);
     disableChat();
     endMediaCall();
     dom.chatLog.innerHTML = '';
