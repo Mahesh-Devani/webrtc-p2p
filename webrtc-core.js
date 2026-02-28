@@ -417,6 +417,18 @@ export const PeerSession = (() => {
       }
     }
 
+    /**
+     * Replaces the running video track (used for camera switching).
+     * @param {MediaStreamTrack} newTrack
+     */
+    async function replaceVideoTrack(newTrack) {
+      const videoSender = senders.get('video');
+      if (videoSender) {
+        await videoSender.replaceTrack(newTrack);
+        log('Camera track replaced on connection');
+      }
+    }
+
     /** @returns {MediaStream|null} */
     function getLocalStream() { return localStream; }
 
@@ -616,6 +628,7 @@ export const PeerSession = (() => {
       removeMedia,
       toggleAudio,
       toggleVideo,
+      replaceVideoTrack,
       startScreenShare,
       stopScreenShare,
       getLocalStream,

@@ -190,6 +190,20 @@
         <button id="btn-screenshare" class="btn btn--secondary" title="Share screen" disabled>🖥️ Screen</button>
         <button id="btn-end-call" class="btn btn--warning" title="End call" disabled>📕 End Call</button>
       </div>
+      <div id="device-controls" class="device-controls hidden">
+        <div class="form-row">
+          <label for="camera-select">📷 Camera</label>
+          <select id="camera-select" class="device-select" disabled>
+            <option value="">Default Camera</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="speaker-select">🔊 Speaker</label>
+          <select id="speaker-select" class="device-select" disabled>
+            <option value="">Default Speaker</option>
+          </select>
+        </div>
+      </div>
       <p class="help-text media-help">
         Start a call after the P2P connection is established. Both audio and video are optional —
         you can toggle them independently. All media is DTLS/SRTP encrypted end‑to‑end.
@@ -246,12 +260,14 @@
 
   <!-- QrCode generator CDN -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <!-- HTML5 QR Code Scanner -->
+  <!-- Pure jsQR for precise image file decoding -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- HTML5 QR Code Scanner (for webcam fallback) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <!-- Pako for compression -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- Load main app module -->
-  <script type="module" src="ui-controller.js"></script>
+  <script type="module" src="ui-controller.js?v=2"></script>
 </body>
 
 </html>

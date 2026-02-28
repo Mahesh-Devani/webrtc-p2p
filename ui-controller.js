@@ -86,6 +86,9 @@ import { PeerSession } from './webrtc-core.js';
     btnToggleVideo: $('#btn-toggle-video'),
     btnScreenShare: $('#btn-screenshare'),
     btnEndCall: $('#btn-end-call'),
+    deviceControls: $('#device-controls'),
+    cameraSelect: $('#camera-select'),
+    speakerSelect: $('#speaker-select'),
 
     // Log
     logPanel: $('#log-panel'),
@@ -374,32 +377,62 @@ import { PeerSession } from './webrtc-core.js';
   // ── QR SCANNER ───────────────────────────────────────────────
   let html5QrcodeScanner = null;
 
+  // ── QR SCANNER (CAMERA) ──────────────────────────────────────
   function openQrScanner(onSuccess) {
     show(dom.qrModal);
-    if (!window.Html5QrcodeScanner) {
+    if (!window.Html5Qrcode) {
       toast('Scanner library loading. Try again in a moment.');
       hide(dom.qrModal);
       return;
     }
 
-    html5QrcodeScanner = new Html5QrcodeScanner(
-      "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
-    );
+    if (html5QrcodeScanner) {
+      closeQrScanner(); // fail-safe cleanup
+    }
 
-    html5QrcodeScanner.render((decodedText) => {
-      onSuccess(decodedText);
+    html5QrcodeScanner = new Html5Qrcode("qr-reader");
+
+    const config = {
+      fps: 15, // High frame rate for faster locks
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+        // Use 85% of the shortest edge
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
+      },
+      aspectRatio: 1.0 // Force a square capture grid
+    };
+
+    html5QrcodeScanner.start(
+      { facingMode: "environment" }, // Prefer back camera on mobile
+      config,
+      (decodedText) => {
+        console.log('Detected QR Code:', decodedText);
+        onSuccess(decodedText);
+        closeQrScanner();
+      },
+      (error) => {
+        // Routine frame failures, ignored
+      }
+    ).catch(err => {
+      console.error('Failed to start scanner', err);
+      toast('Failed to start camera. Need HTTPS/Localhost + permissions.');
       closeQrScanner();
-    }, (error) => {
-      // Ignore routine frame read errors
     });
   }
 
   function closeQrScanner() {
     if (html5QrcodeScanner) {
-      html5QrcodeScanner.clear().catch(err => console.error('Failed to clear scanner', err));
-      html5QrcodeScanner = null;
+      if (html5QrcodeScanner.isScanning) {
+        html5QrcodeScanner.stop().then(() => {
+          html5QrcodeScanner.clear();
+          html5QrcodeScanner = null;
+        }).catch(err => console.error('Error stopping scanner', err));
+      } else {
+        try {
+          html5QrcodeScanner.clear();
+        } catch { }
+        html5QrcodeScanner = null;
+      }
     }
     hide(dom.qrModal);
   }
@@ -492,24 +525,87 @@ import { PeerSession } from './webrtc-core.js';
   }
 
   async function scanQrFile(file, textArea) {
-    if (!window.Html5Qrcode) {
-      toast('Scanner library not loaded.');
+    if (!window.Html5Qrcode && !window.jsQR && !('BarcodeDetector' in window)) {
+      toast('No QR scanner library available.');
       return;
     }
     toast('Scanning pasted image for QR code...');
-    let html5QrCode;
+
     try {
-      html5QrCode = new Html5Qrcode("hidden-qr-reader");
-      const decodedText = await html5QrCode.scanFile(file, true);
-      textArea.value = decodedText;
-      toast('QR code decoded successfully from image!');
-    } catch (err) {
-      console.warn('QR decode failed', err);
-      toast('Could not find a valid QR code in the pasted image.');
-    } finally {
-      if (html5QrCode) {
-        html5QrCode.clear().catch(e => console.error(e));
+      // Force raw Image decoding to strip weird clipboard MIME types
+      const img = new Image();
+      const imgUrl = URL.createObjectURL(file);
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = imgUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // Draw white background to kill transparent alpha pixels
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(imgUrl);
+
+      // Attempt 1: jsQR (100% reliable for high-density generated canvas pixels)
+      if (window.jsQR) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+        if (code && code.data) {
+          textArea.value = code.data;
+          toast('QR code decoded successfully from image (jsQR)!');
+          return;
+        }
       }
+
+      // Attempt 2: Native BarcodeDetector (Chrome/Edge/Android/macOS)
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const barcodes = await detector.detect(canvas);
+          if (barcodes && barcodes.length > 0) {
+            textArea.value = barcodes[0].rawValue;
+            toast('QR code decoded natively from image!');
+            return;
+          }
+        } catch (e) {
+          console.warn('Native BarcodeDetector failed', e);
+        }
+      }
+
+      // Attempt 3: html5-qrcode fallback
+      if (!window.Html5Qrcode) {
+        toast('Scanner library not loaded and native detector failed to find QR.');
+        return;
+      }
+
+      const html5QrCode = new Html5Qrcode("hidden-qr-reader");
+      try {
+        const cleanBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const cleanFile = new File([cleanBlob], 'clipboard-qr.png', { type: 'image/png' });
+
+        const decodedText = await html5QrCode.scanFileV2(cleanFile, true)
+          .then(res => res.decodedText)
+          .catch(() => html5QrCode.scanFile(cleanFile, true));
+
+        textArea.value = decodedText;
+        toast('QR code decoded successfully from image (fallback)!');
+      } finally {
+        if (typeof html5QrCode.clear === 'function') {
+          html5QrCode.clear().catch(e => console.error(e));
+        }
+      }
+
+    } catch (err) {
+      console.warn('QR decode failed completely', err);
+      toast('Could not find a valid QR code in the pasted image.');
     }
   }
 
@@ -545,9 +641,9 @@ import { PeerSession } from './webrtc-core.js';
       const token = await TokenCodec.encode('offer', offer, candidates);
       dom.offerOut.value = token;
 
-      // Generate QR
+      // Generate high-resolution QR (800px) so dense tokens don't blur fractional pixels
       if (window.QRCode) {
-        QRCode.toCanvas(dom.qrOfferOut, token, { width: 300, margin: 4, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
+        QRCode.toCanvas(dom.qrOfferOut, token, { width: 800, margin: 4, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err) => {
           if (!err) {
             show(dom.qrOfferOut);
             dom.btnCopyOfferQr.disabled = false;
@@ -607,9 +703,9 @@ import { PeerSession } from './webrtc-core.js';
       const token = await TokenCodec.encode('answer', answer, candidates);
       dom.answerOut.value = token;
 
-      // Generate QR
+      // Generate high-resolution QR
       if (window.QRCode) {
-        QRCode.toCanvas(dom.qrAnswerOut, token, { width: 300, margin: 4, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
+        QRCode.toCanvas(dom.qrAnswerOut, token, { width: 800, margin: 4, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err) => {
           if (!err) {
             show(dom.qrAnswerOut);
             dom.btnCopyAnswerQr.disabled = false;
@@ -728,6 +824,8 @@ import { PeerSession } from './webrtc-core.js';
       updateMediaButtons(true, true);
       appendLog('Local media started (audio + video)', 'success');
       systemMsg('Audio/video call started.');
+      show(dom.deviceControls);
+      await populateDevices();
     } catch (err) {
       // Try audio-only fallback
       try {
@@ -743,6 +841,8 @@ import { PeerSession } from './webrtc-core.js';
         updateMediaButtons(true, false);
         appendLog('Camera unavailable — audio-only call started', 'warn');
         systemMsg('Audio-only call started (camera not available).');
+        show(dom.deviceControls);
+        await populateDevices();
       } catch (err2) {
         appendLog(`Media access denied: ${err2.message}`, 'error');
         toast('Cannot access microphone/camera. Check browser permissions.');
@@ -815,7 +915,102 @@ import { PeerSession } from './webrtc-core.js';
     dom.btnToggleAudio.className = 'btn btn--secondary';
     dom.btnToggleVideo.className = 'btn btn--secondary';
     dom.btnScreenShare.classList.remove('btn--screensharing');
+    hide(dom.deviceControls);
   }
+
+  // ── DEVICE SWITCHING (Mobile/Desktop) ────────────────────────
+  async function populateDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      const audioOutputDevices = devices.filter(d => d.kind === 'audiooutput');
+
+      dom.cameraSelect.innerHTML = '';
+      if (videoDevices.length > 0) {
+        videoDevices.forEach((device, index) => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          const stream = session?.getLocalStream();
+          const currentDeviceId = stream && stream.getVideoTracks()[0]?.getSettings().deviceId;
+          if (currentDeviceId === device.deviceId) {
+            option.selected = true;
+          }
+          option.text = device.label || `Camera ${index + 1}`;
+          dom.cameraSelect.appendChild(option);
+        });
+        dom.cameraSelect.disabled = false;
+      } else {
+        dom.cameraSelect.innerHTML = '<option value="">No Camera Found</option>';
+        dom.cameraSelect.disabled = true;
+      }
+
+      dom.speakerSelect.innerHTML = '';
+      if (audioOutputDevices.length > 0 && typeof dom.remoteVideo.setSinkId !== 'undefined') {
+        audioOutputDevices.forEach((device, index) => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          if (dom.remoteVideo.sinkId === device.deviceId) {
+            option.selected = true;
+          }
+          option.text = device.label || `Speaker ${index + 1}`;
+          dom.speakerSelect.appendChild(option);
+        });
+        dom.speakerSelect.disabled = false;
+      } else {
+        dom.speakerSelect.innerHTML = '<option value="">System Default (Auto)</option>';
+        dom.speakerSelect.disabled = true; // Not supported on Safari/Firefox Desktop without flags
+      }
+    } catch (err) {
+      console.warn('Could not enumerate devices', err);
+    }
+  }
+
+  dom.cameraSelect.addEventListener('change', async (e) => {
+    const deviceId = e.target.value;
+    const currentStream = session?.getLocalStream();
+    if (!deviceId || !currentStream || session?.isScreenSharing()) return;
+
+    dom.cameraSelect.disabled = true;
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } }
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+
+      // Tell peer connection to swap track
+      await session.replaceVideoTrack(newVideoTrack);
+
+      // Swap track correctly in Local Stream
+      const oldVideoTrack = currentStream.getVideoTracks()[0];
+      if (oldVideoTrack) {
+        oldVideoTrack.stop();
+        currentStream.removeTrack(oldVideoTrack);
+      }
+      currentStream.addTrack(newVideoTrack);
+
+      dom.localVideo.srcObject = currentStream;
+      toast('Camera switched!');
+      appendLog('Camera track hot-swapped');
+    } catch (err) {
+      toast('Failed to jump to selected camera');
+      console.error('Camera switch error', err);
+    } finally {
+      dom.cameraSelect.disabled = false;
+    }
+  });
+
+  dom.speakerSelect.addEventListener('change', async (e) => {
+    const deviceId = e.target.value;
+    if (typeof dom.remoteVideo.setSinkId !== 'undefined') {
+      try {
+        await dom.remoteVideo.setSinkId(deviceId);
+        toast('Speaker output changed!');
+      } catch (err) {
+        toast('Error setting audio output device');
+        console.error('Speaker device swap error', err);
+      }
+    }
+  });
 
   function updateMediaButtons(audioEnabled, videoEnabled) {
     if (audioEnabled !== null && audioEnabled !== undefined) {
@@ -871,6 +1066,9 @@ import { PeerSession } from './webrtc-core.js';
     dom.btnShareAnswerQr.disabled = true;
     hide(dom.qrOfferOut);
     hide(dom.qrAnswerOut);
+    hide(dom.deviceControls);
+    dom.cameraSelect.innerHTML = '<option value="">Default Camera</option>';
+    dom.speakerSelect.innerHTML = '<option value="">Default Speaker</option>';
     disableChat();
     endMediaCall();
     dom.chatLog.innerHTML = '';

@@ -695,3 +695,46 @@ textarea[readonly] {
   margin-top: 0;
   margin-bottom: 1rem;
 }
+
+#qr-reader video {
+  width: 100% !important;
+  max-height: 50vh !important;
+  object-fit: contain !important;
+  /* Prevents aspect ratio distortion */
+  border-radius: var(--radius);
+}
+
+.qr-canvas {
+  width: 100% !important;
+  max-width: 300px;
+  height: auto !important;
+  margin: 0 auto;
+  display: block;
+}
+
+/* ── Device Controls ── */
+.device-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--c-border);
+}
+
+@media (min-width: 600px) {
+  .device-controls {
+    flex-direction: row;
+    gap: 20px;
+  }
+}
+
+.device-select {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 0.9rem;
+}
