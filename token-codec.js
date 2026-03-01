@@ -26,11 +26,7 @@ export const TokenCodec = (() => {
       t: type,
       ts: Date.now(),
       s: sdp ? { type: sdp.type, sdp: sdp.sdp } : null,
-      c: candidates.map(c => ({
-        candidate: c.candidate,
-        sdpMid: c.sdpMid,
-        sdpMLineIndex: c.sdpMLineIndex,
-      })),
+      c: candidates.map(c => c.candidate),
     };
 
     // Convert JSON to stream
@@ -112,7 +108,12 @@ export const TokenCodec = (() => {
     return {
       type: payload.t,
       sdp: payload.s,
-      candidates: Array.isArray(payload.c) ? payload.c : [],
+      candidates: Array.isArray(payload.c)
+        ? payload.c.map(c => typeof c === 'string'
+          ? { candidate: c, sdpMid: '0', sdpMLineIndex: 0 }
+          : c // Backwards-compatible with old tokens that stored full objects
+        )
+        : [],
       ts: payload.ts,
     };
   }

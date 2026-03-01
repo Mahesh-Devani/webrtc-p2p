@@ -738,3 +738,24 @@ textarea[readonly] {
   color: var(--c-text);
   font-size: 0.9rem;
 }
+
+/* ── Token Inspector ────────────────────────── */
+.inspect-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 0.9rem;
+}
+
+.inspect-section label {
+  font-weight: 600;
+  color: var(--c-text-dim);
+  min-width: 140px;
+}
+
+.inspect-section span {
+  color: var(--c-text);
+  text-align: right;
+}

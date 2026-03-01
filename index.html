@@ -78,6 +78,8 @@
                   title="Copy QR image to clipboard">Copy QR</button>
                 <button id="btn-share-offer-qr" class="btn btn--secondary" disabled
                   title="Share QR image via device share">Share QR</button>
+                <button id="btn-inspect-offer" class="btn btn--secondary" disabled
+                  title="Inspect decoded token contents">🔍 Inspect</button>
               </div>
             </div>
           </div>
@@ -135,6 +137,8 @@
                   title="Copy QR image to clipboard">Copy QR</button>
                 <button id="btn-share-answer-qr" class="btn btn--secondary" disabled
                   title="Share QR image via device share">Share QR</button>
+                <button id="btn-inspect-answer" class="btn btn--secondary" disabled
+                  title="Inspect decoded token contents">🔍 Inspect</button>
               </div>
             </div>
           </div>
@@ -251,6 +255,42 @@
         <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; background: #fff; color: #1a1d27;">
         </div>
         <button id="btn-close-scanner" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- ─── TOKEN INSPECTOR MODAL ─── -->
+    <div id="inspect-modal" class="modal hidden">
+      <div class="modal__content" style="max-width: 700px;">
+        <h3>🔍 Token Inspector</h3>
+        <p style="color: var(--c-text-dim); font-size: .82rem; margin-bottom: 1rem;">Decoded contents of the token —
+          this is what gets shared with the other peer.</p>
+        <div class="inspect-section">
+          <label>Type</label>
+          <span id="inspect-type"></span>
+        </div>
+        <div class="inspect-section">
+          <label>Token Version</label>
+          <span id="inspect-version"></span>
+        </div>
+        <div class="inspect-section">
+          <label>Created</label>
+          <span id="inspect-ts"></span>
+        </div>
+        <div class="inspect-section">
+          <label>ICE Candidates</label>
+          <span id="inspect-ice-count"></span>
+        </div>
+        <details style="margin-top: 0.75rem;">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">SDP (Session Description)</summary>
+          <pre id="inspect-sdp"
+            style="max-height: 250px; overflow: auto; font-size: .75rem; background: var(--c-bg); padding: 8px; border-radius: var(--radius); margin-top: 6px; white-space: pre-wrap; word-break: break-all;"></pre>
+        </details>
+        <details style="margin-top: 0.5rem;">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">ICE Candidates (raw)</summary>
+          <pre id="inspect-candidates"
+            style="max-height: 200px; overflow: auto; font-size: .75rem; background: var(--c-bg); padding: 8px; border-radius: var(--radius); margin-top: 6px; white-space: pre-wrap; word-break: break-all;"></pre>
+        </details>
+        <button id="btn-close-inspect" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Close</button>
       </div>
     </div>
 

@@ -54,6 +54,18 @@ import { PeerSession } from './webrtc-core.js';
     btnCopyAnswerQr: $('#btn-copy-answer-qr'),
     btnShareAnswerQr: $('#btn-share-answer-qr'),
 
+    // Inspect
+    btnInspectOffer: $('#btn-inspect-offer'),
+    btnInspectAnswer: $('#btn-inspect-answer'),
+    inspectModal: $('#inspect-modal'),
+    btnCloseInspect: $('#btn-close-inspect'),
+    inspectType: $('#inspect-type'),
+    inspectVersion: $('#inspect-version'),
+    inspectTs: $('#inspect-ts'),
+    inspectIceCount: $('#inspect-ice-count'),
+    inspectSdp: $('#inspect-sdp'),
+    inspectCandidates: $('#inspect-candidates'),
+
     // QR Scanner
     qrModal: $('#qr-modal'),
     btnCloseScanner: $('#btn-close-scanner'),
@@ -508,6 +520,31 @@ import { PeerSession } from './webrtc-core.js';
   dom.btnCopyAnswerQr?.addEventListener('click', () => copyQrImage(dom.qrAnswerOut, 'Answer'));
   dom.btnShareAnswerQr?.addEventListener('click', () => shareQrImage(dom.qrAnswerOut, 'P2P Connect Answer'));
 
+  // ── TOKEN INSPECTOR ──────────────────────────────────────────
+  async function openInspector(tokenStr) {
+    if (!tokenStr) { toast('No token to inspect.'); return; }
+    try {
+      const data = await TokenCodec.decode(tokenStr);
+      dom.inspectType.textContent = data.type?.toUpperCase() || 'Unknown';
+      dom.inspectVersion.textContent = 'v2 (compressed)';
+      dom.inspectTs.textContent = data.ts
+        ? new Date(data.ts).toLocaleString()
+        : 'N/A';
+      dom.inspectIceCount.textContent = `${data.candidates?.length || 0} candidate(s)`;
+      dom.inspectSdp.textContent = data.sdp?.sdp || '(no SDP)';
+      dom.inspectCandidates.textContent = data.candidates?.length
+        ? data.candidates.map((c, i) => `#${i + 1}: ${c.candidate}`).join('\n')
+        : '(none)';
+      show(dom.inspectModal);
+    } catch (err) {
+      toast(`Failed to decode token: ${err.message}`);
+    }
+  }
+
+  dom.btnInspectOffer?.addEventListener('click', () => openInspector(dom.offerOut.value));
+  dom.btnInspectAnswer?.addEventListener('click', () => openInspector(dom.answerOut.value));
+  dom.btnCloseInspect?.addEventListener('click', () => hide(dom.inspectModal));
+
   // ── PASTING IMAGES TO DECODE QR ──────────────────────────────
   async function handlePasteEvent(e, textArea) {
     const items = e.clipboardData?.items;
@@ -636,10 +673,11 @@ import { PeerSession } from './webrtc-core.js';
     try {
       const offer = await session.createOffer();
       // Wait briefly for some ICE candidates to accumulate
-      await waitForIceOrTimeout(3000);
+      await waitForIceOrTimeout(1500);
       const candidates = session.getLocalCandidates();
       const token = await TokenCodec.encode('offer', offer, candidates);
       dom.offerOut.value = token;
+      console.log(`[Token] Offer: ${token.length} chars, ${candidates.length} ICE candidates`);
 
       // Generate high-resolution QR (800px) so dense tokens don't blur fractional pixels
       if (window.QRCode) {
@@ -653,6 +691,7 @@ import { PeerSession } from './webrtc-core.js';
       }
 
       dom.btnCopyOffer.disabled = false;
+      dom.btnInspectOffer.disabled = false;
       appendLog(`Offer token generated (${token.length} chars, ${candidates.length} ICE candidates bundled)`);
     } catch (err) {
       appendLog(`Offer creation failed: ${err.message}`, 'error');
@@ -698,10 +737,11 @@ import { PeerSession } from './webrtc-core.js';
         await session.addIceCandidates(data.candidates);
       }
       // Wait briefly for some ICE candidates
-      await waitForIceOrTimeout(3000);
+      await waitForIceOrTimeout(1500);
       const candidates = session.getLocalCandidates();
       const token = await TokenCodec.encode('answer', answer, candidates);
       dom.answerOut.value = token;
+      console.log(`[Token] Answer: ${token.length} chars, ${candidates.length} ICE candidates`);
 
       // Generate high-resolution QR
       if (window.QRCode) {
@@ -715,6 +755,7 @@ import { PeerSession } from './webrtc-core.js';
       }
 
       dom.btnCopyAnswer.disabled = false;
+      dom.btnInspectAnswer.disabled = false;
       appendLog(`Answer token generated (${token.length} chars, ${candidates.length} ICE candidates bundled)`);
     } catch (err) {
       appendLog(`Invalid offer token: ${err.message}`, 'error');
