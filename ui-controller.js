@@ -440,6 +440,18 @@ import { PeerSession } from './webrtc-core.js';
     const readerEl = document.getElementById('qr-reader');
     readerEl.innerHTML = '';
 
+    // Camera selector dropdown
+    const controlRow = document.createElement('div');
+    controlRow.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px;';
+    const camLabel = document.createElement('label');
+    camLabel.textContent = 'Camera:';
+    camLabel.style.cssText = 'font-size:.85rem; color:var(--c-text-dim); white-space:nowrap;';
+    const camSelect = document.createElement('select');
+    camSelect.style.cssText = 'flex:1; padding:6px; border-radius:var(--radius); border:1px solid var(--c-border); background:var(--c-bg); color:var(--c-text); font-size:.85rem;';
+    controlRow.appendChild(camLabel);
+    controlRow.appendChild(camSelect);
+    readerEl.appendChild(controlRow);
+
     scannerVideo = document.createElement('video');
     scannerVideo.setAttribute('playsinline', 'true');
     scannerVideo.setAttribute('autoplay', 'true');
@@ -450,53 +462,59 @@ import { PeerSession } from './webrtc-core.js';
 
     const statusEl = document.createElement('p');
     statusEl.style.cssText = 'text-align:center; font-size:.82rem; color:#aaa; margin-top:8px;';
-    statusEl.textContent = 'Point camera at QR code…';
+    statusEl.textContent = 'Starting camera…';
     readerEl.appendChild(statusEl);
 
+    // Populate camera list
     try {
-      scannerStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          focusMode: { ideal: 'continuous' }, // Autofocus
-        }
+      // Need initial getUserMedia to trigger permission so enumerateDevices returns labels
+      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      tempStream.getTracks().forEach(t => t.stop());
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      camSelect.innerHTML = '';
+      videoDevices.forEach((dev, i) => {
+        const opt = document.createElement('option');
+        opt.value = dev.deviceId;
+        opt.textContent = dev.label || `Camera ${i + 1}`;
+        camSelect.appendChild(opt);
       });
-      scannerVideo.srcObject = scannerStream;
-      await scannerVideo.play();
+
+      // Prefer last successful camera (cached), then fall back to back-camera heuristic
+      const cachedCamId = localStorage.getItem('p2p-scanner-cam');
+      const cachedExists = cachedCamId && videoDevices.some(d => d.deviceId === cachedCamId);
+      if (cachedExists) {
+        camSelect.value = cachedCamId;
+      } else {
+        const backCam = videoDevices.find(d => /back|rear|environment/i.test(d.label));
+        if (backCam) camSelect.value = backCam.deviceId;
+      }
     } catch (err) {
-      console.error('Camera access failed', err);
-      toast('Failed to access camera. Need HTTPS/Localhost + camera permissions.');
+      console.error('Failed to enumerate cameras', err);
+      toast('Camera access failed. Need HTTPS/Localhost + permissions.');
       closeQrScanner();
       return;
     }
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    // Canvas for frame extraction
+    // Downscale canvas — reduces CPU on mobile while keeping enough detail for jsQR
+    const scanCanvas = document.createElement('canvas');
+    const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
     let frameCount = 0;
 
-    // Adaptive binary threshold — converts gray webcam frames to crisp B&W
     function binarize(imageData) {
       const d = imageData.data;
-      // Calculate average luminance for adaptive threshold
       let sum = 0;
       for (let i = 0; i < d.length; i += 4) {
         sum += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
       }
-      const avg = sum / (d.length / 4);
-      const threshold = avg * 0.8; // Slightly below average for better QR detection
+      const threshold = (sum / (d.length / 4)) * 0.8;
       for (let i = 0; i < d.length; i += 4) {
         const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
         const val = lum > threshold ? 255 : 0;
         d[i] = d[i + 1] = d[i + 2] = val;
       }
-    }
-
-    // Try decoding from a canvas region
-    function tryDecode(srcCanvas, srcCtx, x, y, w, h) {
-      const imgData = srcCtx.getImageData(x, y, w, h);
-      binarize(imgData);
-      return jsQR(imgData.data, w, h, { inversionAttempts: 'attemptBoth' });
     }
 
     function scanFrame() {
@@ -506,31 +524,48 @@ import { PeerSession } from './webrtc-core.js';
         return;
       }
 
-      canvas.width = scannerVideo.videoWidth;
-      canvas.height = scannerVideo.videoHeight;
-      ctx.drawImage(scannerVideo, 0, 0);
+      // Downscale to max 640px wide for faster processing
+      const vw = scannerVideo.videoWidth;
+      const vh = scannerVideo.videoHeight;
+      const scale = Math.min(1, 640 / vw);
+      const sw = Math.floor(vw * scale);
+      const sh = Math.floor(vh * scale);
+      scanCanvas.width = sw;
+      scanCanvas.height = sh;
+      scanCtx.drawImage(scannerVideo, 0, 0, sw, sh);
       frameCount++;
 
       let code = null;
 
-      // Strategy 1: Full frame scan (every frame)
-      code = tryDecode(canvas, ctx, 0, 0, canvas.width, canvas.height);
+      // Strategy 1: Raw scan (every frame) — works great with clean phone cameras
+      const rawData = scanCtx.getImageData(0, 0, sw, sh);
+      code = jsQR(rawData.data, sw, sh, { inversionAttempts: 'dontInvert' });
 
-      // Strategy 2: Center 60% crop (every other frame if full failed)
+      // Strategy 2: Center 60% raw crop (every 2nd frame)
       if (!code && frameCount % 2 === 0) {
-        const cropW = Math.floor(canvas.width * 0.6);
-        const cropH = Math.floor(canvas.height * 0.6);
-        const cx = Math.floor((canvas.width - cropW) / 2);
-        const cy = Math.floor((canvas.height - cropH) / 2);
-        code = tryDecode(canvas, ctx, cx, cy, cropW, cropH);
+        const cw = Math.floor(sw * 0.6);
+        const ch = Math.floor(sh * 0.6);
+        const cx = Math.floor((sw - cw) / 2);
+        const cy = Math.floor((sh - ch) / 2);
+        const cropData = scanCtx.getImageData(cx, cy, cw, ch);
+        code = jsQR(cropData.data, cw, ch, { inversionAttempts: 'dontInvert' });
+      }
+
+      // Strategy 3: Binarized full scan (every 3rd frame) — helps with glare/noise
+      if (!code && frameCount % 3 === 0) {
+        const binData = scanCtx.getImageData(0, 0, sw, sh);
+        binarize(binData);
+        code = jsQR(binData.data, sw, sh, { inversionAttempts: 'attemptBoth' });
       }
 
       if (frameCount % 30 === 0) {
-        statusEl.textContent = `Scanning… (${canvas.width}×${canvas.height}, frame ${frameCount})`;
+        statusEl.textContent = `Scanning… (${sw}×${sh}, frame ${frameCount})`;
       }
 
       if (code && code.data) {
         console.log('jsQR detected:', code.data.substring(0, 50) + '...');
+        // Cache the successful camera for next time
+        try { localStorage.setItem('p2p-scanner-cam', camSelect.value); } catch { }
         onSuccess(code.data);
         closeQrScanner();
         return;
@@ -539,7 +574,41 @@ import { PeerSession } from './webrtc-core.js';
       scannerAnimFrame = requestAnimationFrame(scanFrame);
     }
 
-    scannerAnimFrame = requestAnimationFrame(scanFrame);
+    // Start (or switch) camera by deviceId
+    async function startCamera(deviceId) {
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(t => t.stop());
+        scannerStream = null;
+      }
+      if (scannerAnimFrame) {
+        cancelAnimationFrame(scannerAnimFrame);
+        scannerAnimFrame = null;
+      }
+      frameCount = 0;
+      statusEl.textContent = 'Starting camera…';
+
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            focusMode: { ideal: 'continuous' },
+          }
+        });
+        scannerVideo.srcObject = scannerStream;
+        await scannerVideo.play();
+        statusEl.textContent = 'Point camera at QR code…';
+        scannerAnimFrame = requestAnimationFrame(scanFrame);
+      } catch (err) {
+        console.error('Camera start failed', err);
+        toast('Failed to start this camera.');
+        statusEl.textContent = 'Camera failed — try a different one.';
+      }
+    }
+
+    camSelect.addEventListener('change', () => startCamera(camSelect.value));
+    await startCamera(camSelect.value);
   }
 
   function closeQrScanner() {

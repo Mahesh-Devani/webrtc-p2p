@@ -1,6 +1,17 @@
 # Ignore node_modules
 node_modules/
 
+# SSL certs for local HTTPS dev server
+*.pem
+*.key
+*.crt
+*.pfx
+ca.key
+ca.crt
+cert.key
+cert.crt
+cert.pfx
+
 # Ignore build output
 dist/
 build/
