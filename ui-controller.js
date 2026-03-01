@@ -390,8 +390,20 @@ import { PeerSession } from './webrtc-core.js';
   let html5QrcodeScanner = null;
 
   // ── QR SCANNER (CAMERA) ──────────────────────────────────────
+  let scannerStream = null;
+  let scannerAnimFrame = null;
+  let scannerVideo = null;
+
   function openQrScanner(onSuccess) {
     show(dom.qrModal);
+
+    // Use jsQR for live frame scanning (same decoder that works for paste)
+    if (window.jsQR) {
+      openJsQrScanner(onSuccess);
+      return;
+    }
+
+    // Fallback to html5-qrcode (ZXing-based)
     if (!window.Html5Qrcode) {
       toast('Scanner library loading. Try again in a moment.');
       hide(dom.qrModal);
@@ -399,32 +411,24 @@ import { PeerSession } from './webrtc-core.js';
     }
 
     if (html5QrcodeScanner) {
-      closeQrScanner(); // fail-safe cleanup
+      closeQrScanner();
     }
 
     html5QrcodeScanner = new Html5Qrcode("qr-reader");
-
     const config = {
-      fps: 15, // High frame rate for faster locks
-      qrbox: (viewfinderWidth, viewfinderHeight) => {
-        // Use 85% of the shortest edge
-        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-        return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
+      fps: 15,
+      qrbox: (vw, vh) => {
+        const m = Math.min(vw, vh);
+        return { width: Math.floor(m * 0.85), height: Math.floor(m * 0.85) };
       },
-      aspectRatio: 1.0 // Force a square capture grid
+      aspectRatio: 1.0
     };
 
     html5QrcodeScanner.start(
-      { facingMode: "environment" }, // Prefer back camera on mobile
+      { facingMode: "environment" },
       config,
-      (decodedText) => {
-        console.log('Detected QR Code:', decodedText);
-        onSuccess(decodedText);
-        closeQrScanner();
-      },
-      (error) => {
-        // Routine frame failures, ignored
-      }
+      (decodedText) => { onSuccess(decodedText); closeQrScanner(); },
+      () => { }
     ).catch(err => {
       console.error('Failed to start scanner', err);
       toast('Failed to start camera. Need HTTPS/Localhost + permissions.');
@@ -432,7 +436,86 @@ import { PeerSession } from './webrtc-core.js';
     });
   }
 
+  async function openJsQrScanner(onSuccess) {
+    const readerEl = document.getElementById('qr-reader');
+    readerEl.innerHTML = ''; // clear previous content
+
+    // Create a <video> element inside the QR reader div
+    scannerVideo = document.createElement('video');
+    scannerVideo.setAttribute('playsinline', 'true');
+    scannerVideo.setAttribute('autoplay', 'true');
+    scannerVideo.style.width = '100%';
+    scannerVideo.style.maxWidth = '400px';
+    scannerVideo.style.borderRadius = 'var(--radius)';
+    readerEl.appendChild(scannerVideo);
+
+    // Status indicator
+    const statusEl = document.createElement('p');
+    statusEl.style.cssText = 'text-align:center; font-size:.82rem; color:#aaa; margin-top:8px;';
+    statusEl.textContent = 'Point camera at QR code… (scanning)';
+    readerEl.appendChild(statusEl);
+
+    try {
+      // Request high resolution — laptop webcams usually support 720p+
+      scannerStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      scannerVideo.srcObject = scannerStream;
+      await scannerVideo.play();
+    } catch (err) {
+      console.error('Camera access failed', err);
+      toast('Failed to access camera. Need HTTPS/Localhost + camera permissions.');
+      closeQrScanner();
+      return;
+    }
+
+    // Offscreen canvas for frame extraction
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let frameCount = 0;
+
+    function scanFrame() {
+      if (!scannerStream) return; // scanner was closed
+      if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
+        canvas.width = scannerVideo.videoWidth;
+        canvas.height = scannerVideo.videoHeight;
+        ctx.drawImage(scannerVideo, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth', // Handle dark mode / screen glare
+        });
+        frameCount++;
+        if (frameCount % 30 === 0) { // Update status every ~1 second
+          statusEl.textContent = `Scanning… (${canvas.width}x${canvas.height}, frame ${frameCount})`;
+        }
+        if (code && code.data) {
+          console.log('jsQR live scan detected:', code.data.substring(0, 50) + '...');
+          onSuccess(code.data);
+          closeQrScanner();
+          return;
+        }
+      }
+      scannerAnimFrame = requestAnimationFrame(scanFrame);
+    }
+
+    scannerAnimFrame = requestAnimationFrame(scanFrame);
+  }
+
   function closeQrScanner() {
+    // Stop jsQR scanner
+    if (scannerAnimFrame) {
+      cancelAnimationFrame(scannerAnimFrame);
+      scannerAnimFrame = null;
+    }
+    if (scannerStream) {
+      scannerStream.getTracks().forEach(t => t.stop());
+      scannerStream = null;
+    }
+    if (scannerVideo) {
+      scannerVideo.srcObject = null;
+      scannerVideo = null;
+    }
+    // Stop html5-qrcode scanner
     if (html5QrcodeScanner) {
       if (html5QrcodeScanner.isScanning) {
         html5QrcodeScanner.stop().then(() => {
@@ -440,12 +523,13 @@ import { PeerSession } from './webrtc-core.js';
           html5QrcodeScanner = null;
         }).catch(err => console.error('Error stopping scanner', err));
       } else {
-        try {
-          html5QrcodeScanner.clear();
-        } catch { }
+        try { html5QrcodeScanner.clear(); } catch { }
         html5QrcodeScanner = null;
       }
     }
+    // Clean up the reader div
+    const readerEl = document.getElementById('qr-reader');
+    if (readerEl) readerEl.innerHTML = '';
     hide(dom.qrModal);
   }
 
