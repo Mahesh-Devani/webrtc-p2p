@@ -438,9 +438,8 @@ import { PeerSession } from './webrtc-core.js';
 
   async function openJsQrScanner(onSuccess) {
     const readerEl = document.getElementById('qr-reader');
-    readerEl.innerHTML = ''; // clear previous content
+    readerEl.innerHTML = '';
 
-    // Create a <video> element inside the QR reader div
     scannerVideo = document.createElement('video');
     scannerVideo.setAttribute('playsinline', 'true');
     scannerVideo.setAttribute('autoplay', 'true');
@@ -449,16 +448,19 @@ import { PeerSession } from './webrtc-core.js';
     scannerVideo.style.borderRadius = 'var(--radius)';
     readerEl.appendChild(scannerVideo);
 
-    // Status indicator
     const statusEl = document.createElement('p');
     statusEl.style.cssText = 'text-align:center; font-size:.82rem; color:#aaa; margin-top:8px;';
-    statusEl.textContent = 'Point camera at QR code… (scanning)';
+    statusEl.textContent = 'Point camera at QR code…';
     readerEl.appendChild(statusEl);
 
     try {
-      // Request high resolution — laptop webcams usually support 720p+
       scannerStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          focusMode: { ideal: 'continuous' }, // Autofocus
+        }
       });
       scannerVideo.srcObject = scannerStream;
       await scannerVideo.play();
@@ -469,32 +471,71 @@ import { PeerSession } from './webrtc-core.js';
       return;
     }
 
-    // Offscreen canvas for frame extraction
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     let frameCount = 0;
 
-    function scanFrame() {
-      if (!scannerStream) return; // scanner was closed
-      if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
-        canvas.width = scannerVideo.videoWidth;
-        canvas.height = scannerVideo.videoHeight;
-        ctx.drawImage(scannerVideo, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth', // Handle dark mode / screen glare
-        });
-        frameCount++;
-        if (frameCount % 30 === 0) { // Update status every ~1 second
-          statusEl.textContent = `Scanning… (${canvas.width}x${canvas.height}, frame ${frameCount})`;
-        }
-        if (code && code.data) {
-          console.log('jsQR live scan detected:', code.data.substring(0, 50) + '...');
-          onSuccess(code.data);
-          closeQrScanner();
-          return;
-        }
+    // Adaptive binary threshold — converts gray webcam frames to crisp B&W
+    function binarize(imageData) {
+      const d = imageData.data;
+      // Calculate average luminance for adaptive threshold
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        sum += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
       }
+      const avg = sum / (d.length / 4);
+      const threshold = avg * 0.8; // Slightly below average for better QR detection
+      for (let i = 0; i < d.length; i += 4) {
+        const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+        const val = lum > threshold ? 255 : 0;
+        d[i] = d[i + 1] = d[i + 2] = val;
+      }
+    }
+
+    // Try decoding from a canvas region
+    function tryDecode(srcCanvas, srcCtx, x, y, w, h) {
+      const imgData = srcCtx.getImageData(x, y, w, h);
+      binarize(imgData);
+      return jsQR(imgData.data, w, h, { inversionAttempts: 'attemptBoth' });
+    }
+
+    function scanFrame() {
+      if (!scannerStream) return;
+      if (scannerVideo.readyState !== scannerVideo.HAVE_ENOUGH_DATA) {
+        scannerAnimFrame = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      canvas.width = scannerVideo.videoWidth;
+      canvas.height = scannerVideo.videoHeight;
+      ctx.drawImage(scannerVideo, 0, 0);
+      frameCount++;
+
+      let code = null;
+
+      // Strategy 1: Full frame scan (every frame)
+      code = tryDecode(canvas, ctx, 0, 0, canvas.width, canvas.height);
+
+      // Strategy 2: Center 60% crop (every other frame if full failed)
+      if (!code && frameCount % 2 === 0) {
+        const cropW = Math.floor(canvas.width * 0.6);
+        const cropH = Math.floor(canvas.height * 0.6);
+        const cx = Math.floor((canvas.width - cropW) / 2);
+        const cy = Math.floor((canvas.height - cropH) / 2);
+        code = tryDecode(canvas, ctx, cx, cy, cropW, cropH);
+      }
+
+      if (frameCount % 30 === 0) {
+        statusEl.textContent = `Scanning… (${canvas.width}×${canvas.height}, frame ${frameCount})`;
+      }
+
+      if (code && code.data) {
+        console.log('jsQR detected:', code.data.substring(0, 50) + '...');
+        onSuccess(code.data);
+        closeQrScanner();
+        return;
+      }
+
       scannerAnimFrame = requestAnimationFrame(scanFrame);
     }
 
