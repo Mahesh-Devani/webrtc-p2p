@@ -755,12 +755,18 @@ import { PeerSession } from './webrtc-core.js';
     }
   }
 
+  let scanInProgress = false;
+
   async function scanQrFile(file, textArea) {
+    if (scanInProgress) return; // prevent double-fire from paste + import
+    scanInProgress = true;
+
     if (!window.Html5Qrcode && !window.jsQR && !('BarcodeDetector' in window)) {
       toast('No QR scanner library available.');
+      scanInProgress = false;
       return;
     }
-    toast('Scanning pasted image for QR code...');
+    toast('Scanning image for QR code…');
 
     try {
       // Force raw Image decoding to strip weird clipboard MIME types
@@ -812,31 +818,39 @@ import { PeerSession } from './webrtc-core.js';
       }
 
       // Attempt 3: html5-qrcode fallback
-      if (!window.Html5Qrcode) {
-        toast('Scanner library not loaded and native detector failed to find QR.');
-        return;
-      }
-
-      const html5QrCode = new Html5Qrcode("hidden-qr-reader");
-      try {
-        const cleanBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        const cleanFile = new File([cleanBlob], 'clipboard-qr.png', { type: 'image/png' });
-
-        const decodedText = await html5QrCode.scanFileV2(cleanFile, true)
-          .then(res => res.decodedText)
-          .catch(() => html5QrCode.scanFile(cleanFile, true));
-
-        textArea.value = decodedText;
-        toast('QR code decoded successfully from image (fallback)!');
-      } finally {
-        if (typeof html5QrCode.clear === 'function') {
-          html5QrCode.clear().catch(e => console.error(e));
+      if (window.Html5Qrcode) {
+        const html5QrCode = new Html5Qrcode("hidden-qr-reader");
+        try {
+          const cleanBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          const cleanFile = new File([cleanBlob], 'clipboard-qr.png', { type: 'image/png' });
+          let decodedText;
+          if (typeof html5QrCode.scanFileV2 === 'function') {
+            decodedText = await html5QrCode.scanFileV2(cleanFile, true)
+              .then(res => res.decodedText);
+          } else {
+            decodedText = await html5QrCode.scanFile(cleanFile, true);
+          }
+          if (decodedText) {
+            textArea.value = decodedText;
+            toast('QR code decoded successfully! (fallback)');
+            return;
+          }
+        } catch (e) {
+          console.warn('Html5Qrcode decode failed', e);
+        } finally {
+          try { html5QrCode.clear(); } catch (_) { /* ignore */ }
         }
       }
 
+      // All decoders failed
+      toast('Could not find a valid QR code in the image.');
+      console.warn('All QR decoders failed for this image.');
+
     } catch (err) {
-      console.warn('QR decode failed completely', err);
-      toast('Could not find a valid QR code in the pasted image.');
+      console.warn('QR decode failed', err);
+      toast('Could not find a valid QR code in the image.');
+    } finally {
+      scanInProgress = false;
     }
   }
 
