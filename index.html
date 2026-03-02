@@ -96,6 +96,8 @@
                   📤 Import
                   <input type="file" id="import-answer" class="hidden-file-input" accept="image/*">
                 </label>
+                <button id="btn-inspect-answer-in" class="btn btn--secondary" title="Inspect pasted answer token">🔍
+                  Inspect</button>
                 <button id="btn-accept-answer" class="btn btn--primary">Accept Answer</button>
               </div>
             </div>
@@ -202,6 +204,16 @@
           </select>
         </div>
         <div class="form-row">
+          <label for="resolution-select">📐 Resolution</label>
+          <select id="resolution-select" class="device-select">
+            <option value="">Auto</option>
+            <option value="480">480p (SD)</option>
+            <option value="720" selected>720p (HD)</option>
+            <option value="1080">1080p (Full HD)</option>
+            <option value="1440">1440p (2K)</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label for="speaker-select">🔊 Speaker</label>
           <select id="speaker-select" class="device-select" disabled>
             <option value="">Default Speaker</option>
@@ -264,6 +276,16 @@
         <h3>🔍 Token Inspector</h3>
         <p style="color: var(--c-text-dim); font-size: .82rem; margin-bottom: 1rem;">Decoded contents of the token —
           this is what gets shared with the other peer.</p>
+
+        <!-- Manual decode input -->
+        <div style="margin-bottom: 1rem;">
+          <textarea id="inspect-input" rows="3" placeholder="Paste any token here to decode it…"
+            style="width: 100%; font-size: .8rem; margin-bottom: .5rem;"></textarea>
+          <button id="btn-decode-token" class="btn btn--secondary" style="width: 100%;">Decode Token</button>
+        </div>
+
+        <hr style="border-color: var(--c-border); margin-bottom: 1rem;">
+
         <div class="inspect-section">
           <label>Type</label>
           <span id="inspect-type"></span>
@@ -290,6 +312,38 @@
           <pre id="inspect-candidates"
             style="max-height: 200px; overflow: auto; font-size: .75rem; background: var(--c-bg); padding: 8px; border-radius: var(--radius); margin-top: 6px; white-space: pre-wrap; word-break: break-all;"></pre>
         </details>
+
+        <!-- How to verify independently -->
+        <details style="margin-top: 0.75rem;">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">🛡️ How to verify this token
+            yourself</summary>
+          <div
+            style="font-size: .78rem; color: var(--c-text-dim); padding: 8px; background: var(--c-bg); border-radius: var(--radius); margin-top: 6px; line-height: 1.5;">
+            <p>Tokens use the format: <code>P2P2-&lt;base64url_data&gt;</code></p>
+            <p style="margin-top: 6px;"><strong>To decode manually:</strong></p>
+            <ol style="padding-left: 1.2rem; margin-top: 4px;">
+              <li>Remove the <code>P2P2-</code> prefix</li>
+              <li>Convert base64url → base64 (replace <code>-</code> with <code>+</code>, <code>_</code> with
+                <code>/</code>, pad with <code>=</code>)
+              </li>
+              <li>Base64-decode to get compressed bytes</li>
+              <li>Inflate/decompress using <strong>pako</strong> (zlib deflate)</li>
+              <li>The result is a JSON object with: <code>{ v, t, ts, s, c }</code></li>
+            </ol>
+            <p style="margin-top: 6px;"><strong>Or run in browser console:</strong></p>
+            <pre
+              style="background: #1a1d27; padding: 6px; border-radius: 4px; margin-top: 4px; overflow-x: auto; color: #e0e0e0;">// Paste your token:
+const token = 'P2P2-...';
+const b64 = token.slice(5).replace(/-/g,'+').replace(/_/g,'/');
+const bin = atob(b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '='));
+const bytes = new Uint8Array([...bin].map(c=>c.charCodeAt(0)));
+const json = new TextDecoder().decode(pako.inflate(bytes));
+console.log(JSON.parse(json));</pre>
+            <p style="margin-top: 6px;"><em>No data is sent to any server — everything is decoded locally in your
+                browser.</em></p>
+          </div>
+        </details>
+
         <button id="btn-close-inspect" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Close</button>
       </div>
     </div>

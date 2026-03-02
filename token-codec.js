@@ -21,12 +21,33 @@ export const TokenCodec = (() => {
    * @returns {Promise<string>}
    */
   async function encode(type, sdp, candidates = []) {
+    // Strip non-essential metadata from ICE candidate strings to reduce token size.
+    // Removes: generation, ufrag, network-id, network-cost (browser-added, not needed for connectivity).
+    // Saves ~40-50 chars per candidate while keeping ALL candidates for maximum connectivity.
+    function stripCandidateMetadata(candidateStr) {
+      return candidateStr
+        .replace(/\s+generation\s+\d+/gi, '')
+        .replace(/\s+ufrag\s+\S+/gi, '')
+        .replace(/\s+network-id\s+\d+/gi, '')
+        .replace(/\s+network-cost\s+\d+/gi, '')
+        .trim();
+    }
+
+    const strippedCandidates = candidates.map(c => {
+      const raw = c.candidate || '';
+      const stripped = stripCandidateMetadata(raw);
+      if (stripped.length < raw.length) {
+        console.log(`[Token] Stripped candidate: ${raw.length} → ${stripped.length} chars`);
+      }
+      return stripped;
+    });
+
     const payload = {
       v: VERSION,
       t: type,
       ts: Date.now(),
       s: sdp ? { type: sdp.type, sdp: sdp.sdp } : null,
-      c: candidates.map(c => c.candidate),
+      c: strippedCandidates,
     };
 
     // Convert JSON to stream

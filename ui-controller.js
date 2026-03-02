@@ -57,8 +57,11 @@ import { PeerSession } from './webrtc-core.js';
     // Inspect
     btnInspectOffer: $('#btn-inspect-offer'),
     btnInspectAnswer: $('#btn-inspect-answer'),
+    btnInspectAnswerIn: $('#btn-inspect-answer-in'),
     inspectModal: $('#inspect-modal'),
     btnCloseInspect: $('#btn-close-inspect'),
+    inspectInput: $('#inspect-input'),
+    btnDecodeToken: $('#btn-decode-token'),
     inspectType: $('#inspect-type'),
     inspectVersion: $('#inspect-version'),
     inspectTs: $('#inspect-ts'),
@@ -100,6 +103,7 @@ import { PeerSession } from './webrtc-core.js';
     btnEndCall: $('#btn-end-call'),
     deviceControls: $('#device-controls'),
     cameraSelect: $('#camera-select'),
+    resolutionSelect: $('#resolution-select'),
     speakerSelect: $('#speaker-select'),
 
     // Log
@@ -719,12 +723,15 @@ import { PeerSession } from './webrtc-core.js';
     if (!tokenStr) { toast('No token to inspect.'); return; }
     try {
       const data = await TokenCodec.decode(tokenStr);
+      // Populate the manual input with the token for reference
+      if (dom.inspectInput) dom.inspectInput.value = tokenStr;
       dom.inspectType.textContent = data.type?.toUpperCase() || 'Unknown';
       dom.inspectVersion.textContent = 'v2 (compressed)';
       dom.inspectTs.textContent = data.ts
         ? new Date(data.ts).toLocaleString()
         : 'N/A';
       dom.inspectIceCount.textContent = `${data.candidates?.length || 0} candidate(s)`;
+      // Display SDP as plain text (the <pre> tag preserves line breaks)
       dom.inspectSdp.textContent = data.sdp?.sdp || '(no SDP)';
       dom.inspectCandidates.textContent = data.candidates?.length
         ? data.candidates.map((c, i) => `#${i + 1}: ${c.candidate}`).join('\n')
@@ -737,6 +744,8 @@ import { PeerSession } from './webrtc-core.js';
 
   dom.btnInspectOffer?.addEventListener('click', () => openInspector(dom.offerOut.value));
   dom.btnInspectAnswer?.addEventListener('click', () => openInspector(dom.answerOut.value));
+  dom.btnInspectAnswerIn?.addEventListener('click', () => openInspector(dom.answerIn.value));
+  dom.btnDecodeToken?.addEventListener('click', () => openInspector(dom.inspectInput?.value));
   dom.btnCloseInspect?.addEventListener('click', () => hide(dom.inspectModal));
 
   // ── PASTING IMAGES TO DECODE QR ──────────────────────────────
@@ -890,7 +899,11 @@ import { PeerSession } from './webrtc-core.js';
       // Generate high-resolution QR (800px) so dense tokens don't blur fractional pixels
       if (window.QRCode) {
         QRCode.toCanvas(dom.qrOfferOut, token, { width: 800, margin: 4, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err) => {
-          if (!err) {
+          if (err) {
+            console.error('[QR] Offer QR generation failed:', err);
+            appendLog(`⚠️ QR generation failed (token ${token.length} chars): ${err.message}`, 'error');
+            toast('QR code too large to generate. Use Copy Token instead.');
+          } else {
             show(dom.qrOfferOut);
             dom.btnCopyOfferQr.disabled = false;
             if (navigator.share) dom.btnShareOfferQr.disabled = false;
@@ -954,7 +967,11 @@ import { PeerSession } from './webrtc-core.js';
       // Generate high-resolution QR
       if (window.QRCode) {
         QRCode.toCanvas(dom.qrAnswerOut, token, { width: 800, margin: 4, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err) => {
-          if (!err) {
+          if (err) {
+            console.error('[QR] Answer QR generation failed:', err);
+            appendLog(`⚠️ QR generation failed (token ${token.length} chars): ${err.message}`, 'error');
+            toast('QR code too large to generate. Use Copy Token instead.');
+          } else {
             show(dom.qrAnswerOut);
             dom.btnCopyAnswerQr.disabled = false;
             if (navigator.share) dom.btnShareAnswerQr.disabled = false;
@@ -1058,10 +1075,26 @@ import { PeerSession } from './webrtc-core.js';
   dom.localVideo.addEventListener('dblclick', () => handleVideoDblClick(dom.localVideo));
   dom.remoteVideo.addEventListener('dblclick', () => handleVideoDblClick(dom.remoteVideo));
 
+  // Resolution presets
+  const RES_MAP = {
+    '480': { width: { ideal: 640 }, height: { ideal: 480 } },
+    '720': { width: { ideal: 1280 }, height: { ideal: 720 } },
+    '1080': { width: { ideal: 1920 }, height: { ideal: 1080 } },
+    '1440': { width: { ideal: 2560 }, height: { ideal: 1440 } },
+  };
+
+  function getVideoConstraints(extraOverrides = {}) {
+    const res = dom.resolutionSelect?.value;
+    const camId = dom.cameraSelect?.value;
+    const constraints = { ...RES_MAP[res] || {} };
+    if (camId) constraints.deviceId = { exact: camId };
+    return { ...constraints, ...extraOverrides };
+  }
+
   dom.btnStartCall.addEventListener('click', async () => {
     if (!session) { toast('No active session.'); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: getVideoConstraints() });
       session.addLocalStream(stream);
       dom.localVideo.srcObject = stream;
       mediaActive = true;
@@ -1222,7 +1255,7 @@ import { PeerSession } from './webrtc-core.js';
     dom.cameraSelect.disabled = true;
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } }
+        video: getVideoConstraints({ deviceId: { exact: deviceId } })
       });
       const newVideoTrack = newStream.getVideoTracks()[0];
 
@@ -1245,6 +1278,53 @@ import { PeerSession } from './webrtc-core.js';
       console.error('Camera switch error', err);
     } finally {
       dom.cameraSelect.disabled = false;
+    }
+  });
+
+  // Live resolution switching via applyConstraints (no renegotiation needed)
+  dom.resolutionSelect?.addEventListener('change', async () => {
+    const currentStream = session?.getLocalStream();
+    if (!currentStream || session?.isScreenSharing()) return;
+    const videoTrack = currentStream.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    const res = dom.resolutionSelect.value;
+    const preset = RES_MAP[res];
+    if (!preset) {
+      // "Auto" — remove constraints
+      toast('Resolution set to Auto');
+      return;
+    }
+
+    try {
+      // Try live constraint change (no track replacement)
+      await videoTrack.applyConstraints({
+        width: preset.width,
+        height: preset.height,
+      });
+      const settings = videoTrack.getSettings();
+      toast(`Resolution: ${settings.width}×${settings.height}`);
+      appendLog(`Video resolution changed to ${settings.width}×${settings.height}`);
+    } catch (err) {
+      // Fallback: replace the whole track
+      console.warn('applyConstraints failed, replacing track:', err);
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: getVideoConstraints()
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        await session.replaceVideoTrack(newVideoTrack);
+        const oldVideoTrack = currentStream.getVideoTracks()[0];
+        if (oldVideoTrack) { oldVideoTrack.stop(); currentStream.removeTrack(oldVideoTrack); }
+        currentStream.addTrack(newVideoTrack);
+        dom.localVideo.srcObject = currentStream;
+        const settings = newVideoTrack.getSettings();
+        toast(`Resolution: ${settings.width}×${settings.height}`);
+        appendLog(`Video resolution changed to ${settings.width}×${settings.height} (track replaced)`);
+      } catch (err2) {
+        toast('Failed to change resolution.');
+        console.error('Resolution change failed:', err2);
+      }
     }
   });
 
