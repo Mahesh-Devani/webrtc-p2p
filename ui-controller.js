@@ -9,6 +9,9 @@
 
 import { TokenCodec } from './token-codec.js';
 import { PeerSession } from './webrtc-core.js';
+import { NostrCrypto } from './nostr-crypto.js';
+import { NostrTransport } from './nostr-transport.js';
+import { NostrSignaling } from './nostr-signaling.js';
 
 (() => {
   // ── DOM refs ──────────────────────────────────────────────────
@@ -110,6 +113,30 @@ import { PeerSession } from './webrtc-core.js';
     logPanel: $('#log-panel'),
     logBody: $('#log-body'),
     btnCopyLog: $('#btn-copy-log'),
+
+    // Nostr
+    nostrIdentity: $('#nostr-identity'),
+    nostrPubkey: $('#nostr-pubkey'),
+    btnCopyPubkey: $('#btn-copy-pubkey'),
+    nostrRelayStatus: $('#nostr-relay-status'),
+    nostrRelayPanel: $('#nostr-relay-panel'),
+    relayUrlInput: $('#relay-url-input'),
+    btnAddRelay: $('#btn-add-relay'),
+    relayList: $('#relay-list'),
+    btnResetRelays: $('#btn-reset-relays'),
+    btnNostrConnect: $('#btn-nostr-connect'),
+    flowNostr: $('#flow-nostr'),
+    nostrRemotePubkey: $('#nostr-remote-pubkey'),
+    btnScanNostrQr: $('#btn-scan-nostr-qr'),
+    btnNostrStart: $('#btn-nostr-start'),
+    nostrStepRelay: $('#nostr-step-relay'),
+    nostrStepOffer: $('#nostr-step-offer'),
+    nostrStepAnswer: $('#nostr-step-answer'),
+    nostrStepConnected: $('#nostr-step-connected'),
+    nostrProgressText: $('#nostr-progress-text'),
+    contactList: $('#contact-list'),
+    contactNickname: $('#contact-nickname'),
+    btnSaveContact: $('#btn-save-contact'),
 
     // Retry
     retryBar: $('#retry-bar'),
@@ -1378,6 +1405,7 @@ import { PeerSession } from './webrtc-core.js';
     show(dom.roleChooser);
     hide(dom.flowCreate);
     hide(dom.flowJoin);
+    hide(dom.flowNostr);
     hide(dom.iceSection);
     hide(dom.chatSection);
     hide(dom.mediaSection);
@@ -1402,6 +1430,12 @@ import { PeerSession } from './webrtc-core.js';
     endMediaCall();
     dom.chatLog.innerHTML = '';
     setBadge('idle', 'Idle');
+    nostrActiveSessionId = null;
+    // Reset Nostr progress steps
+    [dom.nostrStepRelay, dom.nostrStepOffer, dom.nostrStepAnswer, dom.nostrStepConnected].forEach(el => {
+      if (el) el.className = 'nostr-progress__item';
+    });
+    if (dom.nostrProgressText) dom.nostrProgressText.textContent = '';
     session = null;
     role = null;
   }
@@ -1422,8 +1456,398 @@ import { PeerSession } from './webrtc-core.js';
     });
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // ═══ NOSTR INTEGRATION ═══════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
+
+  let nostrIdentity = null;   // { privateKey, publicKey }
+  let nostrActiveSessionId = null;
+
+  // ── Contact list ─────────────────────────────────────────────
+  const CONTACTS_KEY = 'nostr-contacts';
+
+  function loadContacts() {
+    try {
+      return JSON.parse(localStorage.getItem(CONTACTS_KEY)) || [];
+    } catch { return []; }
+    // Each contact: { pubkey: string, nickname: string }
+  }
+
+  function saveContacts(contacts) {
+    localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+  }
+
+  function addContact(pubkey, nickname) {
+    const contacts = loadContacts();
+    const existing = contacts.find(c => c.pubkey === pubkey);
+    if (existing) {
+      existing.nickname = nickname;
+    } else {
+      contacts.push({ pubkey, nickname });
+    }
+    saveContacts(contacts);
+  }
+
+  function removeContact(pubkey) {
+    const contacts = loadContacts().filter(c => c.pubkey !== pubkey);
+    saveContacts(contacts);
+  }
+
+  function getContactNickname(pubkey) {
+    const contacts = loadContacts();
+    const c = contacts.find(c => c.pubkey === pubkey);
+    return c?.nickname || '';
+  }
+
+  function renderContacts() {
+    if (!dom.contactList) return;
+    const contacts = loadContacts();
+    dom.contactList.innerHTML = '';
+    if (contacts.length === 0) {
+      dom.contactList.innerHTML = '<li class="contact-empty">No saved contacts yet</li>';
+      return;
+    }
+    for (const { pubkey, nickname } of contacts) {
+      const li = document.createElement('li');
+      li.className = 'contact-item';
+      li.innerHTML = `
+        <span class="contact-item__name">${escapeHtml(nickname || 'Unnamed')}</span>
+        <span class="contact-item__key">${pubkey.slice(0, 8)}…${pubkey.slice(-6)}</span>
+        <button class="contact-item__connect btn btn--primary btn--small" title="Connect">⚡</button>
+        <button class="contact-item__remove" title="Remove contact">×</button>
+      `;
+      li.querySelector('.contact-item__connect').addEventListener('click', () => {
+        dom.nostrRemotePubkey.value = pubkey;
+        toast(`Selected: ${nickname || pubkey.slice(0, 8) + '…'}`);
+      });
+      li.querySelector('.contact-item__remove').addEventListener('click', () => {
+        removeContact(pubkey);
+        renderContacts();
+        toast('Contact removed.');
+      });
+      dom.contactList.appendChild(li);
+    }
+  }
+
+  // Save contact button
+  dom.btnSaveContact?.addEventListener('click', () => {
+    const pubkey = dom.nostrRemotePubkey?.value.trim();
+    const nickname = dom.contactNickname?.value.trim();
+    if (!pubkey || !/^[0-9a-f]{64}$/i.test(pubkey)) {
+      toast('Enter a valid 64-char hex pubkey first.');
+      return;
+    }
+    addContact(pubkey, nickname || `Peer ${pubkey.slice(0, 8)}`);
+    dom.contactNickname.value = '';
+    renderContacts();
+    toast(`Contact saved: ${nickname || pubkey.slice(0, 8) + '…'}`);
+  });
+
+  // ── Nostr progress stepper helper ────────────────────────────
+  function setNostrStep(stepEl, state) {
+    if (!stepEl) return;
+    stepEl.className = 'nostr-progress__item';
+    if (state) stepEl.classList.add(state); // 'active', 'done', 'error'
+  }
+
+  // ── Render relay list UI ──────────────────────────────────────
+  function renderRelayList() {
+    if (!dom.relayList) return;
+    const states = NostrTransport.getRelayStates();
+    dom.relayList.innerHTML = '';
+    for (const { url, state } of states) {
+      const li = document.createElement('li');
+      li.className = 'relay-item';
+      const dotClass = state === 'connected' ? 'relay-item__dot--connected'
+        : state === 'connecting' ? 'relay-item__dot--connecting' : '';
+      li.innerHTML = `
+        <span class="relay-item__dot ${dotClass}"></span>
+        <span class="relay-item__url">${url}</span>
+        <button class="relay-item__remove" title="Remove relay">×</button>
+      `;
+      li.querySelector('.relay-item__remove').addEventListener('click', () => {
+        NostrTransport.removeRelay(url);
+        renderRelayList();
+        appendLog(`Relay removed: ${url}`);
+      });
+      dom.relayList.appendChild(li);
+    }
+    // Update relay status text in header
+    const connected = states.filter(s => s.state === 'connected').length;
+    if (dom.nostrRelayStatus) {
+      dom.nostrRelayStatus.textContent = `${connected}/${states.length} relays connected`;
+    }
+  }
+
+  // ── Add relay button ─────────────────────────────────────────
+  dom.btnAddRelay?.addEventListener('click', () => {
+    const url = dom.relayUrlInput?.value.trim();
+    if (!url) { toast('Enter a relay URL.'); return; }
+    const added = NostrTransport.addRelay(url);
+    if (added) {
+      dom.relayUrlInput.value = '';
+      renderRelayList();
+      toast(`Relay added: ${url}`);
+      appendLog(`Relay added: ${url}`);
+    } else {
+      toast('Invalid or duplicate relay URL.');
+    }
+  });
+
+  // ── Reset relays button ──────────────────────────────────────
+  dom.btnResetRelays?.addEventListener('click', () => {
+    NostrTransport.resetRelays();
+    // Reconnect with defaults
+    NostrTransport.disconnect();
+    NostrTransport.connect().then(() => renderRelayList());
+    toast('Relays reset to defaults.');
+  });
+
+  // ── Copy pubkey button ───────────────────────────────────────
+  dom.btnCopyPubkey?.addEventListener('click', () => {
+    if (nostrIdentity?.publicKey) {
+      copyText(nostrIdentity.publicKey, 'Nostr Public Key');
+    }
+  });
+
+  // ── "Connect via Nostr" button ───────────────────────────────
+  dom.btnNostrConnect?.addEventListener('click', () => {
+    role = 'nostr';
+    hide(dom.roleChooser);
+    show(dom.flowNostr);
+    renderContacts();
+    // Mark relay step
+    if (NostrTransport.isConnected()) {
+      setNostrStep(dom.nostrStepRelay, 'done');
+    } else {
+      setNostrStep(dom.nostrStepRelay, 'active');
+    }
+  });
+
+  // ── Scan QR for remote pubkey ────────────────────────────────
+  dom.btnScanNostrQr?.addEventListener('click', () => {
+    openQrScanner((text) => {
+      dom.nostrRemotePubkey.value = text.trim();
+      toast('Public key scanned!');
+    });
+  });
+
+  // ── Start Nostr connection ───────────────────────────────────
+  dom.btnNostrStart?.addEventListener('click', async () => {
+    const remotePubKey = dom.nostrRemotePubkey?.value.trim();
+    if (!remotePubKey) {
+      toast('Please enter the remote peer\'s public key.');
+      return;
+    }
+    if (!/^[0-9a-f]{64}$/i.test(remotePubKey)) {
+      toast('Invalid public key — must be a 64-character hex string.');
+      return;
+    }
+    if (remotePubKey === nostrIdentity?.publicKey) {
+      toast('Cannot connect to yourself!');
+      return;
+    }
+
+    dom.btnNostrStart.disabled = true;
+    setNostrStep(dom.nostrStepRelay, 'done');
+    setNostrStep(dom.nostrStepOffer, 'active');
+    dom.nostrProgressText.textContent = 'Sending encrypted offer via Nostr relays…';
+
+    try {
+      nostrActiveSessionId = await NostrSignaling.startSession(remotePubKey);
+      setNostrStep(dom.nostrStepOffer, 'done');
+      setNostrStep(dom.nostrStepAnswer, 'active');
+      dom.nostrProgressText.textContent = 'Offer sent! Waiting for peer to respond…';
+      appendLog(`[Nostr] Offer sent to ${remotePubKey.slice(0, 8)}… — waiting for answer`);
+    } catch (err) {
+      setNostrStep(dom.nostrStepOffer, 'error');
+      dom.nostrProgressText.textContent = `Failed: ${err.message}`;
+      toast(`Connection failed: ${err.message}`);
+      dom.btnNostrStart.disabled = false;
+    }
+  });
+
+  // ── Build full PeerSession config for Nostr sessions ─────────
+  // This provides the SAME callbacks as initSession() so that
+  // chat, media, and file transfer all work when connected via Nostr.
+  function buildNostrSessionConfig(sessionId, remotePubKey, sessionRole) {
+    return {
+      onLog: (msg, level) => appendLog(msg, level),
+      onStateChange: handleStateChange,
+      onIceCandidate: () => { },
+      onIceComplete: () => {
+        appendLog('All ICE candidates gathered', 'success');
+      },
+      onChannelOpen: () => {
+        enableChat();
+        hide(dom.retryBar);
+        show(dom.mediaSection);
+        dom.btnStartCall.disabled = false;
+        const nick = getContactNickname(remotePubKey);
+        const peerLabel = nick || remotePubKey.slice(0, 8) + '…';
+        systemMsg(`Secure P2P connection established with ${peerLabel}. Messages are end‑to‑end encrypted (DTLS).`);
+      },
+      onChannelClose: () => {
+        disableChat();
+        endMediaCall();
+        systemMsg('Connection closed by remote peer.');
+      },
+      onMessage: (data) => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed._ack) {
+            markDelivered(parsed._ack);
+            return;
+          }
+          appendChat(parsed.text, 'peer');
+          // send delivery ack
+          session.send(JSON.stringify({ _ack: parsed.id }));
+        } catch {
+          appendChat(data, 'peer');
+        }
+      },
+      onError: (err) => appendLog(err, 'error'),
+      onFileProgress: (pct, dir) => {
+        show(dom.fileProgress);
+        dom.fileProgressLabel.textContent = dir === 'sending' ? 'Sending file...' : 'Receiving file...';
+        dom.fileProgressBar.value = pct;
+        if (pct >= 100) {
+          setTimeout(() => hide(dom.fileProgress), 1000);
+        }
+      },
+      onFileReceived: (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.textContent = `Download: ${filename}`;
+        a.className = 'btn btn--secondary';
+        a.style.display = 'inline-block';
+        a.style.marginTop = '4px';
+
+        const msg = document.createElement('div');
+        msg.className = `chat-msg chat-msg--peer`;
+        msg.innerHTML = `<div>Received file: <strong>${escapeHtml(filename)}</strong></div>`;
+        msg.appendChild(a);
+
+        dom.chatLog.appendChild(msg);
+        dom.chatLog.scrollTop = dom.chatLog.scrollHeight;
+        systemMsg(`File received: ${filename}`);
+      },
+      onRemoteStream: (stream) => {
+        dom.remoteVideo.srcObject = stream;
+        dom.remoteVideo.play().catch((err) => {
+          appendLog(`Remote video autoplay blocked: ${err.message} — click anywhere to resume`, 'warn');
+          const resume = () => {
+            dom.remoteVideo.play().catch(() => { });
+            document.removeEventListener('click', resume);
+          };
+          document.addEventListener('click', resume);
+        });
+        hide(dom.remoteNoVideo);
+        appendLog('Remote media stream received', 'success');
+      },
+      onRemoteStreamEnded: () => {
+        dom.remoteVideo.srcObject = null;
+        show(dom.remoteNoVideo);
+        appendLog('Remote media stream ended');
+      },
+    };
+  }
+
+  // ── Initialize Nostr on page load ────────────────────────────
+  async function initNostr() {
+    try {
+      appendLog('[Nostr] Loading identity…');
+      // Preload library
+      await NostrCrypto.preload();
+      // Load or create identity
+      nostrIdentity = await NostrCrypto.loadOrCreateIdentity();
+      // Show identity in UI
+      if (dom.nostrPubkey) {
+        dom.nostrPubkey.textContent = nostrIdentity.publicKey;
+        dom.nostrPubkey.title = nostrIdentity.publicKey;
+      }
+      show(dom.nostrIdentity);
+      appendLog(`[Nostr] Identity: ${NostrCrypto.truncatePubkey(nostrIdentity.publicKey)}`);
+
+      // Initialize transport
+      NostrTransport.init(nostrIdentity.privateKey, nostrIdentity.publicKey, {
+        onLog: (msg, level) => appendLog(msg, level),
+        onRelayStatus: (url, state) => {
+          renderRelayList();
+          // Auto-update the relay step in Nostr connect flow
+          if (role === 'nostr' && state === 'connected') {
+            setNostrStep(dom.nostrStepRelay, 'done');
+          }
+        },
+      });
+
+      // Connect to relays
+      await NostrTransport.connect();
+      renderRelayList();
+
+      // Initialize signaling
+      NostrSignaling.init({
+        onLog: (msg, level) => appendLog(msg, level),
+        buildIceServers: buildIceServers,
+        // Provide full PeerSession UI config for Nostr-created sessions
+        getSessionConfig: buildNostrSessionConfig,
+        onSessionCreated: (sessionId, peerSession, remotePubKey, sessionRole) => {
+          session = peerSession;
+          if (sessionRole === 'joiner' && role !== 'nostr') {
+            // Incoming connection — switch to Nostr flow UI
+            role = 'nostr';
+            hide(dom.roleChooser);
+            show(dom.flowNostr);
+            setNostrStep(dom.nostrStepRelay, 'done');
+            setNostrStep(dom.nostrStepOffer, 'done');
+            setNostrStep(dom.nostrStepAnswer, 'active');
+            const nick = getContactNickname(remotePubKey);
+            const label = nick || remotePubKey.slice(0, 8) + '…';
+            dom.nostrProgressText.textContent = `Incoming connection from ${label}`;
+          }
+          nostrActiveSessionId = sessionId;
+          appendLog(`[Nostr] Session created (${sessionRole}) with ${remotePubKey.slice(0, 8)}…`);
+        },
+        onConnected: (sessionId) => {
+          if (sessionId !== nostrActiveSessionId) return;
+          setNostrStep(dom.nostrStepAnswer, 'done');
+          setNostrStep(dom.nostrStepConnected, 'done');
+          dom.nostrProgressText.textContent = 'Peer-to-peer connection established! 🎉';
+          handleStateChange('connected');
+          toast('Connected via Nostr! ⚡');
+        },
+        onDisconnected: (sessionId) => {
+          if (sessionId !== nostrActiveSessionId) return;
+          handleStateChange('disconnected');
+        },
+        onError: (sessionId, errMsg) => {
+          if (sessionId !== nostrActiveSessionId) return;
+          dom.nostrProgressText.textContent = `Error: ${errMsg}`;
+          toast(`Signaling error: ${errMsg}`);
+        },
+        onIncomingRequest: (senderPubKey, sessionId) => {
+          const nick = getContactNickname(senderPubKey);
+          const label = nick || senderPubKey.slice(0, 8) + '…';
+          appendLog(`[Nostr] Incoming connection request from ${label}`);
+          toast(`Incoming Nostr connection from ${label}`);
+        },
+      });
+
+      appendLog('[Nostr] Ready — listening for incoming connections', 'success');
+    } catch (err) {
+      appendLog(`[Nostr] Initialization failed: ${err.message}`, 'error');
+      console.error('[Nostr] Init error:', err);
+    }
+  }
+
   // ── Init ─────────────────────────────────────────────────────
   appendLog('App initialised — ready to create or join a session');
   setBadge('idle', 'Idle');
 
+  // Start Nostr in background (non-blocking)
+  initNostr();
+
 })();
+
