@@ -3,468 +3,500 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P Connect — Serverless WebRTC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="P2P Connect — Encrypted peer-to-peer messaging, audio and video calls using WebRTC and Nostr signaling. No servers, no tracking.">
+  <title>P2P Connect — Encrypted Messenger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <div id="app">
-    <!-- ─── HEADER ─── -->
-    <header>
-      <h1>P2P Connect</h1>
-      <p class="subtitle">Serverless WebRTC Communication</p>
-      <div id="connection-badge" class="badge badge--idle">
-        <span class="badge__dot"></span>
-        <span id="connection-label">Idle</span>
+
+    <!-- ═══ TOP BAR ═══ -->
+    <header id="top-bar" class="top-bar">
+      <div class="top-bar__left">
+        <h1 class="top-bar__title">P2P Connect</h1>
+        <span id="connection-badge" class="badge badge--idle">
+          <span class="badge__dot"></span>
+          <span id="connection-label">Connecting…</span>
+        </span>
       </div>
-      <!-- ─── NOSTR IDENTITY BAR ─── -->
-      <div id="nostr-identity" class="nostr-identity hidden">
-        <div class="nostr-identity__row">
-          <span class="nostr-identity__label">🔑 Your Nostr ID</span>
-          <span id="nostr-pubkey" class="pubkey-display">loading…</span>
-          <button id="btn-copy-pubkey" class="btn btn--secondary btn--small" title="Copy public key">📋 Copy</button>
-        </div>
-        <div class="nostr-identity__relays">
-          <span id="nostr-relay-status" class="nostr-relay-indicator"></span>
-        </div>
+      <div class="top-bar__right">
+        <span id="relay-status-mini" class="relay-status-mini" title="Relay connections">0/0</span>
+        <button id="btn-settings" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
       </div>
     </header>
 
-    <!-- ─── NOSTR RELAY CONFIG (collapsible) ─── -->
-    <details id="nostr-relay-panel" class="panel">
-      <summary>Nostr Relay Configuration <span class="hint">(signaling transport)</span></summary>
-      <div class="panel__body">
-        <p class="help-text">
-          Nostr relays route encrypted signaling messages between peers.
-          Add or remove relays to customize your connection strategy.
-        </p>
-        <div class="relay-add-row">
-          <input id="relay-url-input" type="text" placeholder="wss://relay.example.com">
-          <button id="btn-add-relay" class="btn btn--primary">Add</button>
-        </div>
-        <ul id="relay-list" class="relay-list"></ul>
-        <button id="btn-reset-relays" class="btn btn--secondary" style="margin-top: 8px; font-size: .78rem;">Reset to
-          Defaults</button>
-      </div>
-    </details>
+    <!-- ═══ MAIN LAYOUT ═══ -->
+    <main id="main-layout" class="main-layout">
 
-    <!-- ─── TURN CONFIG (collapsible) ─── -->
-    <details id="turn-panel" class="panel">
-      <summary>TURN Server Configuration <span class="hint">(fallback relay)</span></summary>
-      <div class="panel__body">
-        <p class="help-text">
-          Direct connections work on most networks. If you're behind a strict NAT/firewall,
-          configure a TURN server so traffic can be relayed.
-        </p>
-        <div class="form-row">
-          <label for="turn-url">TURN URL</label>
-          <input id="turn-url" type="text" placeholder="turn:your-server.com:3478">
-        </div>
-        <div class="form-row">
-          <label for="turn-user">Username</label>
-          <input id="turn-user" type="text" placeholder="username">
-        </div>
-        <div class="form-row">
-          <label for="turn-cred">Credential</label>
-          <input id="turn-cred" type="password" placeholder="credential">
-        </div>
-        <button id="btn-save-turn" class="btn btn--secondary">Save TURN Config</button>
-      </div>
-    </details>
-
-    <!-- ─── SESSION SETUP ─── -->
-    <section id="session-section" class="section">
-      <h2>Session Setup</h2>
-
-      <div id="role-chooser" class="role-chooser">
-        <button id="btn-nostr-connect" class="btn btn--primary btn--large btn--nostr">
-          <span class="btn__icon">⚡</span>
-          Connect via Nostr
-          <span class="btn__sub">Auto-connect using Nostr relays</span>
-        </button>
-        <button id="btn-create" class="btn btn--primary btn--large">
-          <span class="btn__icon">➕</span>
-          Create Session
-          <span class="btn__sub">Generate invite for the other peer</span>
-        </button>
-        <button id="btn-join" class="btn btn--primary btn--large">
-          <span class="btn__icon">🔗</span>
-          Join Session
-          <span class="btn__sub">Paste an invite you received</span>
-        </button>
-      </div>
-
-      <!-- NOSTR CONNECT FLOW -->
-      <div id="flow-nostr" class="flow hidden">
-        <div class="stepper">
-          <div class="step" data-step="1">
-            <div class="step__header">
-              <span class="step__num">1</span>
-              <span class="step__title">Enter contact's Nostr public key</span>
+      <!-- ─── SIDEBAR ─── -->
+      <aside id="sidebar" class="sidebar">
+        <!-- Sidebar header -->
+        <div class="sidebar__header">
+          <div class="sidebar__identity">
+            <div class="avatar avatar--self">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <div class="step__body">
-              <p class="help-text">
-                Paste the hex public key of the peer you want to connect with,
-                or scan their QR code. You can also pick from your saved contacts below.
-              </p>
-              <input id="nostr-remote-pubkey" type="text" placeholder="Paste remote pubkey (hex)…">
-              <div class="contact-save-row">
-                <input id="contact-nickname" type="text" placeholder="Nickname (optional)">
-                <button id="btn-save-contact" class="btn btn--secondary btn--small">💾 Save Contact</button>
-              </div>
-              <div class="btn-row">
-                <button id="btn-scan-nostr-qr" class="btn btn--secondary">📷 Scan QR</button>
-                <button id="btn-nostr-start" class="btn btn--primary">⚡ Connect</button>
-              </div>
-              <!-- Saved contacts -->
-              <div class="contacts-section">
-                <h4>📒 Saved Contacts</h4>
-                <ul id="contact-list" class="contact-list"></ul>
-              </div>
+            <div class="sidebar__identity-info">
+              <span class="sidebar__identity-label">Your ID</span>
+              <span id="my-pubkey-short" class="sidebar__pubkey" title="Click to copy">loading…</span>
             </div>
           </div>
-          <div class="step" data-step="2">
-            <div class="step__header">
-              <span class="step__num">2</span>
-              <span class="step__title">Connection progress</span>
+          <button id="btn-new-contact" class="icon-btn" title="New contact" aria-label="Add contact">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </button>
+        </div>
+
+        <!-- Search -->
+        <div class="sidebar__search">
+          <input id="contact-search" type="text" placeholder="Search contacts…" autocomplete="off">
+        </div>
+
+        <!-- Contact list -->
+        <div id="contact-list" class="contact-list"></div>
+
+        <!-- Manual signaling (collapsed) -->
+        <details id="manual-signaling" class="manual-signaling">
+          <summary class="manual-signaling__summary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Manual Signaling
+          </summary>
+          <div class="manual-signaling__body">
+            <p class="manual-signaling__hint">Connect without Nostr using copy-paste tokens</p>
+            <button id="btn-create-session" class="btn btn--full">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Create Session
+            </button>
+            <button id="btn-join-session" class="btn btn--full btn--outline">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              Join Session
+            </button>
+          </div>
+        </details>
+      </aside>
+
+      <!-- ─── CHAT PANEL ─── -->
+      <section id="chat-panel" class="chat-panel">
+
+        <!-- Empty state (no contact selected) -->
+        <div id="chat-empty" class="chat-empty">
+          <div class="chat-empty__icon">
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h2 class="chat-empty__title">P2P Connect</h2>
+          <p class="chat-empty__subtitle">End-to-end encrypted messaging</p>
+          <p class="chat-empty__desc">Select a contact to start chatting, or add a new contact using their Nostr public key.</p>
+          <div class="chat-empty__features">
+            <div class="chat-empty__feature">
+              <span>🔒</span> End-to-end encrypted
             </div>
-            <div class="step__body">
-              <div id="nostr-progress" class="nostr-progress">
-                <div class="nostr-progress__item" id="nostr-step-relay">
-                  <span class="nostr-progress__dot"></span>
-                  <span>Connected to relays</span>
-                </div>
-                <div class="nostr-progress__item" id="nostr-step-offer">
-                  <span class="nostr-progress__dot"></span>
-                  <span>Sending offer…</span>
-                </div>
-                <div class="nostr-progress__item" id="nostr-step-answer">
-                  <span class="nostr-progress__dot"></span>
-                  <span>Waiting for answer…</span>
-                </div>
-                <div class="nostr-progress__item" id="nostr-step-connected">
-                  <span class="nostr-progress__dot"></span>
-                  <span>Peer connected!</span>
-                </div>
-              </div>
-              <p id="nostr-progress-text" class="help-text" style="margin-top: 10px;"></p>
+            <div class="chat-empty__feature">
+              <span>📡</span> Peer-to-peer, no server
+            </div>
+            <div class="chat-empty__feature">
+              <span>📹</span> Video & audio calls
+            </div>
+            <div class="chat-empty__feature">
+              <span>📎</span> File sharing
             </div>
           </div>
         </div>
-        <!-- Usage instructions -->
-        <div class="nostr-instructions">
-          <h4>How Nostr Connect works</h4>
-          <ol>
-            <li>Share your public key (above) with your contact via any messenger</li>
-            <li>Paste their public key and click Connect</li>
-            <li>Both peers must be online — the app uses Nostr relays to exchange encrypted signaling</li>
-            <li>Once connected, all communication is direct peer-to-peer (WebRTC)</li>
-          </ol>
-        </div>
-      </div>
 
-      <!-- CREATE FLOW -->
-      <div id="flow-create" class="flow hidden">
-        <div class="stepper">
-          <div class="step" data-step="1">
-            <div class="step__header">
-              <span class="step__num">1</span>
-              <span class="step__title">Copy your invite token &amp; send it to the other peer</span>
+        <!-- Active chat view -->
+        <div id="chat-active" class="chat-active hidden">
+          <!-- Chat header -->
+          <div id="chat-header" class="chat-header">
+            <button id="btn-chat-back" class="icon-btn chat-header__back" title="Back" aria-label="Back to contacts">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="avatar avatar--contact" id="chat-avatar">
+              <span id="chat-avatar-letter">?</span>
             </div>
-            <div class="step__body">
-              <textarea id="offer-out" readonly rows="5" placeholder="Generating invite token…"></textarea>
-              <canvas id="qr-offer-out" class="qr-canvas hidden"></canvas>
-              <div class="btn-row">
-                <button id="btn-copy-offer" class="btn btn--secondary" disabled>Copy Token</button>
-                <button id="btn-copy-offer-qr" class="btn btn--secondary" disabled
-                  title="Copy QR image to clipboard">Copy QR</button>
-                <button id="btn-share-offer-qr" class="btn btn--secondary" disabled
-                  title="Share QR image via device share">Share QR</button>
-                <button id="btn-inspect-offer" class="btn btn--secondary" disabled
-                  title="Inspect decoded token contents">🔍 Inspect</button>
+            <div class="chat-header__info">
+              <span id="chat-contact-name" class="chat-header__name">Contact</span>
+              <span id="chat-contact-status" class="chat-header__status">Tap to connect</span>
+            </div>
+            <div class="chat-header__actions">
+              <button id="btn-connect-peer" class="icon-btn" title="Reconnect" style="display:none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              </button>
+              <button id="btn-video-call" class="icon-btn hidden" title="Video call">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              </button>
+              <button id="btn-chat-menu" class="icon-btn" title="More options">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Chat menu dropdown -->
+          <div id="chat-menu" class="dropdown-menu hidden">
+            <button id="btn-clear-chat" class="dropdown-menu__item">🗑️ Clear chat</button>
+            <button id="btn-delete-contact" class="dropdown-menu__item dropdown-menu__item--danger">❌ Delete contact</button>
+          </div>
+
+          <!-- Connection banner -->
+          <div id="connect-banner" class="connect-banner hidden">
+            <div class="connect-banner__content">
+              <span id="connect-banner-text">Connecting…</span>
+              <div id="connect-progress" class="connect-progress">
+                <div class="connect-progress__dot active"></div>
+                <div class="connect-progress__dot"></div>
+                <div class="connect-progress__dot"></div>
+                <div class="connect-progress__dot"></div>
               </div>
             </div>
           </div>
-          <div class="step" data-step="2">
-            <div class="step__header">
-              <span class="step__num">2</span>
-              <span class="step__title">Paste the answer token you received back</span>
-            </div>
-            <div class="step__body">
-              <textarea id="answer-in" rows="5" placeholder="Paste answer token here…"></textarea>
-              <div class="btn-row">
-                <button id="btn-scan-answer" class="btn btn--secondary" title="Scan QR Code by Camera">📷 Scan</button>
-                <label for="import-answer" class="btn btn--secondary" title="Upload QR Image">
-                  📤 Import
-                  <input type="file" id="import-answer" class="hidden-file-input" accept="image/*">
-                </label>
-                <button id="btn-inspect-answer-in" class="btn btn--secondary" title="Inspect pasted answer token">🔍
-                  Inspect</button>
-                <button id="btn-accept-answer" class="btn btn--primary">Accept Answer</button>
-              </div>
-            </div>
+
+          <!-- Messages area -->
+          <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+
+          <!-- File progress bar -->
+          <div id="file-progress" class="file-progress hidden">
+            <span id="file-progress-label">Sending file…</span>
+            <progress id="file-progress-bar" value="0" max="100"></progress>
+          </div>
+
+          <!-- Message input -->
+          <form id="chat-form" class="chat-input-bar">
+            <label for="file-input" class="icon-btn chat-input__attach" title="Attach file">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <input type="file" id="file-input" class="sr-only" disabled>
+            </label>
+            <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off" disabled>
+            <button type="submit" id="btn-send" class="icon-btn chat-input__send" disabled title="Send">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </form>
+        </div>
+
+        <!-- Manual signaling panel (shown when creating/joining) -->
+        <div id="manual-panel" class="manual-panel hidden">
+          <div class="manual-panel__header">
+            <button id="btn-manual-back" class="icon-btn" title="Back">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <h2 id="manual-panel-title">Create Session</h2>
+          </div>
+          <div id="manual-panel-content" class="manual-panel__content">
+            <!-- Dynamically filled: create or join flow -->
           </div>
         </div>
-      </div>
+      </section>
+    </main>
 
-      <!-- JOIN FLOW -->
-      <div id="flow-join" class="flow hidden">
-        <div class="stepper">
-          <div class="step" data-step="1">
-            <div class="step__header">
-              <span class="step__num">1</span>
-              <span class="step__title">Paste the invite token you received</span>
-            </div>
-            <div class="step__body">
-              <textarea id="offer-in" rows="5" placeholder="Paste invite token here…"></textarea>
-              <div class="btn-row">
-                <button id="btn-scan-offer" class="btn btn--secondary" title="Scan QR Code by Camera">📷 Scan</button>
-                <label for="import-offer" class="btn btn--secondary" title="Upload QR Image">
-                  📤 Import
-                  <input type="file" id="import-offer" class="hidden-file-input" accept="image/*">
-                </label>
-                <button id="btn-accept-offer" class="btn btn--primary">Generate Answer</button>
-              </div>
-            </div>
-          </div>
-          <div class="step" data-step="2">
-            <div class="step__header">
-              <span class="step__num">2</span>
-              <span class="step__title">Copy your answer token &amp; send it back</span>
-            </div>
-            <div class="step__body">
-              <textarea id="answer-out" readonly rows="5" placeholder="Answer token will appear here…"></textarea>
-              <canvas id="qr-answer-out" class="qr-canvas hidden"></canvas>
-              <div class="btn-row">
-                <button id="btn-copy-answer" class="btn btn--secondary" disabled>Copy Token</button>
-                <button id="btn-copy-answer-qr" class="btn btn--secondary" disabled
-                  title="Copy QR image to clipboard">Copy QR</button>
-                <button id="btn-share-answer-qr" class="btn btn--secondary" disabled
-                  title="Share QR image via device share">Share QR</button>
-                <button id="btn-inspect-answer" class="btn btn--secondary" disabled
-                  title="Inspect decoded token contents">🔍 Inspect</button>
-              </div>
-            </div>
-          </div>
+    <!-- ═══ INCOMING CALL NOTIFICATION ═══ -->
+    <div id="incoming-call" class="incoming-call hidden">
+      <div class="incoming-call__card">
+        <div class="incoming-call__pulse"></div>
+        <div class="incoming-call__avatar" id="incoming-call-avatar">
+          <span id="incoming-call-letter">?</span>
+        </div>
+        <h3 id="incoming-call-name" class="incoming-call__name">Incoming Call</h3>
+        <p class="incoming-call__label">Incoming audio/video call…</p>
+        <div class="incoming-call__actions">
+          <button id="btn-reject-call" class="call-btn call-btn--end incoming-call__btn" title="Reject">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            <span>Reject</span>
+          </button>
+          <button id="btn-accept-call" class="call-btn call-btn--accept incoming-call__btn" title="Accept">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span>Accept</span>
+          </button>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- ─── ICE EXCHANGE (shown when needed) ─── -->
-    <section id="ice-section" class="section hidden">
-      <h2>ICE Candidate Exchange</h2>
-      <p class="help-text">
-        If the connection doesn't establish after exchanging offer/answer, you may need to
-        manually exchange additional ICE candidates. This is common behind complex NATs.
-      </p>
-      <div class="ice-grid">
-        <div>
-          <h3>Your ICE Candidates</h3>
-          <textarea id="ice-out" readonly rows="4" placeholder="Gathering candidates…"></textarea>
-          <div class="btn-row">
-            <button id="btn-copy-ice" class="btn btn--secondary">Copy ICE</button>
-          </div>
-        </div>
-        <div>
-          <h3>Remote ICE Candidates</h3>
-          <textarea id="ice-in" rows="4" placeholder="Paste remote ICE candidates here…"></textarea>
-          <div class="btn-row">
-            <button id="btn-import-ice" class="btn btn--primary">Import ICE</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── MEDIA CALL ─── -->
-    <section id="media-section" class="section hidden">
-      <h2>Audio / Video Call</h2>
-      <div class="media-grid">
-        <div class="media-cell">
-          <video id="local-video" autoplay muted playsinline></video>
-          <span class="media-label">You</span>
-        </div>
-        <div class="media-cell">
+    <!-- ═══ MEDIA CALL OVERLAY ═══ -->
+    <div id="call-overlay" class="call-overlay hidden">
+      <div class="call-overlay__videos">
+        <div class="call-overlay__remote">
           <video id="remote-video" autoplay playsinline></video>
-          <span class="media-label">Peer</span>
-          <div id="remote-no-video" class="media-placeholder">Waiting for peer video…</div>
+          <div id="remote-no-video" class="call-overlay__placeholder">Waiting for peer video…</div>
+          <span class="call-overlay__label">Peer</span>
+        </div>
+        <div class="call-overlay__local">
+          <video id="local-video" autoplay muted playsinline></video>
+          <span class="call-overlay__label">You</span>
         </div>
       </div>
       <div class="call-controls">
-        <button id="btn-start-call" class="btn btn--primary" title="Start call">📞 Start Call</button>
-        <button id="btn-toggle-audio" class="btn btn--secondary" title="Mute / unmute microphone" disabled>🎤 Mic
-          On</button>
-        <button id="btn-toggle-video" class="btn btn--secondary" title="Enable / disable camera" disabled>📷 Cam
-          On</button>
-        <button id="btn-screenshare" class="btn btn--secondary" title="Share screen" disabled>🖥️ Screen</button>
-        <button id="btn-end-call" class="btn btn--warning" title="End call" disabled>📕 End Call</button>
+        <button id="btn-toggle-audio" class="call-btn" title="Mute/Unmute" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>Mic</span>
+        </button>
+        <button id="btn-toggle-video" class="call-btn" title="Camera On/Off" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <span>Camera</span>
+        </button>
+        <button id="btn-screenshare" class="call-btn" title="Share Screen" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Screen</span>
+        </button>
+        <button id="btn-end-call" class="call-btn call-btn--end" title="End Call" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          <span>End</span>
+        </button>
       </div>
-      <div id="device-controls" class="device-controls hidden">
-        <div class="form-row">
-          <label for="camera-select">📷 Camera</label>
-          <select id="camera-select" class="device-select" disabled>
-            <option value="">Default Camera</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="resolution-select">📐 Resolution</label>
-          <select id="resolution-select" class="device-select">
+      <!-- Device settings -->
+      <details id="call-devices" class="call-devices">
+        <summary>Device Settings</summary>
+        <div class="call-devices__body">
+          <label>Camera <select id="camera-select"></select></label>
+          <label>Resolution <select id="resolution-select">
             <option value="">Auto</option>
-            <option value="480">480p (SD)</option>
-            <option value="720" selected>720p (HD)</option>
-            <option value="1080">1080p (Full HD)</option>
-            <option value="1440">1440p (2K)</option>
-          </select>
+            <option value="480">480p</option>
+            <option value="720" selected>720p</option>
+            <option value="1080">1080p</option>
+            <option value="1440">1440p</option>
+          </select></label>
+          <label>Speaker <select id="speaker-select"></select></label>
         </div>
-        <div class="form-row">
-          <label for="speaker-select">🔊 Speaker</label>
-          <select id="speaker-select" class="device-select" disabled>
-            <option value="">Default Speaker</option>
-          </select>
-        </div>
-      </div>
-      <p class="help-text media-help">
-        Start a call after the P2P connection is established. Both audio and video are optional —
-        you can toggle them independently. All media is DTLS/SRTP encrypted end‑to‑end.
-      </p>
-    </section>
-
-    <!-- ─── CHAT ─── -->
-    <section id="chat-section" class="section hidden">
-      <h2>Secure P2P Chat</h2>
-      <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
-      <form id="chat-form" class="chat-form">
-        <label for="file-input" class="btn btn--secondary file-btn" title="Send a file">
-          📎
-          <input type="file" id="file-input" class="hidden-file-input" disabled>
-        </label>
-        <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off" disabled>
-        <button type="submit" id="btn-send" class="btn btn--primary" disabled>Send</button>
-      </form>
-      <div id="file-progress" class="file-progress hidden">
-        <span id="file-progress-label">Sending file...</span>
-        <progress id="file-progress-bar" value="0" max="100"></progress>
-      </div>
-    </section>
-
-    <!-- ─── CONNECTION LOG ─── -->
-    <details id="log-panel" class="panel">
-      <summary style="display: flex; justify-content: space-between; align-items: center;">
-        Connection Log
-        <button id="btn-copy-log" class="btn btn--secondary" style="padding: 4px 8px; font-size: 0.75rem;">Copy</button>
-      </summary>
-      <div id="log-body" class="log-body"></div>
-    </details>
-
-    <!-- ─── RETRY BAR ─── -->
-    <div id="retry-bar" class="retry-bar hidden">
-      <span id="retry-msg">Connection failed.</span>
-      <button id="btn-retry" class="btn btn--warning">Retry</button>
-      <button id="btn-suggest-turn" class="btn btn--secondary">Configure TURN</button>
+      </details>
     </div>
 
-    <!-- ─── QR SCANNER MODAL ─── -->
+    <!-- ═══ SETTINGS MODAL ═══ -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal__content modal__content--large">
+        <div class="modal__header">
+          <h2>Settings</h2>
+          <button id="btn-close-settings" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Settings tabs -->
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="profile">Profile</button>
+          <button class="settings-tab" data-tab="relays">Relays</button>
+          <button class="settings-tab" data-tab="turn">TURN</button>
+          <button class="settings-tab" data-tab="security">Security</button>
+          <button class="settings-tab" data-tab="backup">Backup</button>
+        </div>
+
+        <!-- Profile tab -->
+        <div id="tab-profile" class="settings-tab-content active">
+          <div class="settings-group">
+            <h3>Your Nostr Identity</h3>
+            <div class="settings-field">
+              <label>Public Key</label>
+              <div class="settings-key-display">
+                <code id="settings-pubkey">loading…</code>
+                <button id="btn-copy-pubkey" class="btn btn--small">Copy</button>
+              </div>
+            </div>
+            <div class="settings-field">
+              <label>QR Code (share your key)</label>
+              <canvas id="qr-pubkey" class="settings-qr"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Relays tab -->
+        <div id="tab-relays" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <h3>Nostr Relay Configuration</h3>
+            <p class="settings-hint">Relays route encrypted signaling messages between peers.</p>
+            <div class="settings-field settings-field--row">
+              <input id="relay-url-input" type="text" placeholder="wss://relay.example.com">
+              <button id="btn-add-relay" class="btn btn--primary">Add</button>
+            </div>
+            <ul id="relay-list" class="relay-list"></ul>
+            <button id="btn-reset-relays" class="btn btn--small btn--outline" style="margin-top:8px;">Reset to Defaults</button>
+          </div>
+        </div>
+
+        <!-- TURN tab -->
+        <div id="tab-turn" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <h3>TURN Server</h3>
+            <p class="settings-hint">Configure a TURN server for connections behind strict NATs/firewalls.</p>
+            <div class="settings-field">
+              <label for="turn-url">TURN URL</label>
+              <input id="turn-url" type="text" placeholder="turn:your-server.com:3478">
+            </div>
+            <div class="settings-field">
+              <label for="turn-user">Username</label>
+              <input id="turn-user" type="text" placeholder="username">
+            </div>
+            <div class="settings-field">
+              <label for="turn-cred">Credential</label>
+              <input id="turn-cred" type="password" placeholder="credential">
+            </div>
+            <button id="btn-save-turn" class="btn btn--primary">Save TURN Config</button>
+          </div>
+        </div>
+
+        <!-- Security tab -->
+        <div id="tab-security" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <h3>Key Management</h3>
+            <p class="settings-hint">Export your private key to use the same identity on another device, or import a key to restore your identity.</p>
+            <div class="settings-actions">
+              <button id="btn-export-key" class="btn btn--primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Key
+              </button>
+              <label class="btn btn--outline">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import Key
+                <input type="file" id="import-key-file" class="sr-only" accept=".p2pkey,.json,.txt">
+              </label>
+            </div>
+            <div class="settings-field" style="margin-top:16px;">
+              <label>Copy raw private key (hex)</label>
+              <div class="settings-key-display">
+                <input type="password" id="settings-privkey" readonly value="••••••••••••••••" class="settings-privkey-input">
+                <button id="btn-toggle-privkey" class="btn btn--small">Show</button>
+                <button id="btn-copy-privkey" class="btn btn--small">Copy</button>
+              </div>
+              <p class="settings-warning">⚠️ Never share your private key. Anyone with it can impersonate you.</p>
+            </div>
+            <hr class="settings-divider">
+            <div class="settings-field">
+              <button id="btn-regenerate-key" class="btn btn--danger">🔄 Regenerate Identity</button>
+              <p class="settings-hint" style="margin-top:4px; color: var(--c-red);">This will create a new identity. Your contacts won't recognize you.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backup tab -->
+        <div id="tab-backup" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <h3>Chat Backup & Restore</h3>
+            <p class="settings-hint">Export all conversations and contacts to a JSON file, or restore from a previous backup.</p>
+            <div class="settings-actions">
+              <button id="btn-backup-chats" class="btn btn--primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Backup Chats & Contacts
+              </button>
+              <label class="btn btn--outline">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Restore from Backup
+                <input type="file" id="import-backup-file" class="sr-only" accept=".json">
+              </label>
+            </div>
+            <div id="storage-info" class="settings-storage"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ADD CONTACT MODAL ═══ -->
+    <div id="add-contact-modal" class="modal hidden">
+      <div class="modal__content">
+        <div class="modal__header">
+          <h2>Add Contact</h2>
+          <button id="btn-close-add-contact" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="settings-field">
+            <label for="new-contact-pubkey">Nostr Public Key</label>
+            <input id="new-contact-pubkey" type="text" placeholder="Paste 64-character hex public key…">
+          </div>
+          <div class="settings-field">
+            <label for="new-contact-nickname">Nickname</label>
+            <input id="new-contact-nickname" type="text" placeholder="Display name (optional)">
+          </div>
+          <div class="modal__actions">
+            <button id="btn-scan-contact-qr" class="btn btn--outline">📷 Scan QR</button>
+            <button id="btn-add-contact-confirm" class="btn btn--primary">Add Contact</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PASSWORD MODAL ═══ -->
+    <div id="password-modal" class="modal hidden">
+      <div class="modal__content">
+        <div class="modal__header">
+          <h2 id="password-modal-title">Enter Password</h2>
+          <button id="btn-close-password" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <p id="password-modal-desc" class="settings-hint"></p>
+          <div class="settings-field">
+            <label for="password-input">Password</label>
+            <input id="password-input" type="password" placeholder="Enter password…">
+          </div>
+          <div id="password-confirm-field" class="settings-field hidden">
+            <label for="password-confirm">Confirm Password</label>
+            <input id="password-confirm" type="password" placeholder="Confirm password…">
+          </div>
+          <div class="modal__actions">
+            <button id="btn-password-cancel" class="btn btn--outline">Cancel</button>
+            <button id="btn-password-ok" class="btn btn--primary">Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ QR SCANNER MODAL ═══ -->
     <div id="qr-modal" class="modal hidden">
       <div class="modal__content">
         <h3>Scan QR Code</h3>
-        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; background: #fff; color: #1a1d27;">
-        </div>
-        <button id="btn-close-scanner" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Cancel</button>
+        <div id="qr-reader" style="width:100%; max-width:400px; margin:0 auto; background:#fff; color:#1a1d27;"></div>
+        <button id="btn-close-scanner" class="btn btn--outline" style="margin-top:1rem; width:100%;">Cancel</button>
       </div>
     </div>
 
-    <!-- ─── TOKEN INSPECTOR MODAL ─── -->
+    <!-- ═══ TOKEN INSPECTOR MODAL ═══ -->
     <div id="inspect-modal" class="modal hidden">
-      <div class="modal__content" style="max-width: 700px;">
-        <h3>🔍 Token Inspector</h3>
-        <p style="color: var(--c-text-dim); font-size: .82rem; margin-bottom: 1rem;">Decoded contents of the token —
-          this is what gets shared with the other peer.</p>
-
-        <!-- Manual decode input -->
-        <div style="margin-bottom: 1rem;">
-          <textarea id="inspect-input" rows="3" placeholder="Paste any token here to decode it…"
-            style="width: 100%; font-size: .8rem; margin-bottom: .5rem;"></textarea>
-          <button id="btn-decode-token" class="btn btn--secondary" style="width: 100%;">Decode Token</button>
+      <div class="modal__content modal__content--large">
+        <div class="modal__header">
+          <h2>🔍 Token Inspector</h2>
+          <button id="btn-close-inspect" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-
-        <hr style="border-color: var(--c-border); margin-bottom: 1rem;">
-
-        <div class="inspect-section">
-          <label>Type</label>
-          <span id="inspect-type"></span>
-        </div>
-        <div class="inspect-section">
-          <label>Token Version</label>
-          <span id="inspect-version"></span>
-        </div>
-        <div class="inspect-section">
-          <label>Created</label>
-          <span id="inspect-ts"></span>
-        </div>
-        <div class="inspect-section">
-          <label>ICE Candidates</label>
-          <span id="inspect-ice-count"></span>
-        </div>
-        <details style="margin-top: 0.75rem;">
-          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">SDP (Session Description)</summary>
-          <pre id="inspect-sdp"
-            style="max-height: 250px; overflow: auto; font-size: .75rem; background: var(--c-bg); padding: 8px; border-radius: var(--radius); margin-top: 6px; white-space: pre-wrap; word-break: break-all;"></pre>
-        </details>
-        <details style="margin-top: 0.5rem;">
-          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">ICE Candidates (raw)</summary>
-          <pre id="inspect-candidates"
-            style="max-height: 200px; overflow: auto; font-size: .75rem; background: var(--c-bg); padding: 8px; border-radius: var(--radius); margin-top: 6px; white-space: pre-wrap; word-break: break-all;"></pre>
-        </details>
-
-        <!-- How to verify independently -->
-        <details style="margin-top: 0.75rem;">
-          <summary style="cursor: pointer; font-weight: 600; color: var(--c-text);">🛡️ How to verify this token
-            yourself</summary>
-          <div
-            style="font-size: .78rem; color: var(--c-text-dim); padding: 8px; background: var(--c-bg); border-radius: var(--radius); margin-top: 6px; line-height: 1.5;">
-            <p>Tokens use the format: <code>P2P2-&lt;base64url_data&gt;</code></p>
-            <p style="margin-top: 6px;"><strong>To decode manually:</strong></p>
-            <ol style="padding-left: 1.2rem; margin-top: 4px;">
-              <li>Remove the <code>P2P2-</code> prefix</li>
-              <li>Convert base64url → base64 (replace <code>-</code> with <code>+</code>, <code>_</code> with
-                <code>/</code>, pad with <code>=</code>)
-              </li>
-              <li>Base64-decode to get compressed bytes</li>
-              <li>Inflate/decompress using <strong>pako</strong> (zlib deflate)</li>
-              <li>The result is a JSON object with: <code>{ v, t, ts, s, c }</code></li>
-            </ol>
-            <p style="margin-top: 6px;"><strong>Or run in browser console:</strong></p>
-            <pre
-              style="background: #1a1d27; padding: 6px; border-radius: 4px; margin-top: 4px; overflow-x: auto; color: #e0e0e0;">// Paste your token:
-const token = 'P2P2-...';
-const b64 = token.slice(5).replace(/-/g,'+').replace(/_/g,'/');
-const bin = atob(b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '='));
-const bytes = new Uint8Array([...bin].map(c=>c.charCodeAt(0)));
-const json = new TextDecoder().decode(pako.inflate(bytes));
-console.log(JSON.parse(json));</pre>
-            <p style="margin-top: 6px;"><em>No data is sent to any server — everything is decoded locally in your
-                browser.</em></p>
+        <div class="modal__body">
+          <div class="settings-field">
+            <textarea id="inspect-input" rows="3" placeholder="Paste any token here to decode it…"></textarea>
+            <button id="btn-decode-token" class="btn btn--outline btn--full" style="margin-top:8px;">Decode Token</button>
           </div>
-        </details>
-
-        <button id="btn-close-inspect" class="btn btn--secondary" style="margin-top: 1rem; width: 100%;">Close</button>
+          <hr class="settings-divider">
+          <div class="inspect-grid">
+            <div class="inspect-item"><label>Type</label><span id="inspect-type"></span></div>
+            <div class="inspect-item"><label>Version</label><span id="inspect-version"></span></div>
+            <div class="inspect-item"><label>Created</label><span id="inspect-ts"></span></div>
+            <div class="inspect-item"><label>ICE Candidates</label><span id="inspect-ice-count"></span></div>
+          </div>
+          <details style="margin-top:12px;">
+            <summary>SDP</summary>
+            <pre id="inspect-sdp" class="inspect-pre"></pre>
+          </details>
+          <details>
+            <summary>ICE Candidates (raw)</summary>
+            <pre id="inspect-candidates" class="inspect-pre"></pre>
+          </details>
+        </div>
       </div>
     </div>
 
-    <!-- Hidden element for decoding pasted images -->
+    <!-- Toast notifications -->
+    <!-- Dynamically created -->
+
+    <!-- Hidden helpers -->
     <div id="hidden-qr-reader" class="hidden"></div>
   </div>
 
-  <!-- QrCode generator CDN -->
+  <!-- CDN Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <!-- Pure jsQR for precise image file decoding -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <!-- HTML5 QR Code Scanner (for webcam fallback) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
-  <!-- Pako for compression -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-  <!-- Load main app module -->
-  <script type="module" src="ui-controller.js?v=3"></script>
+  <!-- App -->
+  <script type="module" src="ui-controller.js?v=4"></script>
 </body>
 
 </html>

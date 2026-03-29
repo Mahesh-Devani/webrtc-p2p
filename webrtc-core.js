@@ -609,6 +609,12 @@ export const PeerSession = (() => {
       stateChange('closed');
     }
 
+    /** @returns {boolean} */
+    function isChannelOpen() { return dcChat && dcChat.readyState === 'open'; }
+
+    /** @returns {string} */
+    function getState() { return pc.connectionState; }
+
     /** @returns {RTCPeerConnection} raw peer connection (escape hatch) */
     function getRawPC() { return pc; }
 
@@ -621,6 +627,8 @@ export const PeerSession = (() => {
       sendFile,
       getLocalCandidates,
       isIceComplete,
+      isChannelOpen,
+      getState,
       close,
       getRawPC,
       // Media
