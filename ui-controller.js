@@ -39,6 +39,7 @@ import { ChatStore } from './chat-store.js';
     chatContactName: $('#chat-contact-name'),
     chatContactStatus: $('#chat-contact-status'),
     btnConnectPeer: $('#btn-connect-peer'),
+    btnAudioCall: $('#btn-audio-call'),
     btnVideoCall: $('#btn-video-call'),
     btnChatMenu: $('#btn-chat-menu'),
     chatMenu: $('#chat-menu'),
@@ -131,7 +132,6 @@ import { ChatStore } from './chat-store.js';
 
   // ── State ──
   let session = null;
-  let turnConfig = null;
   let nostrIdentity = null;
   let nostrActiveSessionId = null;
   let sessionRemotePubKey = null;
@@ -142,6 +142,65 @@ import { ChatStore } from './chat-store.js';
   let pendingRemoteStream = null; // Holds incoming stream until user accepts
   let pendingRemoteStreamPubkey = null; // Who the incoming call is from
   const pendingMsgs = new Map();
+
+  // ── SOUND ENGINE (Synthesized) ──
+  const SoundEngine = (() => {
+    let ctx = null;
+    let ringInterval = null;
+
+    function init() {
+      if (!ctx && window.AudioContext) {
+        ctx = new window.AudioContext();
+      }
+    }
+
+    function playTone(freq, type, duration, vol, delay = 0) {
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + delay + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + duration);
+    }
+
+    return {
+      playMessage: () => {
+        init();
+        // Subtle double pop
+        playTone(600, 'sine', 0.15, 0.3, 0);
+        playTone(800, 'sine', 0.2, 0.2, 0.1);
+      },
+      startRing: () => {
+        init();
+        if (ringInterval) return;
+        const ring = () => {
+          // Calm, gentle double chime (C5 + E5 major third chord)
+          playTone(523.25, 'sine', 0.8, 0.15, 0); 
+          playTone(659.25, 'sine', 0.8, 0.15, 0); 
+          playTone(523.25, 'triangle', 0.6, 0.05, 0); 
+          
+          playTone(523.25, 'sine', 0.8, 0.15, 1.0); 
+          playTone(659.25, 'sine', 0.8, 0.15, 1.0);
+          playTone(523.25, 'triangle', 0.6, 0.05, 1.0);
+        };
+        ring();
+        ringInterval = setInterval(ring, 3000);
+      },
+      stopRing: () => {
+        if (ringInterval) {
+          clearInterval(ringInterval);
+          ringInterval = null;
+        }
+      }
+    };
+  })();
   const CONTACTS_KEY = 'nostr-contacts';
 
   // ── Helpers ──
@@ -192,12 +251,35 @@ import { ChatStore } from './chat-store.js';
   function removeContact(pubkey) { saveContacts(loadContacts().filter(c => c.pubkey !== pubkey)); }
   function getContactNickname(pubkey) { return loadContacts().find(c => c.pubkey === pubkey)?.nickname || ''; }
   function getContactDisplayName(pubkey) { return getContactNickname(pubkey) || pubkey.slice(0, 8) + '…' + pubkey.slice(-6); }
+  function renameContact(pubkey, newName) {
+    const contacts = loadContacts();
+    const c = contacts.find(c => c.pubkey === pubkey);
+    if (c) { c.nickname = newName; saveContacts(contacts); }
+  }
+
+  // ── Message Request Queue ──
+  const pendingRequests = [];
+  let currentRequest = null;
+
+  function showNextMessageRequest() {
+    if (currentRequest) return; // one at a time
+    if (pendingRequests.length === 0) return;
+    currentRequest = pendingRequests.shift();
+    const modal = document.getElementById('msg-request-modal');
+    document.getElementById('msg-request-pubkey').textContent = currentRequest.senderPubKey;
+    document.getElementById('msg-request-preview').textContent = currentRequest.text;
+    document.getElementById('msg-request-nickname').value = '';
+    show(modal);
+  }
 
   // ── Mobile Navigation ──
   function showChatPanel() {
     if (isMobile) {
       dom.sidebar.classList.add('sidebar--hidden');
       dom.chatPanel.classList.add('chat-panel--active');
+      if (!history.state || history.state.panel !== 'chat') {
+        history.pushState({ panel: 'chat' }, 'Chat', '');
+      }
     }
   }
   function showSidebar() {
@@ -206,6 +288,13 @@ import { ChatStore } from './chat-store.js';
       dom.chatPanel.classList.remove('chat-panel--active');
     }
   }
+  
+  window.addEventListener('popstate', (e) => {
+    if (isMobile && dom.chatPanel.classList.contains('chat-panel--active')) {
+      showSidebar(); // They hit device Back button
+    }
+  });
+  
   window.addEventListener('resize', () => { isMobile = window.innerWidth <= 768; });
 
   // ── Render Contact List ──
@@ -239,6 +328,7 @@ import { ChatStore } from './chat-store.js';
       const preview = c.lastText
         ? (c.lastSender === 'self' ? 'You: ' : '') + c.lastText.slice(0, 40)
         : 'No messages yet';
+      const pubShort = c.pubkey.slice(0, 6) + '…' + c.pubkey.slice(-4);
       div.innerHTML = `
         <div class="avatar avatar--small" style="background:${color}"><span>${escapeHtml(letter)}</span></div>
         <div class="contact-item__info">
@@ -247,6 +337,7 @@ import { ChatStore } from './chat-store.js';
             <span class="contact-item__time">${time}</span>
           </div>
           <div class="contact-item__preview">${escapeHtml(preview)}</div>
+          <div class="contact-item__pubkey" title="${escapeHtml(c.pubkey)}">${pubShort}</div>
         </div>`;
       div.addEventListener('click', () => openChat(c.pubkey));
       dom.contactList.appendChild(div);
@@ -263,6 +354,13 @@ import { ChatStore } from './chat-store.js';
     dom.chatAvatarLetter.textContent = letter;
     dom.chatAvatar.style.background = getAvatarColor(pubkey);
     dom.chatContactName.textContent = name;
+    dom.chatContactName.title = pubkey;
+    // Update pubkey subtitle in header
+    const pubSub = document.getElementById('chat-contact-pubkey');
+    if (pubSub) {
+      pubSub.textContent = pubkey.slice(0, 8) + '…' + pubkey.slice(-6);
+      pubSub.title = pubkey;
+    }
     
     hide(dom.chatEmpty);
     hide(dom.manualPanel);
@@ -277,43 +375,54 @@ import { ChatStore } from './chat-store.js';
     dom.fileInput.disabled = false;
     dom.chatInput.focus();
 
-    const isConnected = session && nostrActiveSessionId && session.isChannelOpen?.();
+    const isConnected = session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.isChannelOpen?.();
     const isConnecting = session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.getState?.() !== 'closed' && session.getState?.() !== 'failed';
     
     if (isConnected) {
         dom.chatContactStatus.textContent = 'Connected';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+        show(dom.btnAudioCall);
         show(dom.btnVideoCall);
         hide(dom.btnConnectPeer);
     } else if (isConnecting) {
         dom.chatContactStatus.textContent = 'Connecting via Nostr...';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
+        hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
         hide(dom.btnConnectPeer);
     } else {
         dom.chatContactStatus.textContent = 'Connecting via Nostr...';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
+        hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
         hide(dom.btnConnectPeer);
         
         // Auto connect
         if (nostrIdentity) {
             clearTimeout(connectionTimeout);
-            NostrSignaling.startSession(pubkey).then(sid => {
-                nostrActiveSessionId = sid;
-                sessionRemotePubKey = pubkey;
-                connectionTimeout = setTimeout(() => {
-                    if (nostrActiveSessionId === sid && (!session || !session.isChannelOpen?.())) {
-                        dom.chatContactStatus.textContent = 'Offline (Auto-connect failed)';
-                        dom.chatContactStatus.className = 'chat-header__status';
-                        show(dom.btnConnectPeer); // allow manual retry
-                    }
-                }, 8000);
-            }).catch(err => {
-                dom.chatContactStatus.textContent = 'Offline';
-                dom.chatContactStatus.className = 'chat-header__status';
-                show(dom.btnConnectPeer);
-            });
+            
+            // If we already have an active session with someone else, do not auto-connect and orphan them!
+            if (session && session.getState?.() !== 'closed' && session.getState?.() !== 'failed' && sessionRemotePubKey !== pubkey) {
+               dom.chatContactStatus.textContent = 'Offline (Busy)';
+               dom.chatContactStatus.className = 'chat-header__status';
+               show(dom.btnConnectPeer);
+            } else {
+               NostrSignaling.startSession(pubkey).then(sid => {
+                   nostrActiveSessionId = sid;
+                   sessionRemotePubKey = pubkey;
+                   connectionTimeout = setTimeout(() => {
+                       if (nostrActiveSessionId === sid && (!session || !session.isChannelOpen?.())) {
+                           dom.chatContactStatus.textContent = 'Offline';
+                           dom.chatContactStatus.className = 'chat-header__status';
+                           show(dom.btnConnectPeer); // allow manual retry
+                       }
+                   }, 15000);
+               }).catch(err => {
+                   dom.chatContactStatus.textContent = 'Offline';
+                   dom.chatContactStatus.className = 'chat-header__status';
+                   show(dom.btnConnectPeer);
+               });
+            }
         }
     }
   }
@@ -369,38 +478,131 @@ import { ChatStore } from './chat-store.js';
 
   function sendChatMessage(text) {
     if (!activeContactPubkey) return;
+    const targetPubKey = activeContactPubkey; // Capture for timeout closure
     const id = `m${++messageIdCounter}-${Date.now()}`;
     const payload = JSON.stringify({ id, text });
     
     let status = 'pending';
     if (session && session.isChannelOpen && session.isChannelOpen()) {
         const sent = session.send(payload);
-        if (sent) status = 'sent';
+        if (sent) {
+            status = 'sent';
+            // Start a 3-second fallback timer just in case WebRTC silently dropped it (zombie state)
+            setTimeout(() => {
+                const currentMsg = ChatStore.getMessages(targetPubKey).find(m => m.id === id);
+                // If it's not delivered via WebRTC ack, peer is likely gone despite channel saying open
+                if (currentMsg && currentMsg.status !== 'delivered' && nostrIdentity && NostrTransport.isConnected()) {
+                    console.log('[WebRTC] Message ack timeout, falling back to Nostr transport');
+                    NostrTransport.sendMessage(targetPubKey, { id, text }).catch(() => {});
+                }
+            }, 3000);
+        }
+    } else if (nostrIdentity && NostrTransport.isConnected()) {
+        // Fall back to Nostr relay for offline delivery
+        NostrTransport.sendMessage(targetPubKey, { id, text })
+          .then(() => {
+            ChatStore.updateMessageStatus(targetPubKey, id, 'sent');
+            const el = pendingMsgs.get(id);
+            if (el) {
+              const ticks = el.querySelector('.chat-msg__ticks');
+              if (ticks) { ticks.textContent = '✓'; ticks.classList.remove('chat-msg__ticks--pending'); }
+            }
+          })
+          .catch(() => { /* stay pending */ });
+        status = 'pending'; // will update to 'sent' on relay acceptance
     }
 
     const msg = { id, text, sender: 'self', ts: Date.now(), status, type: 'text' };
-    ChatStore.addMessage(activeContactPubkey, msg);
+    ChatStore.addMessage(targetPubKey, msg);
     const el = appendChatBubble(msg);
     pendingMsgs.set(id, el);
     renderContacts(dom.contactSearch.value);
   }
 
-  function markDelivered(id) {
-    if (!activeContactPubkey) return;
-    ChatStore.updateMessageStatus(activeContactPubkey, id, 'delivered');
-    const el = pendingMsgs.get(id);
-    if (el) {
-      const ticks = el.querySelector('.chat-msg__ticks');
-      if (ticks) { ticks.textContent = '✓✓'; ticks.classList.remove('chat-msg__ticks--pending'); }
-      pendingMsgs.delete(id);
+  function markDelivered(pubkey, id) {
+    if (!pubkey) return;
+    ChatStore.updateMessageStatus(pubkey, id, 'delivered');
+    if (activeContactPubkey === pubkey) {
+      const el = pendingMsgs.get(id);
+      if (el) {
+        const ticks = el.querySelector('.chat-msg__ticks');
+        if (ticks) { ticks.textContent = '✓✓'; ticks.classList.remove('chat-msg__ticks--pending'); }
+        pendingMsgs.delete(id);
+      }
     }
   }
 
   // ── ICE servers ──
+  const ICE_STORAGE_KEY = 'custom-ice-servers';
+  const DEFAULT_ICE_SERVERS = [
+    // STUN — Google (most reliable, global)
+    { urls: 'stun:stun.l.google.com:19302', _builtin: true },
+    { urls: 'stun:stun1.l.google.com:19302', _builtin: true },
+    { urls: 'stun:stun2.l.google.com:19302', _builtin: true },
+    // STUN — Cloudflare
+    { urls: 'stun:stun.cloudflare.com:3478', _builtin: true },
+    // STUN — Mozilla
+    { urls: 'stun:stun.services.mozilla.com:3478', _builtin: true },
+    // STUN — stunprotocol.org
+    { urls: 'stun:stunserver.stunprotocol.org:3478', _builtin: true },
+    // TURN — Metered OpenRelay (free, port 80/443 to bypass firewalls)
+    { urls: 'turn:standard.relay.metered.ca:80', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
+    { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
+    { urls: 'turn:standard.relay.metered.ca:443', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
+    { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
+  ];
+
+  function loadCustomIceServers() {
+    try { return JSON.parse(localStorage.getItem(ICE_STORAGE_KEY)) || []; } catch { return []; }
+  }
+  function saveCustomIceServers(list) {
+    localStorage.setItem(ICE_STORAGE_KEY, JSON.stringify(list));
+  }
+
   function buildIceServers() {
-    const s = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
-    if (turnConfig) s.push({ urls: turnConfig.urls, username: turnConfig.username, credential: turnConfig.credential });
-    return s;
+    // Combine built-in + user custom; strip _builtin flag for WebRTC API
+    const all = [...DEFAULT_ICE_SERVERS, ...loadCustomIceServers()];
+    return all.map(s => {
+      const entry = { urls: s.urls };
+      if (s.username) entry.username = s.username;
+      if (s.credential) entry.credential = s.credential;
+      return entry;
+    });
+  }
+
+  function renderIceServerList() {
+    const list = document.getElementById('ice-server-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const customs = loadCustomIceServers();
+    const all = [...DEFAULT_ICE_SERVERS.map(s => ({ ...s, custom: false })), ...customs.map(s => ({ ...s, custom: true }))];
+    for (const server of all) {
+      const li = document.createElement('li');
+      li.className = 'relay-item';
+      const isStun = server.urls.startsWith('stun');
+      const badge = isStun ? '🟢 STUN' : '🔵 TURN';
+      const label = server.urls.replace(/^(stun|turn|turns):/, '').replace(/\?.*$/, '');
+      li.innerHTML = `
+        <span class="relay-item__url">
+          <span style="font-size:.7rem;padding:2px 5px;border-radius:4px;background:${isStun ? '#1a3a2a' : '#1a2a3a'};color:${isStun ? '#4caf50' : '#42a5f5'};margin-right:6px;">${badge}</span>
+          ${escapeHtml(label)}
+          ${server.custom ? '<span style="font-size:.65rem;color:#888;margin-left:4px;">(custom)</span>' : '<span style="font-size:.65rem;color:#555;margin-left:4px;">(built-in)</span>'}
+        </span>`;
+      if (server.custom) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn--small btn--outline';
+        btn.textContent = '✕';
+        btn.style.cssText = 'padding:2px 8px;font-size:.75rem;min-width:auto;';
+        btn.addEventListener('click', () => {
+          const updated = loadCustomIceServers().filter(s => s.urls !== server.urls);
+          saveCustomIceServers(updated);
+          renderIceServerList();
+          toast('Server removed.');
+        });
+        li.appendChild(btn);
+      }
+      list.appendChild(li);
+    }
   }
 
   // ── Connection state handler ──
@@ -410,14 +612,21 @@ import { ChatStore } from './chat-store.js';
       case 'connecting': setBadge('connecting', 'Connecting'); break;
       case 'connected':
         setBadge('connected', 'Connected');
-        if (dom.chatContactStatus) {
-          dom.chatContactStatus.textContent = 'Connected';
-          dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
-        }
         break;
       case 'failed': setBadge('failed', 'Failed'); break;
       case 'disconnected': setBadge('failed', 'Disconnected'); break;
       case 'closed': setBadge('closed', 'Closed'); break;
+    }
+    
+    // Only update chat header if we are looking at the person this session belongs to
+    if (dom.chatContactStatus && sessionRemotePubKey === activeContactPubkey) {
+      if (state === 'connected') {
+        dom.chatContactStatus.textContent = 'Connected';
+        dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+      } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+        dom.chatContactStatus.textContent = 'Offline';
+        dom.chatContactStatus.className = 'chat-header__status';
+      }
     }
   }
 
@@ -425,6 +634,7 @@ import { ChatStore } from './chat-store.js';
     dom.chatInput.disabled = false;
     dom.btnSend.disabled = false;
     dom.fileInput.disabled = false;
+    show(dom.btnAudioCall);
     show(dom.btnVideoCall);
     hide(dom.btnConnectPeer);
     dom.chatInput.focus();
@@ -432,6 +642,7 @@ import { ChatStore } from './chat-store.js';
 
   function disableChat() {
     // We strictly DO NOT disable chat inputs anymore to allow offline messaging
+    hide(dom.btnAudioCall);
     hide(dom.btnVideoCall);
     show(dom.btnConnectPeer);
   }
@@ -444,30 +655,45 @@ import { ChatStore } from './chat-store.js';
       onIceCandidate: () => {},
       onIceComplete: () => {},
       onChannelOpen: () => {
-        enableChat();
-        hide(dom.connectBanner);
+        if (remotePubKey === activeContactPubkey) {
+          enableChat();
+          hide(dom.connectBanner);
+        }
         
         // Flush pending messages
         const offlineMsgs = ChatStore.getMessages(remotePubKey).filter(m => m.sender === 'self' && m.status === 'pending');
         for (const m of offlineMsgs) {
             if (m.type === 'text') {
-                if (session.send(JSON.stringify({ id: m.id, text: m.text }))) {
+                if (session && session.send(JSON.stringify({ id: m.id, text: m.text }))) {
                     ChatStore.updateMessageStatus(remotePubKey, m.id, 'sent');
                 }
             }
         }
       },
       onChannelClose: () => {
-        disableChat();
+        if (remotePubKey === activeContactPubkey) {
+          disableChat();
+        }
         endMediaCall();
+      },
+      onCallEnded: () => {
+        if (remotePubKey === activeContactPubkey && mediaActive) {
+          endMediaCall();
+          toast('Peer ended the call.');
+        }
       },
       onMessage: (data) => {
         try {
           const parsed = JSON.parse(data);
-          if (parsed._ack) { markDelivered(parsed._ack); return; }
+          if (parsed._ack) { markDelivered(remotePubKey, parsed._ack); return; }
           const msg = { id: parsed.id || 'p-' + Date.now(), text: parsed.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' };
           ChatStore.addMessage(remotePubKey, msg);
-          if (activeContactPubkey === remotePubKey) appendChatBubble(msg);
+          if (activeContactPubkey === remotePubKey) {
+            appendChatBubble(msg);
+            if (document.hidden) SoundEngine.playMessage();
+          } else {
+            SoundEngine.playMessage();
+          }
           session.send(JSON.stringify({ _ack: parsed.id }));
           renderContacts(dom.contactSearch.value);
         } catch { /* ignore malformed */ }
@@ -525,6 +751,61 @@ import { ChatStore } from './chat-store.js';
     '1440': { width: { ideal: 2560 }, height: { ideal: 1440 } },
   };
 
+  async function populateDeviceSelectors() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      const speakers = devices.filter(d => d.kind === 'audiooutput');
+
+      if (dom.cameraSelect) {
+        const prevCam = dom.cameraSelect.value;
+        dom.cameraSelect.innerHTML = '';
+        cameras.forEach((cam, i) => {
+          const opt = document.createElement('option');
+          opt.value = cam.deviceId;
+          opt.textContent = cam.label || `Camera ${i + 1}`;
+          dom.cameraSelect.appendChild(opt);
+        });
+        if (prevCam && cameras.find(c => c.deviceId === prevCam)) dom.cameraSelect.value = prevCam;
+
+        // Allow switching camera mid-call
+        dom.cameraSelect.onchange = async () => {
+          if (!session || !mediaActive) return;
+          try {
+            const newStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: dom.cameraSelect.value }, ...getVideoConstraints() } });
+            const newTrack = newStream.getVideoTracks()[0];
+            if (newTrack) {
+              await session.replaceVideoTrack(newTrack);
+              // Update local preview
+              const localStream = dom.localVideo.srcObject;
+              if (localStream) {
+                const oldTrack = localStream.getVideoTracks()[0];
+                if (oldTrack) { localStream.removeTrack(oldTrack); oldTrack.stop(); }
+                localStream.addTrack(newTrack);
+              }
+              toast('Camera switched.');
+            }
+          } catch { toast('Camera switch failed.'); }
+        };
+      }
+
+      if (dom.speakerSelect) {
+        dom.speakerSelect.innerHTML = '';
+        speakers.forEach((spk, i) => {
+          const opt = document.createElement('option');
+          opt.value = spk.deviceId;
+          opt.textContent = spk.label || `Speaker ${i + 1}`;
+          dom.speakerSelect.appendChild(opt);
+        });
+        dom.speakerSelect.onchange = () => {
+          if (dom.remoteVideo?.setSinkId) {
+            dom.remoteVideo.setSinkId(dom.speakerSelect.value).catch(() => {});
+          }
+        };
+      }
+    } catch { /* ignore on devices that don't support enumeration */ }
+  }
+
   function getVideoConstraints() {
     const res = dom.resolutionSelect?.value;
     const camId = dom.cameraSelect?.value;
@@ -533,19 +814,20 @@ import { ChatStore } from './chat-store.js';
     return c;
   }
 
-  async function startCall() {
+  async function startCall(videoEnabled = true) {
     if (!session) { toast('Connect first.'); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: getVideoConstraints() });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: videoEnabled ? getVideoConstraints() : false });
       session.addLocalStream(stream);
       dom.localVideo.srcObject = stream;
       mediaActive = true;
       show(dom.callOverlay);
+      populateDeviceSelectors();
       dom.btnToggleAudio.disabled = false;
       dom.btnToggleVideo.disabled = false;
       dom.btnScreenShare.disabled = false;
       dom.btnEndCall.disabled = false;
-      updateCallButtons(true, true);
+      updateCallButtons(true, videoEnabled);
     } catch {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -553,6 +835,7 @@ import { ChatStore } from './chat-store.js';
         dom.localVideo.srcObject = stream;
         mediaActive = true;
         show(dom.callOverlay);
+        populateDeviceSelectors();
         dom.btnToggleAudio.disabled = false;
         dom.btnEndCall.disabled = false;
         updateCallButtons(true, false);
@@ -561,8 +844,12 @@ import { ChatStore } from './chat-store.js';
     }
   }
 
-  function endMediaCall() {
-    if (session) session.removeMedia();
+  function endMediaCall(sendSignal = true) {
+    SoundEngine.stopRing();
+    if (session) {
+      session.removeMedia();
+      if (sendSignal && session.sendCallEnded) session.sendCallEnded();
+    }
     dom.localVideo.srcObject = null;
     dom.remoteVideo.srcObject = null;
     show(dom.remoteNoVideo);
@@ -588,7 +875,6 @@ import { ChatStore } from './chat-store.js';
     }
   }
 
-  // ── Incoming call prompt ──
   function showIncomingCallPrompt(remotePubKey) {
     const name = getContactDisplayName(remotePubKey);
     const letter = (getContactNickname(remotePubKey) || remotePubKey)[0].toUpperCase();
@@ -596,9 +882,11 @@ import { ChatStore } from './chat-store.js';
     dom.incomingCallAvatar.style.background = getAvatarColor(remotePubKey);
     dom.incomingCallName.textContent = name;
     show(dom.incomingCall);
+    SoundEngine.startRing();
   }
 
   function acceptIncomingCall() {
+    SoundEngine.stopRing();
     hide(dom.incomingCall);
     if (!pendingRemoteStream) return;
 
@@ -609,18 +897,21 @@ import { ChatStore } from './chat-store.js';
 
     // Show call overlay and enable controls
     show(dom.callOverlay);
+    populateDeviceSelectors();
     mediaActive = true;
     dom.btnToggleAudio.disabled = false;
     dom.btnToggleVideo.disabled = false;
     dom.btnScreenShare.disabled = false;
     dom.btnEndCall.disabled = false;
 
+    const hasRemoteVideo = pendingRemoteStream.getVideoTracks().length > 0;
+
     // Auto-start local media (camera+mic) so the peer can see/hear us
-    navigator.mediaDevices.getUserMedia({ audio: true, video: getVideoConstraints() })
+    navigator.mediaDevices.getUserMedia({ audio: true, video: hasRemoteVideo ? getVideoConstraints() : false })
       .then(stream => {
         if (session) session.addLocalStream(stream);
         dom.localVideo.srcObject = stream;
-        updateCallButtons(true, true);
+        updateCallButtons(true, hasRemoteVideo);
       })
       .catch(() => {
         // Fallback to audio only
@@ -640,28 +931,49 @@ import { ChatStore } from './chat-store.js';
   }
 
   function rejectIncomingCall() {
+    SoundEngine.stopRing();
     hide(dom.incomingCall);
     // Stop the remote stream tracks that WebRTC is providing
     pendingRemoteStream = null;
     pendingRemoteStreamPubkey = null;
     // End media on our side to signal the peer
     if (session) session.removeMedia();
+    if (session && session.sendCallEnded) session.sendCallEnded();
     toast('Call rejected.');
   }
 
   // ── QR Scanner ──
   let scannerStream = null, scannerAnimFrame = null, scannerVideo = null;
+  const QR_CAMERA_KEY = 'qr-last-camera';
+
   function openQrScanner(onSuccess) {
     show(dom.qrModal);
     const readerEl = document.getElementById('qr-reader');
     readerEl.innerHTML = '';
+
+    // Camera selector
+    const camRow = document.createElement('div');
+    camRow.style.cssText = 'margin-bottom:8px;display:flex;align-items:center;gap:8px;';
+    const camLabel = document.createElement('label');
+    camLabel.textContent = 'Camera: ';
+    camLabel.style.cssText = 'font-size:.85rem;color:#aeb7c4;white-space:nowrap;';
+    const camSelect = document.createElement('select');
+    camSelect.id = 'qr-camera-select';
+    camSelect.style.cssText = 'flex:1;padding:6px 8px;border-radius:6px;background:#1a1d27;color:#e4e8f1;border:1px solid #2a3040;font-size:.85rem;';
+    camRow.appendChild(camLabel);
+    camRow.appendChild(camSelect);
+    readerEl.appendChild(camRow);
+
+    // Video element
     scannerVideo = document.createElement('video');
     scannerVideo.setAttribute('playsinline', 'true');
     scannerVideo.setAttribute('autoplay', 'true');
     scannerVideo.style.cssText = 'width:100%;max-width:400px;border-radius:8px;';
     readerEl.appendChild(scannerVideo);
+
     const scanCanvas = document.createElement('canvas');
     const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
     function scanFrame() {
       if (!scannerStream) return;
       if (scannerVideo.readyState !== scannerVideo.HAVE_ENOUGH_DATA) { scannerAnimFrame = requestAnimationFrame(scanFrame); return; }
@@ -675,10 +987,54 @@ import { ChatStore } from './chat-store.js';
       if (code?.data) { onSuccess(code.data); closeQrScanner(); return; }
       scannerAnimFrame = requestAnimationFrame(scanFrame);
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } })
-      .then(stream => { scannerStream = stream; scannerVideo.srcObject = stream; scannerVideo.play(); scannerAnimFrame = requestAnimationFrame(scanFrame); })
-      .catch(() => { toast('Camera access failed.'); closeQrScanner(); });
+
+    function startCameraStream(deviceId) {
+      // Stop existing stream
+      if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+      if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
+      const constraints = { video: deviceId
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 } }
+        : { facingMode: 'environment', width: { ideal: 1280 } }
+      };
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(stream => {
+          scannerStream = stream;
+          scannerVideo.srcObject = stream;
+          scannerVideo.play();
+          scannerAnimFrame = requestAnimationFrame(scanFrame);
+          // Cache the successful camera
+          const activeTrack = stream.getVideoTracks()[0];
+          if (activeTrack) {
+            const settings = activeTrack.getSettings();
+            if (settings.deviceId) localStorage.setItem(QR_CAMERA_KEY, settings.deviceId);
+          }
+        })
+        .catch(() => { toast('Camera access failed.'); closeQrScanner(); });
+    }
+
+    // Populate camera list
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      camSelect.innerHTML = '';
+      cameras.forEach((cam, i) => {
+        const opt = document.createElement('option');
+        opt.value = cam.deviceId;
+        opt.textContent = cam.label || `Camera ${i + 1}`;
+        camSelect.appendChild(opt);
+      });
+      // Select cached camera or default to last one (usually rear/back camera)
+      const cached = localStorage.getItem(QR_CAMERA_KEY);
+      if (cached && cameras.find(c => c.deviceId === cached)) {
+        camSelect.value = cached;
+      } else if (cameras.length > 0) {
+        // Default to last camera in list (often the back camera on mobile)
+        camSelect.value = cameras[cameras.length - 1].deviceId;
+      }
+      camSelect.addEventListener('change', () => startCameraStream(camSelect.value));
+      startCameraStream(camSelect.value || null);
+    }).catch(() => startCameraStream(null)); // Fallback if enumerate fails
   }
+
   function closeQrScanner() {
     if (scannerAnimFrame) { cancelAnimationFrame(scannerAnimFrame); scannerAnimFrame = null; }
     if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
@@ -876,13 +1232,102 @@ import { ChatStore } from './chat-store.js';
     toast('Contact added!');
   });
 
+  // Click contact name or pubkey in chat header to copy full pubkey
+  dom.chatContactName?.addEventListener('click', () => {
+    if (activeContactPubkey) copyText(activeContactPubkey, 'Public key');
+  });
+  document.getElementById('chat-contact-pubkey')?.addEventListener('click', () => {
+    if (activeContactPubkey) copyText(activeContactPubkey, 'Public key');
+  });
+
+  // Chat menu toggle
+  dom.btnChatMenu?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dom.chatMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => { dom.chatMenu?.classList.add('hidden'); });
+
+  // Rename contact
+  document.getElementById('btn-rename-contact')?.addEventListener('click', () => {
+    dom.chatMenu.classList.add('hidden');
+    if (!activeContactPubkey) return;
+    const current = getContactNickname(activeContactPubkey);
+    const newName = prompt('Enter new nickname:', current);
+    if (newName !== null && newName.trim()) {
+      renameContact(activeContactPubkey, newName.trim());
+      dom.chatContactName.textContent = newName.trim();
+      renderContacts(dom.contactSearch?.value);
+      toast('Contact renamed!');
+    }
+  });
+
+  // Clear chat
+  dom.btnClearChat?.addEventListener('click', () => {
+    dom.chatMenu.classList.add('hidden');
+    if (!activeContactPubkey) return;
+    if (!confirm('Clear all messages with this contact?')) return;
+    ChatStore.clearChat(activeContactPubkey);
+    dom.chatMessages.innerHTML = '';
+    renderContacts(dom.contactSearch?.value);
+    toast('Chat cleared');
+  });
+
+  // Delete contact
+  dom.btnDeleteContact?.addEventListener('click', () => {
+    dom.chatMenu.classList.add('hidden');
+    if (!activeContactPubkey) return;
+    const name = getContactDisplayName(activeContactPubkey);
+    if (!confirm(`Delete contact "${name}" and all messages?`)) return;
+    ChatStore.clearChat(activeContactPubkey);
+    removeContact(activeContactPubkey);
+    activeContactPubkey = null;
+    hide(dom.chatActive);
+    show(dom.chatEmpty);
+    showSidebar();
+    renderContacts();
+    toast('Contact deleted');
+  });
+
+  // Message request — Accept
+  document.getElementById('btn-accept-request')?.addEventListener('click', () => {
+    if (!currentRequest) return;
+    const nick = document.getElementById('msg-request-nickname').value.trim() || 'Peer ' + currentRequest.senderPubKey.slice(0, 8);
+    addContact(currentRequest.senderPubKey, nick);
+    // Deliver this message and any others from the same sender still in queue
+    const allFromSender = [currentRequest, ...pendingRequests.filter(r => r.senderPubKey === currentRequest.senderPubKey)];
+    // Remove from queue
+    const senderKey = currentRequest.senderPubKey;
+    for (let i = pendingRequests.length - 1; i >= 0; i--) {
+      if (pendingRequests[i].senderPubKey === senderKey) pendingRequests.splice(i, 1);
+    }
+    for (const req of allFromSender) {
+      const msg = { id: req.id || 'nr-' + Date.now(), text: req.text, sender: 'peer', ts: req.ts || Date.now(), status: 'delivered', type: 'text' };
+      ChatStore.addMessage(senderKey, msg);
+      if (activeContactPubkey === senderKey) appendChatBubble(msg);
+    }
+    renderContacts(dom.contactSearch?.value);
+    toast(`Contact "${nick}" added!`);
+    hide(document.getElementById('msg-request-modal'));
+    currentRequest = null;
+    showNextMessageRequest(); // process next in queue
+  });
+
+  // Message request — Decline
+  document.getElementById('btn-decline-request')?.addEventListener('click', () => {
+    hide(document.getElementById('msg-request-modal'));
+    currentRequest = null;
+    showNextMessageRequest(); // process next in queue
+  });
   // Manual signaling
   dom.btnCreateSession?.addEventListener('click', showCreateSession);
   dom.btnJoinSession?.addEventListener('click', showJoinSession);
   dom.btnManualBack?.addEventListener('click', () => { hide(dom.manualPanel); show(dom.chatEmpty); showSidebar(); });
 
   // Chat panel
-  dom.btnChatBack?.addEventListener('click', () => { showSidebar(); });
+  dom.btnChatBack?.addEventListener('click', () => { 
+    showSidebar(); 
+    if (history.state && history.state.panel === 'chat') history.back();
+  });
   dom.chatForm?.addEventListener('submit', (e) => { e.preventDefault(); const t = dom.chatInput.value.trim(); if (!t) return; sendChatMessage(t); dom.chatInput.value = ''; dom.chatInput.focus(); });
   dom.fileInput?.addEventListener('change', async (e) => {
     if (!session) return;
@@ -918,7 +1363,16 @@ import { ChatStore } from './chat-store.js';
   // Connect P2P button
   dom.btnConnectPeer?.addEventListener('click', async () => {
     if (!activeContactPubkey || !nostrIdentity) { toast('No contact selected.'); return; }
-    if (session && nostrActiveSessionId) { toast('Already connected.'); return; }
+    if (session && sessionRemotePubKey === activeContactPubkey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) { 
+        toast('Already connected.'); return; 
+    }
+    
+    // Auto-close any existing session with someone else to prevent orphaning resources
+    if (session && sessionRemotePubKey !== activeContactPubkey) {
+       if (typeof session.close === 'function') session.close();
+       session = null;
+    }
+    
     show(dom.connectBanner);
     dom.connectBannerText.textContent = 'Connecting via Nostr…';
     const dots = dom.connectProgress.children;
@@ -936,11 +1390,35 @@ import { ChatStore } from './chat-store.js';
     }
   });
 
-  // Video call
-  dom.btnVideoCall?.addEventListener('click', () => startCall());
+  // Calls
+  dom.btnAudioCall?.addEventListener('click', () => startCall(false));
+  dom.btnVideoCall?.addEventListener('click', () => startCall(true));
   dom.btnEndCall?.addEventListener('click', () => { endMediaCall(); toast('Call ended.'); });
   dom.btnToggleAudio?.addEventListener('click', () => { if (session) updateCallButtons(session.toggleAudio(), null); });
-  dom.btnToggleVideo?.addEventListener('click', () => { if (session) updateCallButtons(null, session.toggleVideo()); });
+  
+  dom.btnToggleVideo?.addEventListener('click', async () => {
+    if (!session) return;
+    const ls = session.getLocalStream();
+    if (!ls) return;
+    
+    const hasVideo = ls.getVideoTracks().length > 0;
+    if (!hasVideo) {
+      // Upgrade from audio-only to video
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: getVideoConstraints() });
+        const videoTrack = stream.getVideoTracks()[0];
+        ls.addTrack(videoTrack);
+        await session.replaceVideoTrack(videoTrack);
+        dom.localVideo.srcObject = ls;
+        updateCallButtons(null, true);
+        toast('Upgraded to video call');
+      } catch (e) {
+        toast('Could not access camera for video upgrade');
+      }
+    } else {
+      updateCallButtons(null, session.toggleVideo());
+    }
+  });
   dom.btnScreenShare?.addEventListener('click', async () => {
     if (!session) return;
     if (session.isScreenSharing()) {
@@ -968,6 +1446,7 @@ import { ChatStore } from './chat-store.js';
   dom.btnSettings?.addEventListener('click', () => {
     show(dom.settingsModal);
     renderRelayList();
+    renderIceServerList();
     updateStorageInfo();
     if (nostrIdentity && window.QRCode) {
       QRCode.toCanvas(dom.qrPubkey, nostrIdentity.publicKey, { width: 180, margin: 2, color: { dark: '#000', light: '#fff' } }, () => {});
@@ -1020,12 +1499,27 @@ import { ChatStore } from './chat-store.js';
     toast('Relays reset.');
   });
 
-  // TURN
+  // ICE Servers (add custom + reset)
   dom.btnSaveTurn?.addEventListener('click', () => {
     const url = dom.turnUrl.value.trim();
-    if (!url) { toast('Enter TURN URL.'); return; }
-    turnConfig = { urls: url, username: dom.turnUser.value.trim(), credential: dom.turnCred.value.trim() };
-    toast('TURN saved.'); hide(dom.settingsModal);
+    if (!url) { toast('Enter a server URL.'); return; }
+    const entry = { urls: url };
+    const user = dom.turnUser.value.trim();
+    const cred = dom.turnCred.value.trim();
+    if (user) entry.username = user;
+    if (cred) entry.credential = cred;
+    const customs = loadCustomIceServers();
+    if (customs.find(s => s.urls === url)) { toast('Server already added.'); return; }
+    customs.push(entry);
+    saveCustomIceServers(customs);
+    dom.turnUrl.value = ''; dom.turnUser.value = ''; dom.turnCred.value = '';
+    renderIceServerList();
+    toast('Server added!');
+  });
+  document.getElementById('btn-reset-ice')?.addEventListener('click', () => {
+    saveCustomIceServers([]);
+    renderIceServerList();
+    toast('Custom servers cleared. Built-in servers active.');
   });
 
   // Security - Key mgmt
@@ -1118,6 +1612,34 @@ import { ChatStore } from './chat-store.js';
 
       await NostrTransport.connect();
       renderRelayList();
+
+      // Subscribe to incoming Nostr chat messages (offline delivery)
+      NostrTransport.subscribeMessages((incoming) => {
+        const { id, text, ts, senderPubKey } = incoming;
+        if (!text) return;
+        // Deduplicate — check if we already have this message
+        const existing = ChatStore.getMessages(senderPubKey);
+        if (existing.find(m => m.id === id)) return;
+        // Check if sender is already a known contact
+        if (loadContacts().find(c => c.pubkey === senderPubKey)) {
+          // Known contact — deliver immediately
+          const msg = { id: id || 'nr-' + Date.now(), text, sender: 'peer', ts: ts || Date.now(), status: 'delivered', type: 'text' };
+          ChatStore.addMessage(senderPubKey, msg);
+          if (activeContactPubkey === senderPubKey) {
+            appendChatBubble(msg);
+            if (document.hidden) SoundEngine.playMessage();
+          } else {
+            SoundEngine.playMessage();
+          }
+          renderContacts(dom.contactSearch?.value);
+          toast(`Message from ${getContactDisplayName(senderPubKey)}`);
+        } else {
+          // Unknown contact — queue as message request
+          SoundEngine.playMessage();
+          pendingRequests.push({ id, text, ts, senderPubKey });
+          showNextMessageRequest();
+        }
+      });
 
       // Init signaling
       NostrSignaling.init({

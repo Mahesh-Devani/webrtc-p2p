@@ -25,6 +25,7 @@ const EVENT_KIND = 24133;
 const MAX_PROCESSED_EVENTS = 500;
 const ICE_STALE_SECONDS = 60;
 const MAX_ICE_PER_SESSION = 20;
+const STORAGE_LAST_SEEN_KEY = 'nostr-last-seen';
 
 // ── Relay config storage ─────────────────────────────────────────
 const STORAGE_RELAY_KEY = 'nostr-relays';
@@ -41,6 +42,7 @@ export const NostrTransport = (() => {
     let _publicKey = null;         // hex
     let _relays = new Map();       // url → NostrRelay instance
     let _signalHandler = null;     // callback for incoming signals
+    let _messageHandler = null;    // callback for incoming chat messages
     let _statusHandler = null;     // callback for relay status changes
     let _logHandler = (() => { });  // log callback
     let _processedEvents = new Set();
@@ -196,6 +198,8 @@ export const NostrTransport = (() => {
      */
     function disconnect() {
         _connected = false;
+        // Save last-seen timestamp for offline message delivery on next connect
+        localStorage.setItem(STORAGE_LAST_SEEN_KEY, String(Math.floor(Date.now() / 1000)));
         for (const [url, relay] of _relays) {
             relay.disconnect();
         }
@@ -231,7 +235,17 @@ export const NostrTransport = (() => {
             relay.unsubscribe(existingSubId);
         }
 
-        const since = Math.floor(Date.now() / 1000) - 5; // 5 seconds ago
+        // Use stored 'last seen' timestamp for offline message delivery
+        const storedLastSeen = parseInt(localStorage.getItem(STORAGE_LAST_SEEN_KEY) || '0', 10);
+        
+        let since;
+        if (storedLastSeen > 0) {
+            // Fetch everything since we were last online, no matter how long ago
+            since = storedLastSeen - 5; // 5s safety overlap
+        } else {
+            // First time running on this device: fetch last 7 days of history
+            since = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60); 
+        }
         const filters = [{
             kinds: [EVENT_KIND],
             '#p': [_publicKey],
@@ -385,8 +399,21 @@ export const NostrTransport = (() => {
             _logHandler(`[Nostr] Unknown payload version: ${payload.v}`, 'warn');
             return;
         }
-        if (!['offer', 'answer', 'ice', 'close'].includes(payload.type)) {
+        if (!['offer', 'answer', 'ice', 'close', 'message'].includes(payload.type)) {
             _logHandler(`[Nostr] Unknown signal type: ${payload.type}`, 'warn');
+            return;
+        }
+
+        // ── Chat message — dispatch separately ──
+        if (payload.type === 'message') {
+            if (_messageHandler) {
+                _messageHandler({
+                    id: payload.data?.id,
+                    text: payload.data?.text,
+                    ts: payload.ts,
+                    senderPubKey: event.pubkey,
+                });
+            }
             return;
         }
 
@@ -402,6 +429,7 @@ export const NostrTransport = (() => {
         // ── Update timestamp ──
         if (event.created_at > _lastEventTimestamp) {
             _lastEventTimestamp = event.created_at;
+            localStorage.setItem(STORAGE_LAST_SEEN_KEY, String(event.created_at));
         }
 
         // ── Dispatch to handler ──
@@ -460,12 +488,46 @@ export const NostrTransport = (() => {
         return false;
     }
 
+    /**
+     * Send an encrypted chat message via Nostr (offline delivery).
+     * @param {string} toPubKey - Receiver's public key (hex)
+     * @param {Object} message  - { id, text }
+     * @returns {Promise<void>}
+     */
+    async function sendMessage(toPubKey, message) {
+        if (!_privateKey || !_publicKey) return;
+        const payload = JSON.stringify({
+            v: 1,
+            type: 'message',
+            data: { id: message.id, text: message.text },
+            ts: Date.now(),
+        });
+        const encrypted = await NostrCrypto.encrypt(payload, _privateKey, toPubKey);
+        const tags = [
+            ['p', toPubKey],
+            ['t', 'webrtc'],
+            ['v', '1'],
+        ];
+        const event = await NostrCrypto.createSignedEvent(encrypted, EVENT_KIND, tags, _privateKey);
+        await _publishWithRetry(event, 'message', toPubKey);
+    }
+
+    /**
+     * Subscribe to incoming chat messages.
+     * @param {function(Object):void} handler - Called with { id, text, ts, senderPubKey }
+     */
+    function subscribeMessages(handler) {
+        _messageHandler = handler;
+    }
+
     return {
         init,
         connect,
         disconnect,
         sendSignal,
+        sendMessage,
         subscribeSignals,
+        subscribeMessages,
         clearSession,
         getRelayList,
         addRelay,

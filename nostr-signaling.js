@@ -93,8 +93,8 @@ export const NostrSignaling = (() => {
         // Create offer
         const offer = await peerSession.createOffer();
 
-        // Wait briefly for ICE candidates
-        await _waitForIce(peerSession, 1500);
+        // Wait for ICE candidates (3s allows TURN relay candidates to be discovered)
+        await _waitForIce(peerSession, 3000);
         const candidates = peerSession.getLocalCandidates();
 
         // Compress SDP + candidates
@@ -175,8 +175,8 @@ export const NostrSignaling = (() => {
                 await peerSession.addIceCandidates(candidates);
             }
 
-            // Wait for our ICE candidates
-            await _waitForIce(peerSession, 1500);
+            // Wait for our ICE candidates (3s for TURN relay discovery)
+            await _waitForIce(peerSession, 3000);
             const localCandidates = peerSession.getLocalCandidates();
 
             // Compress answer + our candidates

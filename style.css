@@ -330,6 +330,15 @@ body {
   margin-top: 2px;
 }
 
+.contact-item__pubkey {
+  font-size: .65rem;
+  font-family: var(--mono);
+  color: rgba(134,150,160,.5);
+  margin-top: 1px;
+  letter-spacing: .3px;
+  cursor: default;
+}
+
 .contact-item__unread {
   background: var(--c-primary);
   color: #fff;
@@ -404,6 +413,7 @@ body {
   background: var(--c-bg);
   min-width: 0;
   position: relative;
+  min-height: 0;
 }
 
 /* WhatsApp-style chat background pattern */
@@ -482,6 +492,7 @@ body {
   flex-direction: column;
   position: relative;
   z-index: 1;
+  min-height: 0;
 }
 
 /* Chat header */
@@ -516,6 +527,22 @@ body {
   text-overflow: ellipsis;
 }
 
+.chat-header__pubkey {
+  display: block;
+  font-size: .62rem;
+  font-family: var(--mono);
+  color: rgba(134,150,160,.45);
+  letter-spacing: .3px;
+  cursor: pointer;
+  transition: color .15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-header__pubkey:hover {
+  color: var(--c-primary);
+}
+
 .chat-header__status {
   display: block;
   font-size: .72rem;
@@ -529,6 +556,7 @@ body {
 .chat-header__actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 /* Dropdown menu */
@@ -624,6 +652,7 @@ body {
   flex-direction: column;
   gap: 2px;
   scroll-behavior: smooth;
+  min-height: 0;
 }
 
 /* Date separator */
@@ -813,7 +842,7 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 8px 18px;
-  border: none;
+  border: 1px solid var(--c-border);
   border-radius: var(--radius);
   font-family: var(--font);
   font-size: .85rem;
@@ -822,14 +851,17 @@ body {
   transition: background .15s, opacity .15s, transform .1s;
   white-space: nowrap;
   color: var(--c-text);
+  background: var(--c-surface);
 }
 
+.btn:hover:not(:disabled) { background: var(--c-hover); }
 .btn:active { transform: scale(.97); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .btn--primary {
   background: var(--c-primary);
   color: #fff;
+  border-color: var(--c-primary);
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--c-primary-h);
@@ -847,6 +879,7 @@ body {
 .btn--danger {
   background: var(--c-red);
   color: #fff;
+  border-color: var(--c-red);
 }
 
 .btn--full { width: 100%; }
@@ -1722,10 +1755,10 @@ textarea {
   }
 
   .sidebar {
-    position: absolute;
+    position: fixed;
     inset: 0;
     width: 100%;
-    z-index: 10;
+    z-index: 100;
     transition: transform .25s ease;
   }
 
@@ -1734,9 +1767,9 @@ textarea {
   }
 
   .chat-panel {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    z-index: 20;
+    z-index: 200;
     transform: translateX(100%);
     transition: transform .25s ease;
   }

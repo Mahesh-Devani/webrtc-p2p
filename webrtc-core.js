@@ -158,10 +158,21 @@ export const PeerSession = (() => {
           } catch (err) {
             log(`Renegotiation ICE add failed: ${err.message}`, 'warn');
           }
+        } else if (data._sig === 'call_ended') {
+          // Graceful call teardown from peer
+          if (cfg.onCallEnded) cfg.onCallEnded();
         }
       } catch (err) {
         log(`Renegotiation signaling error: ${err.message}`, 'error');
       }
+    }
+
+    function sendCallEnded() {
+      if (dcSig && dcSig.readyState === 'open') {
+        dcSig.send(JSON.stringify({ _sig: 'call_ended' }));
+        return true;
+      }
+      return false;
     }
 
     // ── Negotiation needed (fires when tracks are added/removed) ─
@@ -426,6 +437,10 @@ export const PeerSession = (() => {
       if (videoSender) {
         await videoSender.replaceTrack(newTrack);
         log('Camera track replaced on connection');
+      } else if (localStream) {
+        const sender = pc.addTrack(newTrack, localStream);
+        senders.set('video', sender);
+        log('Camera track added mid-call (upgrade from audio-only)');
       }
     }
 
@@ -610,7 +625,13 @@ export const PeerSession = (() => {
     }
 
     /** @returns {boolean} */
-    function isChannelOpen() { return dcChat && dcChat.readyState === 'open'; }
+    function isChannelOpen() { 
+      return dcChat && dcChat.readyState === 'open' &&
+             pc.iceConnectionState !== 'disconnected' && 
+             pc.iceConnectionState !== 'failed' &&
+             pc.connectionState !== 'disconnected' &&
+             pc.connectionState !== 'failed'; 
+    }
 
     /** @returns {string} */
     function getState() { return pc.connectionState; }
@@ -625,6 +646,7 @@ export const PeerSession = (() => {
       addIceCandidates,
       send,
       sendFile,
+      sendCallEnded,
       getLocalCandidates,
       isIceComplete,
       isChannelOpen,
