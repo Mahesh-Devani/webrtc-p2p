@@ -1756,7 +1756,10 @@ textarea {
 
   .sidebar {
     position: fixed;
-    inset: 0;
+    top: var(--topbar-h);
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     z-index: 100;
     transition: transform .25s ease;
@@ -1768,7 +1771,10 @@ textarea {
 
   .chat-panel {
     position: fixed;
-    inset: 0;
+    top: var(--topbar-h);
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 200;
     transform: translateX(100%);
     transition: transform .25s ease;
