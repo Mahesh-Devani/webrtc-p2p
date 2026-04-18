@@ -825,7 +825,7 @@ import { ChatStore } from './chat-store.js';
       populateDeviceSelectors();
       dom.btnToggleAudio.disabled = false;
       dom.btnToggleVideo.disabled = false;
-      dom.btnScreenShare.disabled = false;
+      if (navigator.mediaDevices?.getDisplayMedia) dom.btnScreenShare.disabled = false;
       dom.btnEndCall.disabled = false;
       updateCallButtons(true, videoEnabled);
     } catch {
@@ -901,7 +901,7 @@ import { ChatStore } from './chat-store.js';
     mediaActive = true;
     dom.btnToggleAudio.disabled = false;
     dom.btnToggleVideo.disabled = false;
-    dom.btnScreenShare.disabled = false;
+    if (navigator.mediaDevices?.getDisplayMedia) dom.btnScreenShare.disabled = false;
     dom.btnEndCall.disabled = false;
 
     const hasRemoteVideo = pendingRemoteStream.getVideoTracks().length > 0;
@@ -1441,7 +1441,10 @@ import { ChatStore } from './chat-store.js';
         };
       } catch (err) { 
         console.error('Screen share error:', err);
-        toast('Screen share failed.'); 
+        const msg = !navigator.mediaDevices?.getDisplayMedia
+          ? 'Screen sharing is not supported on this device.'
+          : 'Screen share failed.';
+        toast(msg); 
       }
     }
   });
