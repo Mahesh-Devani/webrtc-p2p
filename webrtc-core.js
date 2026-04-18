@@ -44,6 +44,8 @@ export const PeerSession = (() => {
 
     /** @type {RTCIceCandidate[]} */
     const localCandidates = [];
+    /** @type {RTCIceCandidate[]} candidates gathered during renegotiation while DC is closed */
+    const pendingIceCandidates = [];
     let iceComplete = false;
 
     // ── Create RTCPeerConnection ───────────────────────────────
@@ -80,6 +82,7 @@ export const PeerSession = (() => {
         localCandidates.push(e.candidate);
         log(`ICE candidate gathered: ${e.candidate.candidate.split(' ')[7] || 'unknown'} (${e.candidate.type || ''})`);
         if (cfg.onIceCandidate) cfg.onIceCandidate(e.candidate);
+        
         // Forward via Signaling DataChannel when open (renegotiation ICE)
         if (dcSig && dcSig.readyState === 'open') {
           try {
@@ -88,6 +91,9 @@ export const PeerSession = (() => {
               candidate: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex }
             }));
           } catch { }
+        } else if (initialSignalingDone) {
+          // If connection is established but DC is temporarily closed/connecting, queue it
+          pendingIceCandidates.push(e.candidate);
         }
       }
     };
@@ -184,7 +190,10 @@ export const PeerSession = (() => {
         return;
       }
       if (!dcSig || dcSig.readyState !== 'open') {
-        log('Negotiation needed but Signaling DataChannel not open');
+        log('Negotiation needed but Signaling DataChannel not open — retrying soon…');
+        setTimeout(() => {
+          if (pc.signalingState !== 'closed') pc.onnegotiationneeded();
+        }, 500);
         return;
       }
       try {
@@ -218,6 +227,17 @@ export const PeerSession = (() => {
         dcSig.onopen = () => {
           initialSignalingDone = true;
           log('Signaling DataChannel open — auto-renegotiation enabled', 'success');
+          
+          // Flush pending ICE candidates
+          while (pendingIceCandidates.length > 0) {
+            const c = pendingIceCandidates.shift();
+            try {
+              dcSig.send(JSON.stringify({
+                _sig: 'ice',
+                candidate: { candidate: c.candidate, sdpMid: c.sdpMid, sdpMLineIndex: c.sdpMLineIndex }
+              }));
+            } catch { }
+          }
         };
         dcSig.onclose = () => log('Signaling DataChannel closed');
         dcSig.onerror = (err) => log(`Signaling DC error: ${err.error?.message || err}`, 'error');
@@ -358,28 +378,28 @@ export const PeerSession = (() => {
     }
 
     /**
-     * Toggle local audio track (mute/unmute without renegotiation).
+     * Toggle local audio track (mute/unmute).
      * @returns {boolean} new enabled state
      */
     function toggleAudio() {
-      if (!localStream) return false;
-      const track = localStream.getAudioTracks()[0];
+      const sender = senders.get('audio');
+      const track = (sender && sender.track) ? sender.track : (localStream ? localStream.getAudioTracks()[0] : null);
       if (!track) return false;
       track.enabled = !track.enabled;
-      log(`Microphone ${track.enabled ? 'unmuted' : 'muted'}`);
+      log(`Audio ${track.enabled ? 'unmuted' : 'muted'}`);
       return track.enabled;
     }
 
     /**
-     * Toggle local video track (enable/disable without renegotiation).
+     * Toggle local video track (enable/disable).
      * @returns {boolean} new enabled state
      */
     function toggleVideo() {
-      if (!localStream) return false;
-      const track = localStream.getVideoTracks()[0];
+      const sender = senders.get('video');
+      const track = (sender && sender.track) ? sender.track : (localStream ? localStream.getVideoTracks()[0] : null);
       if (!track) return false;
       track.enabled = !track.enabled;
-      log(`Camera ${track.enabled ? 'enabled' : 'disabled'}`);
+      log(`Video ${track.enabled ? 'enabled' : 'disabled'}`);
       return track.enabled;
     }
 
@@ -410,18 +430,22 @@ export const PeerSession = (() => {
     /**
      * Stop screen sharing and restore camera track if available.
      */
-    function stopScreenShare() {
+    async function stopScreenShare() {
       if (screenStream) {
         for (const t of screenStream.getTracks()) t.stop();
         screenStream = null;
       }
       // restore camera
-      if (localStream) {
-        const camTrack = localStream.getVideoTracks()[0];
-        const videoSender = senders.get('video');
-        if (camTrack && videoSender) {
-          videoSender.replaceTrack(camTrack);
+      const videoSender = senders.get('video');
+      if (videoSender) {
+        const camTrack = localStream ? localStream.getVideoTracks()[0] : null;
+        if (camTrack) {
+          await videoSender.replaceTrack(camTrack);
           log('Camera restored after screen share');
+        } else {
+          // No camera track to restore - replace with null to stop transmission
+          await videoSender.replaceTrack(null);
+          log('Screen share stopped (no camera to restore)');
         }
       } else {
         log('Screen share ended');

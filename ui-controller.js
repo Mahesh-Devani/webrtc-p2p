@@ -1429,12 +1429,20 @@ import { ChatStore } from './chat-store.js';
       try {
         const ss = await session.startScreenShare();
         dom.localVideo.srcObject = ss;
+        dom.localVideo.play().catch(() => {});
         dom.btnScreenShare.classList.add('call-btn--sharing');
         ss.getVideoTracks()[0].onended = () => {
-          const ls = session.getLocalStream(); if (ls) dom.localVideo.srcObject = ls;
+          const ls = session.getLocalStream();
+          if (ls) {
+            dom.localVideo.srcObject = ls;
+            dom.localVideo.play().catch(() => {});
+          }
           dom.btnScreenShare.classList.remove('call-btn--sharing');
         };
-      } catch { toast('Screen share failed.'); }
+      } catch (err) { 
+        console.error('Screen share error:', err);
+        toast('Screen share failed.'); 
+      }
     }
   });
 
