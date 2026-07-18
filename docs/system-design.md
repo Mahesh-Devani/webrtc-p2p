@@ -1,6 +1,6 @@
 # P2P Connect — System Design
 
-> **Last updated:** 2026-03-27
+> **Last updated:** 2026-07-19
 
 This document details every module, its internal functions, data structures, and inter-module protocols. Keep it updated when changing any module.
 
@@ -267,14 +267,14 @@ Creator                          Nostr Relays                    Joiner
 ────────                         ────────────                    ──────
 startSession(remotePubKey)
   → PeerSession.createOffer()
-  → wait 1.5s for ICE
+  → wait 3s for ICE
   → compress(sdp + candidates)
   → NostrTransport.sendSignal
     ──── [offer] ────────────▶   ──── [offer] ────────────▶
                                                            _handleOffer()
                                                              → PeerSession.acceptOffer()
                                                              → add remote ICE
-                                                             → wait 1.5s for ICE
+                                                             → wait 3s for ICE
                                                              → compress(answer + candidates)
                                  ◀── [answer] ──────────── ◀── NostrTransport.sendSignal
   _handleAnswer()
@@ -372,6 +372,7 @@ Payload:
 | `nostr-relays` | nostr-transport | JSON array of relay URLs |
 | `nostr-contacts` | ui-controller | JSON array of `{pubkey, nickname}` |
 | `p2p-scanner-cam` | ui-controller | Last successful camera deviceId |
+| `nostr-last-seen` | nostr-transport | Unix timestamp of last processed Nostr event |
 
 ### Connection State Badge
 
@@ -387,7 +388,57 @@ Payload:
 
 ---
 
-## 8. External Dependencies (CDN)
+## 8. `chat-store.js` — ChatStore
+
+**Pattern:** Singleton IIFE.
+
+Persistent chat storage using localStorage, keyed by contact pubkey.
+
+### Constants
+
+| Constant | Value | Purpose |
+|---|---|---|
+| `CHAT_PREFIX` | `'chat-'` | localStorage key prefix for per-contact chat storage |
+| `MAX_MESSAGES_PER_CONTACT` | `500` | Maximum messages stored per contact (oldest trimmed) |
+
+### Message Schema
+
+```json
+{
+  "id": "unique-id",
+  "text": "Hello!",
+  "sender": "me" | "them",
+  "ts": 1711300000000,
+  "status": "sent" | "delivered" | "nostr",
+  "type": "text" | "file",
+  "fileName": "photo.jpg"
+}
+```
+
+### Public API
+
+| Function | Description |
+|---|---|
+| `getMessages(pubkey)` | Get all messages for a contact, sorted by timestamp |
+| `addMessage(pubkey, message)` | Add a message (deduplicates by `id`) |
+| `updateMessageStatus(pubkey, messageId, newStatus)` | Update delivery status |
+| `getLastMessage(pubkey)` | Get the last message for list preview |
+| `clearChat(pubkey)` | Delete all messages for a contact |
+| `getAllChatPubkeys()` | List all pubkeys that have stored chats |
+| `exportAllChats()` | Export all chats as `{ version: 1, exportedAt, chats: { pubkey: messages[] } }` |
+| `importChats(backup, replace?)` | Import from backup. Merges by default (dedup by message ID), or replaces |
+| `getStorageUsage()` | Returns `{ used, chatBytes }` — approximate localStorage usage in bytes |
+
+### Storage Format
+
+```
+localStorage key: "chat-<pubkey hex>"
+localStorage value: JSON array of message objects
+```
+
+---
+
+## 9. External Dependencies (CDN)
 
 | Library | Version | CDN | Purpose |
 |---|---|---|---|
