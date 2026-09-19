@@ -5,12 +5,14 @@
  */
 'use strict';
 
-import { TokenCodec } from './token-codec.js';
-import { PeerSession } from './webrtc-core.js';
-import { NostrCrypto } from './nostr-crypto.js';
-import { NostrTransport } from './nostr-transport.js';
-import { NostrSignaling } from './nostr-signaling.js';
-import { ChatStore } from './chat-store.js';
+import { TokenCodec } from './token-codec.js?v=6';
+import { PeerSession } from './webrtc-core.js?v=6';
+import { NostrCrypto } from './nostr-crypto.js?v=6';
+import { NostrTransport } from './nostr-transport.js?v=6';
+import { NostrSignaling } from './nostr-signaling.js?v=6';
+import { ChatStore } from './chat-store.js?v=6';
+
+console.log('[P2P Connect] v6 - Flow Control & Multi-File Transfer Active');
 
 (() => {
   const $ = (sel) => document.querySelector(sel);
