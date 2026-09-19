@@ -25,8 +25,8 @@ export const PeerSession = (() => {
    * @property {function():void}                [onChannelOpen]
    * @property {function():void}                [onChannelClose]
    * @property {function(string):void}          [onMessage]
-   * @property {function(File|Blob, string):void} [onFileReceived]
-   * @property {function(number, string):void}  [onFileProgress]
+   * @property {function(File|Blob, string, Object=):void} [onFileReceived] - (blob, filename, meta)
+   * @property {function(number, string, Object=):void}  [onFileProgress]   - (pct, dir, fileInfo)
    * @property {function(string):void}          [onError]
    * @property {function(MediaStream):void}     [onRemoteStream] – remote media stream
    * @property {function():void}                [onRemoteStreamEnded]
@@ -215,10 +215,11 @@ export const PeerSession = (() => {
       }
     };
 
-    // ── File Reception State ──
+    // ── File Transfer State ──
     let incomingFileChunks = [];
     let incomingFileMeta = null;
     let incomingFileBytesReceived = 0;
+    let fileSendQueue = Promise.resolve();
 
     // ── DataChannel wiring helper ──────────────────────────────
     function wireChannel(channel) {
@@ -279,11 +280,19 @@ export const PeerSession = (() => {
                 incomingFileChunks = [];
                 incomingFileBytesReceived = 0;
                 log(`Incoming file started: ${meta.name} (${meta.size} bytes)`);
+                if (cfg.onFileProgress) {
+                  cfg.onFileProgress(0, 'receiving', {
+                    fileName: meta.name,
+                    size: meta.size,
+                    fileIndex: meta.fileIndex,
+                    totalFiles: meta.totalFiles
+                  });
+                }
               } else if (meta._fileEnd) {
                 if (!incomingFileMeta) return;
                 const blob = new Blob(incomingFileChunks, { type: incomingFileMeta.type });
                 log(`Incoming file complete: ${incomingFileMeta.name}`);
-                if (cfg.onFileReceived) cfg.onFileReceived(blob, incomingFileMeta.name);
+                if (cfg.onFileReceived) cfg.onFileReceived(blob, incomingFileMeta.name, incomingFileMeta);
                 incomingFileMeta = null;
                 incomingFileChunks = [];
                 incomingFileBytesReceived = 0;
@@ -295,8 +304,13 @@ export const PeerSession = (() => {
             incomingFileChunks.push(e.data);
             incomingFileBytesReceived += e.data.byteLength;
             if (cfg.onFileProgress) {
-              const pct = Math.round((incomingFileBytesReceived / incomingFileMeta.size) * 100);
-              cfg.onFileProgress(pct, 'receiving');
+              const pct = incomingFileMeta.size === 0 ? 100 : Math.round((incomingFileBytesReceived / incomingFileMeta.size) * 100);
+              cfg.onFileProgress(pct, 'receiving', {
+                fileName: incomingFileMeta.name,
+                size: incomingFileMeta.size,
+                fileIndex: incomingFileMeta.fileIndex,
+                totalFiles: incomingFileMeta.totalFiles
+              });
             }
           }
         };
@@ -576,52 +590,84 @@ export const PeerSession = (() => {
     }
 
     /**
-     * Send a file via the p2p-files DataChannel.
+     * Send a single file via the p2p-files DataChannel.
+     * Sequentially queues transfers so concurrent calls never interleave chunks.
      * @param {File} file
+     * @param {Object} [extraMeta] Optional batch metadata (e.g. { fileIndex, totalFiles })
+     * @returns {Promise<void>}
      */
-    async function sendFile(file) {
-      if (!dcFiles || dcFiles.readyState !== 'open') throw new Error('File channel not open');
+    function sendFile(file, extraMeta = {}) {
+      const run = async () => {
+        if (!dcFiles || dcFiles.readyState !== 'open') throw new Error('File channel not open');
 
-      dcFiles.send(JSON.stringify({
-        _fileStart: true,
-        name: file.name,
-        size: file.size,
-        type: file.type
-      }));
+        dcFiles.send(JSON.stringify({
+          _fileStart: true,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          ...extraMeta
+        }));
 
-      const chunkSize = 16 * 1024; // 16KB max for broad compatibility
-      const buffer = await file.arrayBuffer();
-      let offset = 0;
+        const chunkSize = 16 * 1024; // 16KB max for broad compatibility
+        const buffer = await file.arrayBuffer();
+        let offset = 0;
 
-      return new Promise((resolve, reject) => {
-        const sendBlock = () => {
-          while (offset < buffer.byteLength) {
-            // Respect buffer limits
-            if (dcFiles.bufferedAmount > 16 * 1024 * 1024) { // Don't queue more than 16MB
-              // Wait for buffer to drain
-              setTimeout(sendBlock, 50);
-              return;
+        return new Promise((resolve, reject) => {
+          const sendBlock = () => {
+            while (offset < buffer.byteLength) {
+              // Respect buffer limits
+              if (dcFiles.bufferedAmount > 16 * 1024 * 1024) { // Don't queue more than 16MB
+                // Wait for buffer to drain
+                setTimeout(sendBlock, 50);
+                return;
+              }
+              const chunk = buffer.slice(offset, offset + chunkSize);
+              try {
+                dcFiles.send(chunk);
+              } catch (e) {
+                reject(e);
+                return;
+              }
+              offset += chunk.byteLength;
+              if (cfg.onFileProgress) {
+                const pct = file.size === 0 ? 100 : Math.round((offset / file.size) * 100);
+                cfg.onFileProgress(pct, 'sending', {
+                  fileName: file.name,
+                  size: file.size,
+                  ...extraMeta
+                });
+              }
             }
-            const chunk = buffer.slice(offset, offset + chunkSize);
-            try {
-              dcFiles.send(chunk);
-            } catch (e) {
-              reject(e);
-              return;
-            }
-            offset += chunk.byteLength;
-            if (cfg.onFileProgress) {
-              const pct = Math.round((offset / file.size) * 100);
-              cfg.onFileProgress(pct, 'sending');
-            }
-          }
 
-          dcFiles.send(JSON.stringify({ _fileEnd: true }));
-          log(`Sent file: ${file.name}`, 'success');
-          resolve();
-        };
-        sendBlock();
-      });
+            dcFiles.send(JSON.stringify({ _fileEnd: true }));
+            log(`Sent file: ${file.name}`, 'success');
+            resolve();
+          };
+          sendBlock();
+        });
+      };
+
+      const currentTask = fileSendQueue.then(run);
+      // Ensure failure of one file does not halt subsequent queued files
+      fileSendQueue = currentTask.catch(() => {});
+      return currentTask;
+    }
+
+    /**
+     * Send multiple files sequentially.
+     * @param {File[]|FileList} files
+     * @returns {Promise<File[]>}
+     */
+    async function sendFiles(files) {
+      const list = Array.from(files || []);
+      const total = list.length;
+      const sent = [];
+      for (let i = 0; i < total; i++) {
+        const file = list[i];
+        await sendFile(file, { fileIndex: i + 1, totalFiles: total });
+        sent.push(file);
+      }
+      return sent;
     }
 
     /**
@@ -670,6 +716,7 @@ export const PeerSession = (() => {
       addIceCandidates,
       send,
       sendFile,
+      sendFiles,
       sendCallEnded,
       getLocalCandidates,
       isIceComplete,

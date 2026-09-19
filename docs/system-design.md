@@ -52,7 +52,8 @@ graph TD
 | `acceptAnswer(sdp)` | Sets remote answer. Handles edge case of already-stable signaling state |
 | `addIceCandidates(candidates[])` | Adds remote ICE candidates with per-candidate error handling |
 | `send(msg)` | Send text via `dcChat` |
-| `sendFile(file)` | Chunked file transfer via `dcFiles` (16KB chunks, backpressure at 16MB buffer) |
+| `sendFile(file, meta?)` | Chunked file transfer via `dcFiles` (16KB chunks, sequential queueing, backpressure at 16MB buffer) |
+| `sendFiles(files)` | Sequential multi-file transfer with batch metadata (`fileIndex`, `totalFiles`) |
 | `addLocalStream(stream)` | Add/replace audio+video tracks. Uses `replaceTrack()` to avoid renegotiation |
 | `removeMedia()` | Stop all local tracks, remove senders |
 | `toggleAudio()` / `toggleVideo()` | Enable/disable tracks without renegotiation |
@@ -76,17 +77,20 @@ Collision handling: impolite peer (creator) ignores colliding offers; polite pee
 
 ### File Transfer Protocol
 
+Multiple files are queued and transferred sequentially so chunks never interleave. Each file transfer follows:
+
 ```
-Sender                          Receiver
-──────                          ────────
-{ _fileStart: true,             → incomingFileMeta = meta
-  name, size, type }               incomingFileChunks = []
+Sender                                      Receiver
+──────                                      ────────
+{ _fileStart: true,                         → incomingFileMeta = meta
+  name, size, type,                           incomingFileChunks = []
+  fileIndex?, totalFiles? }                   update progress (onFileProgress)
 
-ArrayBuffer (16KB chunk)  ×N    → push to incomingFileChunks
-                                  update progress (onFileProgress)
+ArrayBuffer (16KB chunk)  ×N                → push to incomingFileChunks
+                                              update progress (onFileProgress)
 
-{ _fileEnd: true }              → Blob from chunks
-                                  onFileReceived(blob, filename)
+{ _fileEnd: true }                          → Blob from chunks
+                                              onFileReceived(blob, filename, meta)
 ```
 
 ---

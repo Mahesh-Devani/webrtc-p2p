@@ -232,6 +232,13 @@ import { ChatStore } from './chat-store.js';
     if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
     return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
   }
+  function formatFileSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
   function getAvatarColor(pubkey) {
     const colors = ['#00a884','#53bdeb','#8b5cf6','#fb923c','#f87171','#fbbf24','#34d399','#6366f1'];
     let hash = 0;
@@ -462,7 +469,8 @@ import { ChatStore } from './chat-store.js';
 
     let content = escapeHtml(msg.text);
     if (msg.type === 'file' && msg.fileName) {
-      content = `📎 ${escapeHtml(msg.fileName)}`;
+      const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
+      content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
     }
 
     const ticks = msg.sender === 'self'
@@ -647,6 +655,124 @@ import { ChatStore } from './chat-store.js';
     show(dom.btnConnectPeer);
   }
 
+  // ── File Transfer Handling ──
+  let fileProgressHideTimer = null;
+
+  function handleFileProgress(pct, dir, fileInfo) {
+    if (fileProgressHideTimer) {
+      clearTimeout(fileProgressHideTimer);
+      fileProgressHideTimer = null;
+    }
+    show(dom.fileProgress);
+    let prefix = dir === 'sending' ? 'Sending' : 'Receiving';
+    if (fileInfo?.fileIndex && fileInfo?.totalFiles && fileInfo.totalFiles > 1) {
+      prefix += ` (${fileInfo.fileIndex}/${fileInfo.totalFiles})`;
+    }
+    const name = fileInfo?.fileName ? ` ${fileInfo.fileName}` : ' file';
+    dom.fileProgressLabel.textContent = `${prefix}${name}: ${pct}%`;
+    dom.fileProgressBar.value = pct;
+    if (pct >= 100) {
+      // If there are more files remaining in the batch, stay visible
+      if (fileInfo?.fileIndex && fileInfo?.totalFiles && fileInfo.fileIndex < fileInfo.totalFiles) {
+        // Keep progress indicator up for the next file
+      } else {
+        fileProgressHideTimer = setTimeout(() => {
+          hide(dom.fileProgress);
+          fileProgressHideTimer = null;
+        }, 1200);
+      }
+    }
+  }
+
+  function handleFileReceived(blob, filename, fileMeta, targetPubKey = null) {
+    const url = URL.createObjectURL(blob);
+    const msg = {
+      id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      text: `Received file: ${filename}`,
+      sender: 'peer',
+      ts: Date.now(),
+      status: 'delivered',
+      type: 'file',
+      fileName: filename,
+      fileSize: blob.size
+    };
+    if (targetPubKey) {
+      ChatStore.addMessage(targetPubKey, msg);
+    }
+    if (!targetPubKey || activeContactPubkey === targetPubKey) {
+      const div = appendChatBubble(msg);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.textContent = `Download (${formatFileSize(blob.size)})`;
+      a.className = 'btn btn--small btn--primary';
+      a.style.marginTop = '4px';
+      a.style.display = 'inline-block';
+      div.querySelector('.chat-msg__text')?.appendChild(a);
+    }
+    if (targetPubKey) {
+      renderContacts(dom.contactSearch.value);
+    }
+    SoundEngine.playMessage();
+  }
+
+  async function sendSelectedFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    if (!session || !session.isChannelOpen || !session.isChannelOpen()) {
+      toast('Peer not connected via P2P. Connect first to send files.');
+      return;
+    }
+
+    dom.fileInput.disabled = true;
+    const total = files.length;
+    let successCount = 0;
+
+    try {
+      for (let i = 0; i < total; i++) {
+        const file = files[i];
+        try {
+          await session.sendFile(file, { fileIndex: i + 1, totalFiles: total });
+          successCount++;
+          const msg = {
+            id: `fs-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            text: `Sent file: ${file.name}`,
+            sender: 'self',
+            ts: Date.now(),
+            status: 'delivered',
+            type: 'file',
+            fileName: file.name,
+            fileSize: file.size
+          };
+          if (activeContactPubkey) {
+            ChatStore.addMessage(activeContactPubkey, msg);
+            appendChatBubble(msg);
+          } else {
+            appendChatBubble(msg);
+          }
+        } catch (err) {
+          console.error('File send error:', err);
+          toast(`Failed to send ${file.name}: ${err.message || 'Send failed'}`);
+          if (!session || !session.isChannelOpen || !session.isChannelOpen()) {
+            toast('P2P connection lost during file transfer.');
+            break;
+          }
+        }
+      }
+
+      if (activeContactPubkey) {
+        renderContacts(dom.contactSearch.value);
+      }
+
+      if (total > 1 && successCount > 0) {
+        toast(`Sent ${successCount} of ${total} files.`);
+      }
+    } finally {
+      dom.fileInput.disabled = false;
+    }
+  }
+
   // ── Build Nostr session config (callbacks for PeerSession) ──
   function buildNostrSessionConfig(sessionId, remotePubKey, sessionRole) {
     return {
@@ -699,25 +825,8 @@ import { ChatStore } from './chat-store.js';
         } catch { /* ignore malformed */ }
       },
       onError: () => {},
-      onFileProgress: (pct, dir) => {
-        show(dom.fileProgress);
-        dom.fileProgressLabel.textContent = dir === 'sending' ? 'Sending file…' : 'Receiving file…';
-        dom.fileProgressBar.value = pct;
-        if (pct >= 100) setTimeout(() => hide(dom.fileProgress), 1000);
-      },
-      onFileReceived: (blob, filename) => {
-        const url = URL.createObjectURL(blob);
-        const msg = { id: 'f-' + Date.now(), text: `Received file: ${filename}`, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'file', fileName: filename };
-        ChatStore.addMessage(remotePubKey, msg);
-        if (activeContactPubkey === remotePubKey) {
-          const div = appendChatBubble(msg);
-          const a = document.createElement('a');
-          a.href = url; a.download = filename; a.textContent = 'Download'; a.className = 'btn btn--small btn--primary';
-          a.style.marginTop = '4px'; a.style.display = 'inline-block';
-          div.querySelector('.chat-msg__text').appendChild(a);
-        }
-        renderContacts(dom.contactSearch.value);
-      },
+      onFileProgress: handleFileProgress,
+      onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, remotePubKey),
       onRemoteStream: (stream) => {
         // If we already have the call overlay open (we initiated the call), just play
         if (mediaActive) {
@@ -1122,8 +1231,8 @@ import { ChatStore } from './chat-store.js';
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
       onError: () => {},
-      onFileProgress: () => {},
-      onFileReceived: () => {},
+      onFileProgress: handleFileProgress,
+      onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
       onRemoteStream: (stream) => {
         if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
@@ -1177,7 +1286,9 @@ import { ChatStore } from './chat-store.js';
       onChannelOpen: () => { enableChat(); hide(dom.manualPanel); show(dom.chatActive); toast('Connected!'); },
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
-      onError: () => {}, onFileProgress: () => {}, onFileReceived: () => {},
+      onError: () => {},
+      onFileProgress: handleFileProgress,
+      onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
       onRemoteStream: (stream) => {
         if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
@@ -1330,13 +1441,40 @@ import { ChatStore } from './chat-store.js';
   });
   dom.chatForm?.addEventListener('submit', (e) => { e.preventDefault(); const t = dom.chatInput.value.trim(); if (!t) return; sendChatMessage(t); dom.chatInput.value = ''; dom.chatInput.focus(); });
   dom.fileInput?.addEventListener('change', async (e) => {
-    if (!session) return;
-    const file = e.target.files[0]; if (!file) return;
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
-    try { dom.fileInput.disabled = true; await session.sendFile(file);
-      const msg = { id: 'fs-' + Date.now(), text: `Sent file: ${file.name}`, sender: 'self', ts: Date.now(), status: 'delivered', type: 'file', fileName: file.name };
-      if (activeContactPubkey) { ChatStore.addMessage(activeContactPubkey, msg); appendChatBubble(msg); }
-    } catch (err) { toast('File send failed.'); } finally { dom.fileInput.disabled = false; }
+    if (files.length) {
+      await sendSelectedFiles(files);
+    }
+  });
+
+  // Drag and drop multiple files
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dom.chatActive?.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (session && session.isChannelOpen && session.isChannelOpen()) {
+        dom.chatActive.classList.add('chat-active--dragover');
+      }
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dom.chatActive?.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dom.chatActive.classList.remove('chat-active--dragover');
+    });
+  });
+
+  dom.chatActive?.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dom.chatActive.classList.remove('chat-active--dragover');
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length > 0) {
+      await sendSelectedFiles(dt.files);
+    }
   });
 
   // Chat menu
