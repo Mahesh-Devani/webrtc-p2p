@@ -27,6 +27,7 @@ export const PeerSession = (() => {
    * @property {function(string):void}          [onMessage]
    * @property {function(File|Blob, string, Object=):void} [onFileReceived] - (blob, filename, meta)
    * @property {function(number, string, Object=):void}  [onFileProgress]   - (pct, dir, fileInfo)
+   * @property {function(string):void}                  [onFileAbort]      - (filename)
    * @property {function(string):void}          [onError]
    * @property {function(MediaStream):void}     [onRemoteStream] – remote media stream
    * @property {function():void}                [onRemoteStreamEnded]
@@ -276,6 +277,10 @@ export const PeerSession = (() => {
             try {
               const meta = JSON.parse(e.data);
               if (meta._fileStart) {
+                // If a previous file never completed (e.g. sender error), clean up partial chunks
+                if (incomingFileMeta) {
+                  log(`Previous file incomplete (${incomingFileMeta.name}), resetting for new file: ${meta.name}`, 'warn');
+                }
                 incomingFileMeta = meta;
                 incomingFileChunks = [];
                 incomingFileBytesReceived = 0;
@@ -288,6 +293,12 @@ export const PeerSession = (() => {
                     totalFiles: meta.totalFiles
                   });
                 }
+              } else if (meta._fileAbort) {
+                log(`Incoming file aborted: ${meta.name}`, 'warn');
+                incomingFileMeta = null;
+                incomingFileChunks = [];
+                incomingFileBytesReceived = 0;
+                if (cfg.onFileAbort) cfg.onFileAbort(meta.name);
               } else if (meta._fileEnd) {
                 if (!incomingFileMeta) return;
                 const blob = new Blob(incomingFileChunks, { type: incomingFileMeta.type });
@@ -589,9 +600,97 @@ export const PeerSession = (() => {
       return true;
     }
 
+    const CHUNK_SIZE = 16 * 1024; // 16KB max for universal WebRTC compatibility
+    const BUFFER_HIGH = 256 * 1024; // 256KB threshold to pause queuing (prevents SCTP buffer exhaustion)
+    const BUFFER_LOW = 64 * 1024;  // 64KB threshold to resume queuing
+
+    /**
+     * Wait for the DataChannel buffer to drain below a target threshold.
+     * Uses the native bufferedamountlow event with fallback polling.
+     * @param {RTCDataChannel} dc
+     * @param {number} targetBytes
+     * @param {number} [timeoutMs=60000]
+     * @returns {Promise<void>}
+     */
+    function waitForBufferDrain(dc, targetBytes = 0, timeoutMs = 60000) {
+      if (!dc || dc.readyState !== 'open' || dc.bufferedAmount <= targetBytes) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        let timer = null;
+        let timeoutTimer = null;
+        let lastBuffered = dc.bufferedAmount;
+        let lastProgressTime = Date.now();
+
+        const cleanup = () => {
+          if (timer) { clearInterval(timer); timer = null; }
+          if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
+          dc.removeEventListener('bufferedamountlow', onLow);
+          dc.removeEventListener('close', onClose);
+          dc.removeEventListener('error', onError);
+        };
+
+        const onLow = () => {
+          if (!dc || dc.readyState !== 'open') {
+            cleanup();
+            reject(new Error('DataChannel closed'));
+            return;
+          }
+          if (dc.bufferedAmount <= targetBytes) {
+            cleanup();
+            resolve();
+          }
+        };
+
+        const onClose = () => {
+          cleanup();
+          reject(new Error('DataChannel closed while waiting for buffer drain'));
+        };
+
+        const onError = (err) => {
+          cleanup();
+          reject(err.error || new Error('DataChannel error while waiting for buffer drain'));
+        };
+
+        dc.bufferedAmountLowThreshold = targetBytes;
+        dc.addEventListener('bufferedamountlow', onLow);
+        dc.addEventListener('close', onClose);
+        dc.addEventListener('error', onError);
+
+        // Fallback polling interval in case bufferedamountlow event is missed
+        timer = setInterval(() => {
+          if (!dc || dc.readyState !== 'open') {
+            cleanup();
+            reject(new Error('DataChannel closed'));
+            return;
+          }
+          if (dc.bufferedAmount < lastBuffered) {
+            lastBuffered = dc.bufferedAmount;
+            lastProgressTime = Date.now();
+          }
+          if (dc.bufferedAmount <= targetBytes) {
+            cleanup();
+            resolve();
+            return;
+          }
+          // If no buffer drain progress for 30s, reject
+          if (Date.now() - lastProgressTime > 30000) {
+            cleanup();
+            reject(new Error('Buffer drain timed out (transfer stalled)'));
+          }
+        }, 25);
+
+        timeoutTimer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Buffer drain timed out'));
+        }, timeoutMs);
+      });
+    }
+
     /**
      * Send a single file via the p2p-files DataChannel.
-     * Sequentially queues transfers so concurrent calls never interleave chunks.
+     * Sequentially queues transfers with true backpressure so buffer limits are never breached.
      * @param {File} file
      * @param {Object} [extraMeta] Optional batch metadata (e.g. { fileIndex, totalFiles })
      * @returns {Promise<void>}
@@ -599,6 +698,9 @@ export const PeerSession = (() => {
     function sendFile(file, extraMeta = {}) {
       const run = async () => {
         if (!dcFiles || dcFiles.readyState !== 'open') throw new Error('File channel not open');
+
+        // Wait until any previous pending data in the channel has drained
+        await waitForBufferDrain(dcFiles, BUFFER_LOW);
 
         dcFiles.send(JSON.stringify({
           _fileStart: true,
@@ -608,43 +710,63 @@ export const PeerSession = (() => {
           ...extraMeta
         }));
 
-        const chunkSize = 16 * 1024; // 16KB max for broad compatibility
         const buffer = await file.arrayBuffer();
         let offset = 0;
 
-        return new Promise((resolve, reject) => {
-          const sendBlock = () => {
-            while (offset < buffer.byteLength) {
-              // Respect buffer limits
-              if (dcFiles.bufferedAmount > 16 * 1024 * 1024) { // Don't queue more than 16MB
-                // Wait for buffer to drain
-                setTimeout(sendBlock, 50);
-                return;
-              }
-              const chunk = buffer.slice(offset, offset + chunkSize);
-              try {
-                dcFiles.send(chunk);
-              } catch (e) {
-                reject(e);
-                return;
-              }
-              offset += chunk.byteLength;
-              if (cfg.onFileProgress) {
-                const pct = file.size === 0 ? 100 : Math.round((offset / file.size) * 100);
-                cfg.onFileProgress(pct, 'sending', {
-                  fileName: file.name,
-                  size: file.size,
-                  ...extraMeta
-                });
-              }
+        try {
+          while (offset < buffer.byteLength) {
+            if (dcFiles.readyState !== 'open') {
+              throw new Error('File channel closed during transfer');
             }
 
-            dcFiles.send(JSON.stringify({ _fileEnd: true }));
-            log(`Sent file: ${file.name}`, 'success');
-            resolve();
-          };
-          sendBlock();
-        });
+            // Apply backpressure: pause if buffer is filling up
+            if (dcFiles.bufferedAmount > BUFFER_HIGH) {
+              await waitForBufferDrain(dcFiles, BUFFER_LOW);
+            }
+
+            const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+            dcFiles.send(chunk);
+            offset += chunk.byteLength;
+
+            if (cfg.onFileProgress) {
+              // Calculate actual sent bytes (bufferedAmount still in queue has not left the client)
+              const unsent = Math.min(offset, dcFiles.bufferedAmount);
+              const actualSent = offset - unsent;
+              const pct = file.size === 0 ? 100 : Math.min(100, Math.max(0, Math.round((actualSent / file.size) * 100)));
+              cfg.onFileProgress(pct, 'sending', {
+                fileName: file.name,
+                size: file.size,
+                ...extraMeta
+              });
+            }
+          }
+
+          // Wait until all file chunks have fully drained out of the network buffer
+          await waitForBufferDrain(dcFiles, 0);
+
+          if (cfg.onFileProgress) {
+            cfg.onFileProgress(100, 'sending', {
+              fileName: file.name,
+              size: file.size,
+              ...extraMeta
+            });
+          }
+
+          // Send file end delimiter
+          dcFiles.send(JSON.stringify({ _fileEnd: true }));
+          log(`Sent file: ${file.name}`, 'success');
+
+          // Wait for end delimiter to drain before resolving
+          await waitForBufferDrain(dcFiles, 0);
+        } catch (err) {
+          // If error occurred during transfer, notify receiver to discard partial state
+          try {
+            if (dcFiles && dcFiles.readyState === 'open') {
+              dcFiles.send(JSON.stringify({ _fileAbort: true, name: file.name }));
+            }
+          } catch { }
+          throw err;
+        }
       };
 
       const currentTask = fileSendQueue.then(run);

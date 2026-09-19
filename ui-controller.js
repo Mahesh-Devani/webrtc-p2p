@@ -684,6 +684,18 @@ import { ChatStore } from './chat-store.js';
     }
   }
 
+  function handleFileAbort(fileName) {
+    toast(`Transfer of ${fileName} was cancelled or failed.`);
+    if (fileProgressHideTimer) {
+      clearTimeout(fileProgressHideTimer);
+      fileProgressHideTimer = null;
+    }
+    fileProgressHideTimer = setTimeout(() => {
+      hide(dom.fileProgress);
+      fileProgressHideTimer = null;
+    }, 1200);
+  }
+
   function handleFileReceived(blob, filename, fileMeta, targetPubKey = null) {
     const url = URL.createObjectURL(blob);
     const msg = {
@@ -827,6 +839,7 @@ import { ChatStore } from './chat-store.js';
       onError: () => {},
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, remotePubKey),
+      onFileAbort: handleFileAbort,
       onRemoteStream: (stream) => {
         // If we already have the call overlay open (we initiated the call), just play
         if (mediaActive) {
@@ -1233,6 +1246,7 @@ import { ChatStore } from './chat-store.js';
       onError: () => {},
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
+      onFileAbort: handleFileAbort,
       onRemoteStream: (stream) => {
         if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
@@ -1289,6 +1303,7 @@ import { ChatStore } from './chat-store.js';
       onError: () => {},
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
+      onFileAbort: handleFileAbort,
       onRemoteStream: (stream) => {
         if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;

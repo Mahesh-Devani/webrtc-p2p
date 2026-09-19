@@ -52,7 +52,7 @@ graph TD
 | `acceptAnswer(sdp)` | Sets remote answer. Handles edge case of already-stable signaling state |
 | `addIceCandidates(candidates[])` | Adds remote ICE candidates with per-candidate error handling |
 | `send(msg)` | Send text via `dcChat` |
-| `sendFile(file, meta?)` | Chunked file transfer via `dcFiles` (16KB chunks, sequential queueing, backpressure at 16MB buffer) |
+| `sendFile(file, meta?)` | Chunked file transfer via `dcFiles` (16KB chunks, sequential queueing, 256KB/64KB backpressure watermarks, and drain synchronization) |
 | `sendFiles(files)` | Sequential multi-file transfer with batch metadata (`fileIndex`, `totalFiles`) |
 | `addLocalStream(stream)` | Add/replace audio+video tracks. Uses `replaceTrack()` to avoid renegotiation |
 | `removeMedia()` | Stop all local tracks, remove senders |
