@@ -142,7 +142,7 @@ ArrayBuffer (16KB chunk) × N                        → push chunk; update prog
 - **Rule**: All internal module imports must use clean paths (`import ... from './nostr-transport.js'`).
 - **Cache Busting Rule**: Cache busting is permitted **ONLY** on the root entry point in `index.html`:
   ```html
-  <script type="module" src="ui-controller.js?v=7"></script>
+  <script type="module" src="ui-controller.js?v=8"></script>
   ```
 
 ### 2. Zero-Build Philosophy
@@ -155,6 +155,13 @@ ArrayBuffer (16KB chunk) × N                        → push chunk; update prog
 
 ### 4. Storage Usage & Separation
 - Do not store file blobs or base64 file payloads in `localStorage`. `ChatStore` records only metadata (`{ id, text, type: 'file', fileName, fileSize }`). File blobs exist strictly in memory via `URL.createObjectURL(blob)`.
+
+### 5. Mobile Background Suspensions & Auto-Reconnection
+- **Mobile OS Suspension**: When mobile users open native file pickers or switch tabs, iOS Safari and Android Chrome aggressively freeze web page execution and stop STUN consent freshness checks (RFC 7675). WebRTC ICE enters `'disconnected'` after ~10–15 seconds.
+- **No Native Timeout Adjustment**: WebRTC exposes no JavaScript API to lengthen ICE consent timeouts; the limits are native C++ `libwebrtc` constants.
+- **Auto-Reconnection on Send**: Senders MUST NOT drop files if the channel is closed or in transient recovery when returning from the picker. `sendSelectedFiles` calls `ensurePeerConnected(pubkey)` to automatically re-establish or wait for the P2P connection and stream all queued files.
+- **Transient Disconnect Debounce**: `'disconnected'` is a transient state. `NostrSignaling` applies a 4-second debounce before reporting disconnected to the UI, allowing temporary blips to self-heal without tearing down call or chat state.
+- **Lifecycle Recovery (`visibilitychange`)**: When the app regains visibility, it immediately wakes up relay WebSockets (`NostrTransport.ensureConnected()`) and tests active P2P liveness with in-band pings.
 
 ---
 

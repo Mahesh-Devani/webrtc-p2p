@@ -730,13 +730,92 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     SoundEngine.playMessage();
   }
 
+  // ── Auto-reconnect / Ensure Peer Connected ──
+  async function ensurePeerConnected(remotePubKey, { timeoutMs = 25000 } = {}) {
+    if (!remotePubKey) return false;
+
+    // 1. If already open and active with this contact
+    if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
+      return true;
+    }
+
+    // 2. If session exists and is recovering (e.g. transient disconnect during app switch)
+    if (session && sessionRemotePubKey === remotePubKey && typeof session.waitForOpen === 'function') {
+      const quicklyRecovered = await session.waitForOpen(2000);
+      if (quicklyRecovered) return true;
+    }
+
+    // 3. Need to establish session via Nostr
+    if (!nostrIdentity) return false;
+
+    // Close any previous session with this contact to avoid conflicting state
+    if (session && typeof session.close === 'function') {
+      try { session.close(); } catch { }
+      session = null;
+    }
+
+    show(dom.connectBanner);
+    dom.connectBannerText.textContent = `Connecting with ${getContactDisplayName(remotePubKey)}…`;
+    const dots = dom.connectProgress?.children;
+    if (dots) {
+      dots[0]?.classList.add('done');
+      dots[1]?.classList.add('active');
+    }
+
+    try {
+      nostrActiveSessionId = await NostrSignaling.startSession(remotePubKey);
+      sessionRemotePubKey = remotePubKey;
+      if (dots) {
+        dots[1]?.classList.replace('active', 'done');
+        dots[2]?.classList.add('active');
+      }
+      dom.connectBannerText.textContent = 'Waiting for peer response…';
+    } catch (err) {
+      console.error('[ensurePeerConnected] Failed to start session:', err);
+      if (dots) dots[1]?.classList.replace('active', 'error');
+      dom.connectBannerText.textContent = 'Connection failed';
+      setTimeout(() => hide(dom.connectBanner), 3000);
+      return false;
+    }
+
+    // Wait for the session channel to open
+    const startTime = Date.now();
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
+          cleanup();
+          hide(dom.connectBanner);
+          resolve(true);
+        } else if (Date.now() - startTime > timeoutMs) {
+          cleanup();
+          hide(dom.connectBanner);
+          resolve(false);
+        }
+      }, 200);
+
+      function cleanup() {
+        clearInterval(interval);
+      }
+    });
+  }
+
   async function sendSelectedFiles(fileList) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
 
+    // Check if channel is open; if not, attempt auto-reconnect if we have an active contact
     if (!session || !session.isChannelOpen || !session.isChannelOpen()) {
-      toast('Peer not connected via P2P. Connect first to send files.');
-      return;
+      if (activeContactPubkey && nostrIdentity) {
+        toast(`Connecting to peer to send ${files.length} file${files.length > 1 ? 's' : ''}…`);
+        const connected = await ensurePeerConnected(activeContactPubkey, { timeoutMs: 25000 });
+        if (!connected || !session || !session.isChannelOpen || !session.isChannelOpen()) {
+          toast('Could not connect to peer. Peer may be offline.');
+          return;
+        }
+      } else {
+        toast('Peer not connected via P2P. Connect first to send files.');
+        return;
+      }
     }
 
     dom.fileInput.disabled = true;
@@ -1528,19 +1607,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
        session = null;
     }
     
-    show(dom.connectBanner);
-    dom.connectBannerText.textContent = 'Connecting via Nostr…';
-    const dots = dom.connectProgress.children;
-    dots[0]?.classList.add('done');
-    dots[1]?.classList.add('active');
-    try {
-      nostrActiveSessionId = await NostrSignaling.startSession(activeContactPubkey);
-      dots[1]?.classList.replace('active', 'done');
-      dots[2]?.classList.add('active');
-      dom.connectBannerText.textContent = 'Waiting for peer…';
-    } catch (err) {
-      dots[1]?.classList.replace('active', 'error');
-      dom.connectBannerText.textContent = 'Failed: ' + err.message;
+    const ok = await ensurePeerConnected(activeContactPubkey);
+    if (!ok) {
       toast('Connection failed.');
     }
   });
@@ -1834,6 +1902,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           hide(dom.connectBanner);
           handleStateChange('connected');
           enableChat();
+          startHeartbeat();
           toast('Connected! ⚡');
           // Update connect progress dots
           const dots = dom.connectProgress?.children;
@@ -1841,6 +1910,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         },
         onDisconnected: (sessionId) => {
           if (sessionId !== nostrActiveSessionId) return;
+          stopHeartbeat();
           handleStateChange('disconnected');
           disableChat();
         },
@@ -1860,6 +1930,65 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       setBadge('failed', 'Offline');
     }
   }
+
+  // ── Connection Heartbeat & Lifecycle Management ──
+  let heartbeatTimer = null;
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      if (session && typeof session.sendPing === 'function' && session.isChannelOpen?.()) {
+        session.sendPing();
+      }
+    }, 15000);
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  async function handleAppResume() {
+    console.log('[Lifecycle] App resumed / tab visible');
+    // 1. Ensure Nostr relay WebSockets are connected
+    if (nostrIdentity && typeof NostrTransport.ensureConnected === 'function') {
+      try {
+        await NostrTransport.ensureConnected();
+        renderRelayList();
+      } catch (err) {
+        console.warn('[Lifecycle] Relay reconnection error:', err);
+      }
+    }
+
+    // 2. Check active P2P session
+    if (session) {
+      if (session.isChannelOpen?.()) {
+        if (typeof session.sendPing === 'function') session.sendPing();
+        startHeartbeat();
+      } else if (activeContactPubkey && nostrIdentity) {
+        // Give transient ICE recovery a brief window
+        if (typeof session.waitForOpen === 'function') {
+          session.waitForOpen(2500).then(open => {
+            if (open) startHeartbeat();
+          });
+        }
+      }
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      handleAppResume();
+    } else {
+      stopHeartbeat();
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    handleAppResume();
+  });
 
   // ═══ INIT ═══
   setBadge('connecting', 'Connecting…');

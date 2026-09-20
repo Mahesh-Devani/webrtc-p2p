@@ -168,6 +168,15 @@ export const PeerSession = (() => {
         } else if (data._sig === 'call_ended') {
           // Graceful call teardown from peer
           if (cfg.onCallEnded) cfg.onCallEnded();
+        } else if (data._sig === 'ping') {
+          // In-band keepalive ping — reply with pong
+          if (dcSig && dcSig.readyState === 'open') {
+            try {
+              dcSig.send(JSON.stringify({ _sig: 'pong', ts: data.ts }));
+            } catch { }
+          }
+        } else if (data._sig === 'pong') {
+          log(`Keepalive pong received (${Date.now() - (data.ts || 0)}ms)`);
         }
       } catch (err) {
         log(`Renegotiation signaling error: ${err.message}`, 'error');
@@ -178,6 +187,16 @@ export const PeerSession = (() => {
       if (dcSig && dcSig.readyState === 'open') {
         dcSig.send(JSON.stringify({ _sig: 'call_ended' }));
         return true;
+      }
+      return false;
+    }
+
+    function sendPing() {
+      if (dcSig && dcSig.readyState === 'open') {
+        try {
+          dcSig.send(JSON.stringify({ _sig: 'ping', ts: Date.now() }));
+          return true;
+        } catch { }
       }
       return false;
     }
@@ -819,10 +838,46 @@ export const PeerSession = (() => {
     /** @returns {boolean} */
     function isChannelOpen() { 
       return dcChat && dcChat.readyState === 'open' &&
-             pc.iceConnectionState !== 'disconnected' && 
              pc.iceConnectionState !== 'failed' &&
-             pc.connectionState !== 'disconnected' &&
-             pc.connectionState !== 'failed'; 
+             pc.connectionState !== 'failed' &&
+             pc.iceConnectionState !== 'closed' &&
+             pc.connectionState !== 'closed'; 
+    }
+
+    /**
+     * Wait for DataChannel to be open.
+     * @param {number} [timeoutMs=5000]
+     * @returns {Promise<boolean>} resolves true if open, false if timeout/failed
+     */
+    function waitForOpen(timeoutMs = 5000) {
+      if (isChannelOpen()) return Promise.resolve(true);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        return Promise.resolve(false);
+      }
+      return new Promise((resolve) => {
+        let timer = null;
+        let interval = null;
+        const cleanup = () => {
+          if (timer) { clearTimeout(timer); timer = null; }
+          if (interval) { clearInterval(interval); interval = null; }
+        };
+
+        const check = () => {
+          if (isChannelOpen()) {
+            cleanup();
+            resolve(true);
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+            cleanup();
+            resolve(false);
+          }
+        };
+
+        interval = setInterval(check, 100);
+        timer = setTimeout(() => {
+          cleanup();
+          resolve(isChannelOpen());
+        }, timeoutMs);
+      });
     }
 
     /** @returns {string} */
@@ -840,9 +895,11 @@ export const PeerSession = (() => {
       sendFile,
       sendFiles,
       sendCallEnded,
+      sendPing,
       getLocalCandidates,
       isIceComplete,
       isChannelOpen,
+      waitForOpen,
       getState,
       close,
       getRawPC,

@@ -267,6 +267,10 @@ export const NostrSignaling = (() => {
         if (sessionEntry.remotePubKey !== senderPubKey) return;
 
         _log(`[Signaling] Remote peer closed session ${sessionId.slice(0, 8)}`, 'info');
+        if (sessionEntry.disconnectTimer) {
+            clearTimeout(sessionEntry.disconnectTimer);
+            sessionEntry.disconnectTimer = null;
+        }
         sessionEntry.session.close();
         sessionEntry.state = 'closed';
         NostrTransport.clearSession(sessionId);
@@ -290,6 +294,10 @@ export const NostrSignaling = (() => {
             });
         } catch { }
 
+        if (sessionEntry.disconnectTimer) {
+            clearTimeout(sessionEntry.disconnectTimer);
+            sessionEntry.disconnectTimer = null;
+        }
         sessionEntry.session.close();
         sessionEntry.state = 'closed';
         NostrTransport.clearSession(sessionId);
@@ -322,14 +330,41 @@ export const NostrSignaling = (() => {
                 if (!entry) return;
 
                 if (state === 'connected') {
+                    if (entry.disconnectTimer) {
+                        clearTimeout(entry.disconnectTimer);
+                        entry.disconnectTimer = null;
+                    }
                     entry.state = 'connected';
                     _log(`[Signaling] ✅ P2P connected (session ${sessionId.slice(0, 8)})`, 'success');
                     if (_onConnected) _onConnected(sessionId);
-                } else if (state === 'failed' || state === 'disconnected') {
+                    if (uiConfig.onStateChange) uiConfig.onStateChange(state);
+                } else if (state === 'disconnected') {
+                    // Transient disconnect (e.g. mobile tab suspension/file picker).
+                    // Debounce by 4 seconds before reporting disconnected to UI.
+                    if (!entry.disconnectTimer) {
+                        _log(`[Signaling] P2P disconnected (session ${sessionId.slice(0, 8)}) — awaiting recovery…`, 'warn');
+                        entry.disconnectTimer = setTimeout(() => {
+                            entry.disconnectTimer = null;
+                            if (entry.state !== 'connected') {
+                                entry.state = 'disconnected';
+                                _log(`[Signaling] P2P disconnect confirmed (session ${sessionId.slice(0, 8)})`, 'warn');
+                                if (_onDisconnected) _onDisconnected(sessionId);
+                                if (uiConfig.onStateChange) uiConfig.onStateChange('disconnected');
+                            }
+                        }, 4000);
+                    }
+                } else if (state === 'failed') {
+                    if (entry.disconnectTimer) {
+                        clearTimeout(entry.disconnectTimer);
+                        entry.disconnectTimer = null;
+                    }
                     entry.state = state;
+                    _log(`[Signaling] ❌ P2P failed (session ${sessionId.slice(0, 8)})`, 'error');
                     if (_onDisconnected) _onDisconnected(sessionId);
+                    if (uiConfig.onStateChange) uiConfig.onStateChange(state);
+                } else {
+                    if (uiConfig.onStateChange) uiConfig.onStateChange(state);
                 }
-                if (uiConfig.onStateChange) uiConfig.onStateChange(state);
             },
             onIceCandidate: (candidate) => {
                 // Send ICE candidate via Nostr (delayed batch)
@@ -466,6 +501,10 @@ export const NostrSignaling = (() => {
         for (const [sessionId, entry] of _sessions) {
             if (entry.state !== 'connected' && (now - entry.createdAt) > SESSION_TIMEOUT_MS) {
                 _log(`[Signaling] Cleaning up stale session ${sessionId.slice(0, 8)}`, 'info');
+                if (entry.disconnectTimer) {
+                    clearTimeout(entry.disconnectTimer);
+                    entry.disconnectTimer = null;
+                }
                 entry.session.close();
                 NostrTransport.clearSession(sessionId);
                 _sessions.delete(sessionId);

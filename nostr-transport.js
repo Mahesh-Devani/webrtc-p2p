@@ -160,6 +160,27 @@ export const NostrTransport = (() => {
     }
 
     /**
+     * Ensure all configured relays are connected, reconnecting any that dropped.
+     * Useful when resuming from mobile background/suspend.
+     * @returns {Promise<void>}
+     */
+    async function ensureConnected() {
+        const relayList = getRelayList();
+        _connected = true;
+
+        const promises = [];
+        for (const url of relayList) {
+            const relay = _relays.get(url);
+            if (!relay) {
+                promises.push(_connectSingleRelay(url));
+            } else if (relay.state !== RelayState.CONNECTED || relay._ws?.readyState !== WebSocket.OPEN) {
+                promises.push(relay.connect().catch(() => { }));
+            }
+        }
+        await Promise.allSettled(promises);
+    }
+
+    /**
      * Connect to a single relay and set up subscriptions.
      * @private
      * @param {string} url
@@ -523,6 +544,7 @@ export const NostrTransport = (() => {
     return {
         init,
         connect,
+        ensureConnected,
         disconnect,
         sendSignal,
         sendMessage,
