@@ -87,6 +87,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnResetRelays: $('#btn-reset-relays'),
     turnUrl: $('#turn-url'), turnUser: $('#turn-user'), turnCred: $('#turn-cred'),
     btnSaveTurn: $('#btn-save-turn'),
+    btnTestIce: $('#btn-test-ice'),
+    iceTestResults: $('#ice-test-results'),
     btnExportKey: $('#btn-export-key'),
     importKeyFile: $('#import-key-file'),
     settingsPrivkey: $('#settings-privkey'),
@@ -144,6 +146,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   let pendingRemoteStream = null; // Holds incoming stream until user accepts
   let pendingRemoteStreamPubkey = null; // Who the incoming call is from
   const pendingMsgs = new Map();
+  const lastIceErrors = []; // Diagnostic tracking for candidate errors (TURN/STUN)
 
   // ── SOUND ENGINE (Synthesized) ──
   const SoundEngine = (() => {
@@ -555,11 +558,6 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     { urls: 'stun:stun.services.mozilla.com:3478', _builtin: true },
     // STUN — stunprotocol.org
     { urls: 'stun:stunserver.stunprotocol.org:3478', _builtin: true },
-    // TURN — Metered OpenRelay (free, port 80/443 to bypass firewalls)
-    { urls: 'turn:standard.relay.metered.ca:80', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
-    { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
-    { urls: 'turn:standard.relay.metered.ca:443', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
-    { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: 'e8dd65b92f3adf2fa4c66419', credential: '5VuMjsBamlMGwNkP', _builtin: true },
   ];
 
   function loadCustomIceServers() {
@@ -623,7 +621,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       case 'connected':
         setBadge('connected', 'Connected');
         break;
-      case 'failed': setBadge('failed', 'Failed'); break;
+      case 'failed':
+        setBadge('failed', 'Failed');
+        const recentTurnErrors = lastIceErrors.filter(e => Date.now() - e.ts < 30000 && (e.code === 400 || e.code === 401 || e.code === 403));
+        if (recentTurnErrors.length > 0) {
+          toast('P2P failed: TURN relay reported allocate/auth error. Check Settings → ICE Servers.');
+        }
+        break;
       case 'disconnected': setBadge('failed', 'Disconnected'); break;
       case 'closed': setBadge('closed', 'Closed'); break;
     }
@@ -872,6 +876,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       onLog: () => {},
       onStateChange: handleStateChange,
       onIceCandidate: () => {},
+      onIceCandidateError: (err) => {
+        lastIceErrors.push({ url: err.url, code: err.errorCode, text: err.errorText, ts: Date.now() });
+        console.warn(`[ICE] Candidate error (${err.url || 'local'}): code ${err.errorCode} ${err.errorText || ''}`);
+      },
       onIceComplete: () => {},
       onChannelOpen: () => {
         if (remotePubKey === activeContactPubkey) {
@@ -1321,6 +1329,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       iceServers: buildIceServers(),
       onLog: () => {}, onStateChange: handleStateChange,
       onIceCandidate: () => {}, onIceComplete: () => {},
+      onIceCandidateError: (err) => {
+        lastIceErrors.push({ url: err.url, code: err.errorCode, text: err.errorText, ts: Date.now() });
+      },
       onChannelOpen: () => { enableChat(); hide(dom.manualPanel); show(dom.chatActive); toast('Connected!'); },
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
@@ -1378,6 +1389,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       iceServers: buildIceServers(),
       onLog: () => {}, onStateChange: handleStateChange,
       onIceCandidate: () => {}, onIceComplete: () => {},
+      onIceCandidateError: (err) => {
+        lastIceErrors.push({ url: err.url, code: err.errorCode, text: err.errorText, ts: Date.now() });
+      },
       onChannelOpen: () => { enableChat(); hide(dom.manualPanel); show(dom.chatActive); toast('Connected!'); },
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
@@ -1754,6 +1768,55 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     saveCustomIceServers([]);
     renderIceServerList();
     toast('Custom servers cleared. Built-in servers active.');
+  });
+
+  // Test ICE Connectivity
+  dom.btnTestIce?.addEventListener('click', async () => {
+    dom.btnTestIce.disabled = true;
+    dom.btnTestIce.textContent = 'Testing connectivity…';
+    show(dom.iceTestResults);
+    dom.iceTestResults.innerHTML = '<span style="color:#aeb7c4;">Gathering STUN & TURN candidates across configured servers…</span>';
+    
+    try {
+      const res = await PeerSession.testIceServers(buildIceServers(), 7000);
+      let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+      
+      // STUN Status
+      if (res.stunWorking) {
+        html += `<div><b style="color:#4caf50;">✓ STUN Discovery: Working</b> (Public IP: <code>${escapeHtml(res.publicIp || 'detected')}</code>)</div>`;
+      } else {
+        html += `<div><b style="color:#ef5350;">✗ STUN Discovery: Failed</b> (Unable to discover public IP)</div>`;
+      }
+      
+      // TURN Status
+      if (res.turnWorking) {
+        html += `<div><b style="color:#42a5f5;">✓ TURN Relay: Active</b> (${res.candidates.relay} relay candidate(s) gathered)</div>`;
+      } else {
+        const hasTurnServer = buildIceServers().some(s => s.urls.startsWith('turn'));
+        if (hasTurnServer) {
+          html += `<div><b style="color:#ffa726;">⚠ TURN Relay: Inactive / Failed</b> (No relay candidate allocated)</div>`;
+        } else {
+          html += `<div><span style="color:#888;">ℹ TURN Relay: None configured (Direct P2P / STUN only)</span></div>`;
+        }
+      }
+      
+      // Candidates breakdown
+      html += `<div style="color:#888;font-size:0.75rem;">Candidates: host=${res.candidates.host}, srflx=${res.candidates.srflx}, relay=${res.candidates.relay}</div>`;
+      
+      // Errors
+      if (res.errors && res.errors.length > 0) {
+        const uniqueErrors = Array.from(new Set(res.errors.map(e => `${e.url ? e.url + ': ' : ''}code ${e.errorCode} ${e.errorText}`)));
+        html += `<div style="color:#ef5350;font-size:0.75rem;margin-top:2px;">Errors: ${escapeHtml(uniqueErrors.join(' | '))}</div>`;
+      }
+      
+      html += '</div>';
+      dom.iceTestResults.innerHTML = html;
+    } catch (err) {
+      dom.iceTestResults.innerHTML = `<span style="color:#ef5350;">Test failed: ${escapeHtml(err.message)}</span>`;
+    } finally {
+      dom.btnTestIce.disabled = false;
+      dom.btnTestIce.textContent = '⚡ Test Connectivity (STUN / TURN)';
+    }
   });
 
   // Security - Key mgmt

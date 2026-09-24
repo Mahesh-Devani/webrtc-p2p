@@ -9,10 +9,13 @@
 
 export const PeerSession = (() => {
 
-  // ── Default ICE servers (STUN only) ──────────────────────────
+  // ── Default ICE servers (STUN) ───────────────────────────────
   const DEFAULT_ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.services.mozilla.com:3478' },
   ];
 
   /**
@@ -21,6 +24,7 @@ export const PeerSession = (() => {
    * @property {function(string,string=):void} [onLog]        – (msg, level)
    * @property {function(string):void}          [onStateChange] – connection state label
    * @property {function(RTCIceCandidate):void} [onIceCandidate]
+   * @property {function(RTCIceCandidateErrorEvent):void} [onIceCandidateError]
    * @property {function():void}                [onIceComplete]
    * @property {function():void}                [onChannelOpen]
    * @property {function():void}                [onChannelClose]
@@ -97,6 +101,11 @@ export const PeerSession = (() => {
           pendingIceCandidates.push(e.candidate);
         }
       }
+    };
+
+    pc.onicecandidateerror = (e) => {
+      log(`ICE candidate error (${e.url || 'local'}): code ${e.errorCode} ${e.errorText || ''}`, 'warn');
+      if (cfg.onIceCandidateError) cfg.onIceCandidateError(e);
     };
 
     pc.onicegatheringstatechange = () => {
@@ -917,5 +926,95 @@ export const PeerSession = (() => {
     };
   }
 
-  return { create };
+  /**
+   * Diagnostic function to test ICE servers (STUN discovery and TURN relay allocation).
+   * @param {RTCIceServer[]} iceServers
+   * @param {number} [timeoutMs=8000]
+   * @returns {Promise<{
+   *   success: boolean,
+   *   stunWorking: boolean,
+   *   turnWorking: boolean,
+   *   publicIp: string|null,
+   *   candidates: { host: number, srflx: number, relay: number },
+   *   errors: Array<{ url: string, errorCode: number, errorText: string }>
+   * }>}
+   */
+  async function testIceServers(iceServers, timeoutMs = 8000) {
+    return new Promise((resolve) => {
+      let pc = null;
+      let timer = null;
+      const result = {
+        success: false,
+        stunWorking: false,
+        turnWorking: false,
+        publicIp: null,
+        candidates: { host: 0, srflx: 0, relay: 0 },
+        errors: [],
+      };
+
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        if (pc) {
+          try { pc.close(); } catch { }
+          pc = null;
+        }
+      };
+
+      try {
+        pc = new RTCPeerConnection({ iceServers });
+        pc.createDataChannel('ice-diag');
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            const type = e.candidate.type;
+            if (type in result.candidates) {
+              result.candidates[type]++;
+            }
+            if (type === 'srflx') {
+              result.stunWorking = true;
+              if (!result.publicIp && e.candidate.address) {
+                result.publicIp = e.candidate.address;
+              }
+            }
+            if (type === 'relay') {
+              result.turnWorking = true;
+            }
+          } else {
+            cleanup();
+            result.success = result.stunWorking || result.turnWorking;
+            resolve(result);
+          }
+        };
+
+        pc.onicecandidateerror = (e) => {
+          result.errors.push({
+            url: e.url || '',
+            errorCode: e.errorCode,
+            errorText: e.errorText || '',
+          });
+        };
+
+        pc.createOffer().then(offer => {
+          return pc.setLocalDescription(offer);
+        }).catch(err => {
+          result.errors.push({ url: '', errorCode: -1, errorText: err.message });
+          cleanup();
+          resolve(result);
+        });
+
+        timer = setTimeout(() => {
+          cleanup();
+          result.success = result.stunWorking || result.turnWorking;
+          resolve(result);
+        }, timeoutMs);
+
+      } catch (err) {
+        cleanup();
+        result.errors.push({ url: '', errorCode: -1, errorText: err.message });
+        resolve(result);
+      }
+    });
+  }
+
+  return { create, testIceServers };
 })();

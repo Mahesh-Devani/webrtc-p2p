@@ -323,6 +323,10 @@
             <h3>ICE Servers (STUN / TURN)</h3>
             <p class="settings-hint">STUN discovers your public IP. TURN relays traffic when direct P2P fails (e.g. across mobile/corporate networks). Built-in servers are always active.</p>
             <div id="ice-server-list" class="relay-list" style="max-height:220px;overflow-y:auto;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <button id="btn-test-ice" class="btn btn--small btn--outline" style="flex:1;">⚡ Test Connectivity (STUN / TURN)</button>
+            </div>
+            <div id="ice-test-results" class="settings-storage hidden" style="margin-bottom:12px;font-size:0.8rem;line-height:1.4;"></div>
             <hr class="settings-divider">
             <h4 style="margin:8px 0 4px;font-size:.9rem;color:#aeb7c4;">Add Custom Server</h4>
             <div class="settings-field">
@@ -341,6 +345,17 @@
               <button id="btn-save-turn" class="btn btn--primary" style="flex:1;">Add Server</button>
               <button id="btn-reset-ice" class="btn btn--outline btn--small">Reset to Defaults</button>
             </div>
+            <details style="margin-top:12px;font-size:0.8rem;color:#888;">
+              <summary style="cursor:pointer;color:var(--c-primary,#128c7e);">ISP / Router Troubleshooting (Hathway, Jio, etc.)</summary>
+              <div style="margin-top:6px;line-height:1.4;">
+                <p>If WebRTC fails to connect on your Wi-Fi:</p>
+                <ul style="padding-left:18px;margin:4px 0;">
+                  <li><b>Disable SIP ALG</b> in your router admin settings (it often corrupts WebRTC UDP packets).</li>
+                  <li><b>Disable AP Isolation</b> (if devices are connected to the same Wi-Fi).</li>
+                  <li><b>Add a free TURN server</b> (e.g. from Metered.ca or self-hosted Coturn) to bypass Symmetric NAT.</li>
+                </ul>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -530,7 +545,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=8"></script>
+  <script type="module" src="ui-controller.js?v=9"></script>
 </body>
 
 </html>

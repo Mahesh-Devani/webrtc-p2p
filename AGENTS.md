@@ -142,7 +142,7 @@ ArrayBuffer (16KB chunk) × N                        → push chunk; update prog
 - **Rule**: All internal module imports must use clean paths (`import ... from './nostr-transport.js'`).
 - **Cache Busting Rule**: Cache busting is permitted **ONLY** on the root entry point in `index.html`:
   ```html
-  <script type="module" src="ui-controller.js?v=8"></script>
+  <script type="module" src="ui-controller.js?v=9"></script>
   ```
 
 ### 2. Zero-Build Philosophy
@@ -162,6 +162,11 @@ ArrayBuffer (16KB chunk) × N                        → push chunk; update prog
 - **Auto-Reconnection on Send**: Senders MUST NOT drop files if the channel is closed or in transient recovery when returning from the picker. `sendSelectedFiles` calls `ensurePeerConnected(pubkey)` to automatically re-establish or wait for the P2P connection and stream all queued files.
 - **Transient Disconnect Debounce**: `'disconnected'` is a transient state. `NostrSignaling` applies a 4-second debounce before reporting disconnected to the UI, allowing temporary blips to self-heal without tearing down call or chat state.
 - **Lifecycle Recovery (`visibilitychange`)**: When the app regains visibility, it immediately wakes up relay WebSockets (`NostrTransport.ensureConnected()`) and tests active P2P liveness with in-band pings.
+
+### 6. STUN/TURN Architecture & NAT Traversal
+- **Candidate Prioritization (RFC 8445)**: WebRTC ICE assigns `host` (local LAN) the highest priority (`126`), `prflx` (`110`), `srflx` / STUN (`100`), and `relay` / TURN (`0`). `host` ↔ `host` pairs are always tested first. If devices are on the same LAN without client isolation, traffic flows over local Wi-Fi without leaving the local network.
+- **Symmetric NAT & ISP Routers**: Restrictive ISP routers (such as Hathway, Jio, or corporate firewalls) randomize external port mappings or enable SIP ALG, preventing STUN hole-punching. In such environments, TURN relay servers (`turn:` or `turns:`) are required.
+- **Diagnostic Testing**: `PeerSession.testIceServers(iceServers)` provides on-demand STUN/TURN allocation verification, reporting discovered public IPs and TURN allocation errors (`onicecandidateerror`) directly to the UI.
 
 ---
 
