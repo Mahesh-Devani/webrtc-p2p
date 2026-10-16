@@ -28,6 +28,35 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnNewContact: $('#btn-new-contact'),
     contactSearch: $('#contact-search'),
     contactList: $('#contact-list'),
+    // Remote Desktops
+    remoteDevicesSection: $('#remote-devices-section'),
+    remoteDevicesList: $('#remote-devices-list'),
+    btnAddRemoteDevice: $('#btn-add-remote-device'),
+    addRemoteDeviceModal: $('#add-remote-device-modal'),
+    btnCloseAddRemoteDevice: $('#btn-close-add-remote-device'),
+    remoteDeviceToken: $('#remote-device-token'),
+    remoteDeviceNickname: $('#remote-device-nickname'),
+    remoteDeviceIcon: $('#remote-device-icon'),
+    remoteDevicePin: $('#remote-device-pin'),
+    btnScanRemoteQr: $('#btn-scan-remote-qr'),
+    btnSaveRemoteDevice: $('#btn-save-remote-device'),
+    clientIdDisplay: $('#client-id-display'),
+    btnCopyClientId: $('#btn-copy-client-id'),
+    editRemoteDeviceModal: $('#edit-remote-device-modal'),
+    btnCloseEditRemoteDevice: $('#btn-close-edit-remote-device'),
+    editRemoteDeviceOriginalPubkey: $('#edit-remote-device-original-pubkey'),
+    editRemoteDeviceNickname: $('#edit-remote-device-nickname'),
+    editRemoteDeviceIcon: $('#edit-remote-device-icon'),
+    editRemoteDevicePubkey: $('#edit-remote-device-pubkey'),
+    btnCopyEditPubkey: $('#btn-copy-edit-pubkey'),
+    editRemoteDevicePin: $('#edit-remote-device-pin'),
+    btnToggleEditPinVisibility: $('#btn-toggle-edit-pin-visibility'),
+    btnCopyQuickConnectLink: $('#btn-copy-quick-connect-link'),
+    btnTestRemoteDevice: $('#btn-test-remote-device'),
+    editDeviceTestStatus: $('#edit-device-test-status'),
+    btnDeleteFromEdit: $('#btn-delete-from-edit'),
+    btnCancelEditRemoteDevice: $('#btn-cancel-edit-remote-device'),
+    btnSaveEditRemoteDevice: $('#btn-save-edit-remote-device'),
     btnCreateSession: $('#btn-create-session'),
     btnJoinSession: $('#btn-join-session'),
     // Chat panel
@@ -43,6 +72,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnConnectPeer: $('#btn-connect-peer'),
     btnAudioCall: $('#btn-audio-call'),
     btnVideoCall: $('#btn-video-call'),
+    btnRemoteDesktop: $('#btn-remote-desktop'),
     btnChatMenu: $('#btn-chat-menu'),
     chatMenu: $('#chat-menu'),
     btnClearChat: $('#btn-clear-chat'),
@@ -71,10 +101,40 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnToggleAudio: $('#btn-toggle-audio'),
     btnToggleVideo: $('#btn-toggle-video'),
     btnScreenShare: $('#btn-screenshare'),
+    btnRdToggle: $('#btn-rd-toggle'),
     btnEndCall: $('#btn-end-call'),
     cameraSelect: $('#camera-select'),
     resolutionSelect: $('#resolution-select'),
     speakerSelect: $('#speaker-select'),
+    // Remote Desktop toolbar & elements
+    rdToolbar: $('#rd-toolbar'),
+    rdModeView: $('#rd-mode-view'),
+    rdModePointer: $('#rd-mode-pointer'),
+    rdModeControl: $('#rd-mode-control'),
+    rdBtnPointerLock: $('#rd-btn-pointer-lock'),
+    rdBtnKeyboardLock: $('#rd-btn-keyboard-lock'),
+    rdBtnSyncClipboard: $('#rd-btn-sync-clipboard'),
+    rdBtnSpecialKeys: $('#rd-btn-special-keys'),
+    rdKeysMenu: $('#rd-keys-menu'),
+    rdBtnFit: $('#rd-btn-fit'),
+    rdFitLabel: $('#rd-fit-label'),
+    rdBtnFullscreen: $('#rd-btn-fullscreen'),
+    rdBtnDisconnect: $('#rd-btn-disconnect'),
+    rdBtnCollapse: $('#rd-btn-collapse'),
+    rdBtnKeyboard: $('#rd-btn-keyboard'),
+    rdZoomIndicator: $('#rd-zoom-indicator'),
+    rdZoomLevel: $('#rd-zoom-level'),
+    rdBtnResetZoom: $('#rd-btn-reset-zoom'),
+    rdHostPrompt: $('#rd-host-prompt'),
+    rdHostPromptText: $('#rd-host-prompt-text'),
+    rdBtnGrantControl: $('#rd-btn-grant-control'),
+    rdBtnDenyControl: $('#rd-btn-deny-control'),
+    rdHostActiveBar: $('#rd-host-active-bar'),
+    rdBtnRevokeControl: $('#rd-btn-revoke-control'),
+    rdLaserPointer: $('#rd-laser-pointer'),
+    rdLaserPointerLabel: $('#rd-laser-pointer-label'),
+    bridgeStatusPill: $('#bridge-status-pill'),
+    btnToggleBridge: $('#btn-toggle-bridge'),
     // Settings modal
     settingsModal: $('#settings-modal'),
     btnCloseSettings: $('#btn-close-settings'),
@@ -140,6 +200,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   let nostrActiveSessionId = null;
   let sessionRemotePubKey = null;
   let activeContactPubkey = null;
+  let activeRemoteDesktopDevice = null;
+  let isWaitingForRemoteDesktop = false;
   let messageIdCounter = 0;
   let mediaActive = false;
   let isMobile = window.innerWidth <= 768;
@@ -269,6 +331,267 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (c) { c.nickname = newName; saveContacts(contacts); }
   }
 
+  // ── Remote Devices (Unattended Hosts) CRUD ──
+  const REMOTE_DEVICES_KEY = 'p2p-remote-devices';
+
+  function loadRemoteDevices() {
+    try { return JSON.parse(localStorage.getItem(REMOTE_DEVICES_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveRemoteDevices(devices) {
+    localStorage.setItem(REMOTE_DEVICES_KEY, JSON.stringify(devices));
+    renderRemoteDevices();
+  }
+
+  function addOrUpdateRemoteDevice(pubkey, name, pin = '', icon = '🖥️') {
+    const devices = loadRemoteDevices();
+    const existing = devices.find(d => d.pubkey === pubkey);
+    if (existing) {
+      existing.name = name || existing.name;
+      existing.icon = icon || existing.icon || '🖥️';
+      if (pin !== undefined && pin !== '') existing.pin = pin;
+    } else {
+      devices.push({ pubkey, name: name || `Host-${pubkey.slice(0, 6)}`, pin: pin || '', icon: icon || '🖥️' });
+    }
+    saveRemoteDevices(devices);
+  }
+
+  function removeRemoteDevice(pubkey) {
+    const devices = loadRemoteDevices().filter(d => d.pubkey !== pubkey);
+    saveRemoteDevices(devices);
+  }
+
+  function renderRemoteDevices() {
+    if (!dom.remoteDevicesList) return;
+    const devices = loadRemoteDevices();
+    if (devices.length === 0) {
+      dom.remoteDevicesList.innerHTML = `<div class="remote-device-empty">No remote computers paired yet.<br>Click "Add Remote Computer" to pair.</div>`;
+      return;
+    }
+
+    dom.remoteDevicesList.innerHTML = devices.map(d => `
+      <div class="remote-device-item" data-pubkey="${escapeHtml(d.pubkey)}">
+        <div class="remote-device-info">
+          <div class="remote-device-name">
+            <span>${escapeHtml(d.icon || '🖥️')}</span>
+            <span>${escapeHtml(d.name)}</span>
+          </div>
+          <div class="remote-device-meta">
+            ${escapeHtml(d.pubkey.slice(0, 8))}…${escapeHtml(d.pubkey.slice(-6))} ${d.pin ? '🔒' : ''}
+          </div>
+        </div>
+        <div class="remote-device-actions">
+          <button class="remote-device-btn-connect" data-pubkey="${escapeHtml(d.pubkey)}" title="Connect to Remote Desktop">
+            ⚡ Connect
+          </button>
+          <button class="remote-device-btn-edit" data-pubkey="${escapeHtml(d.pubkey)}" title="Edit Computer Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+          <button class="remote-device-btn-del" data-pubkey="${escapeHtml(d.pubkey)}" title="Remove Computer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    dom.remoteDevicesList.querySelectorAll('.remote-device-btn-connect').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pubkey = btn.dataset.pubkey;
+        const dev = loadRemoteDevices().find(d => d.pubkey === pubkey);
+        if (dev) connectToRemoteDevice(dev);
+      });
+    });
+
+    dom.remoteDevicesList.querySelectorAll('.remote-device-btn-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pubkey = btn.dataset.pubkey;
+        const dev = loadRemoteDevices().find(d => d.pubkey === pubkey);
+        if (dev) openEditRemoteDeviceModal(dev);
+      });
+    });
+
+    dom.remoteDevicesList.querySelectorAll('.remote-device-btn-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pubkey = btn.dataset.pubkey;
+        const dev = loadRemoteDevices().find(d => d.pubkey === pubkey);
+        const name = dev ? dev.name : 'this computer';
+        if (confirm(`Remove "${name}" from your remote computers?`)) {
+          removeRemoteDevice(pubkey);
+          toast(`Removed "${name}".`);
+        }
+      });
+    });
+  }
+
+  function openEditRemoteDeviceModal(dev) {
+    if (!dev) return;
+    if (dom.editRemoteDeviceOriginalPubkey) dom.editRemoteDeviceOriginalPubkey.value = dev.pubkey;
+    if (dom.editRemoteDeviceNickname) dom.editRemoteDeviceNickname.value = dev.name || '';
+    if (dom.editRemoteDeviceIcon) dom.editRemoteDeviceIcon.value = dev.icon || '🖥️';
+    if (dom.editRemoteDevicePubkey) dom.editRemoteDevicePubkey.textContent = dev.pubkey;
+    if (dom.editRemoteDevicePin) {
+      dom.editRemoteDevicePin.value = dev.pin || '';
+      dom.editRemoteDevicePin.type = 'password';
+    }
+    const eyeIcon = document.getElementById('icon-edit-pin-eye');
+    if (eyeIcon) {
+      eyeIcon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+    }
+    if (dom.editDeviceTestStatus) {
+      dom.editDeviceTestStatus.innerHTML = `Click "Test Reachability" to check if the host daemon is online on Nostr relays.`;
+    }
+    show(dom.editRemoteDeviceModal);
+  }
+
+  async function testRemoteDeviceReachability(pubkey) {
+    if (!pubkey || !dom.editDeviceTestStatus) return;
+
+    dom.editDeviceTestStatus.innerHTML = `<span style="color:var(--c-primary);">📡 Connecting to relays and pinging host...</span>`;
+    
+    if (!NostrTransport.isConnected()) {
+      try {
+        await NostrTransport.connect();
+      } catch (err) {
+        dom.editDeviceTestStatus.innerHTML = `<span style="color:var(--c-danger);">❌ Could not connect to Nostr relays: ${escapeHtml(err.message || '')}</span>`;
+        return;
+      }
+    }
+
+    const testSessionId = 'test-' + Date.now();
+    let responded = false;
+    let timer = null;
+
+    const cleanup = NostrTransport.subscribeSignals((signal) => {
+      if (signal.senderPubKey === pubkey && (signal.type === 'host_pong' || signal.type === 'close')) {
+        responded = true;
+        if (timer) clearTimeout(timer);
+        if (typeof cleanup === 'function') cleanup();
+
+        if (signal.type === 'host_pong') {
+          const info = signal.data || {};
+          if (info.status === 'blocked') {
+            dom.editDeviceTestStatus.innerHTML = `
+              <div style="color:#f59e0b;font-weight:600;margin-bottom:2px;">⚠️ Host Online, but Connection Blocked</div>
+              <div style="color:var(--c-text-dim);font-size:0.7rem;">${escapeHtml(info.reason || 'Client ID not in host whitelist')}</div>
+            `;
+          } else if (info.status === 'ready') {
+            const streamState = info.streamActive
+              ? `<span style="color:#10b981;font-weight:600;">🟢 Online &amp; Desktop Capture Active</span>`
+              : `<span style="color:#f59e0b;font-weight:600;">🟡 Online, but Desktop Capture Inactive</span>`;
+            const bridgeState = info.bridgeLive
+              ? `• Native Bridge: Active`
+              : `• Native Bridge: Inactive`;
+            const pinState = info.pinRequired ? `• Password: Required 🔒` : `• Password: None`;
+            
+            dom.editDeviceTestStatus.innerHTML = `
+              <div style="margin-bottom:3px;">${streamState}</div>
+              <div style="color:var(--c-text-dim);font-size:0.68rem;line-height:1.4;">
+                Host: <strong>${escapeHtml(info.name || 'Remote Host')}</strong><br>
+                ${bridgeState} ${pinState}
+              </div>
+            `;
+          }
+        } else if (signal.type === 'close') {
+          dom.editDeviceTestStatus.innerHTML = `
+            <div style="color:var(--c-danger);font-weight:600;">❌ Connection Blocked by Host</div>
+            <div style="color:var(--c-text-dim);font-size:0.7rem;">${escapeHtml(signal.data || 'Unauthorized')}</div>
+          `;
+        }
+      }
+    });
+
+    try {
+      await NostrTransport.sendSignal(pubkey, {
+        type: 'host_ping',
+        session: testSessionId,
+        data: { t: Date.now() }
+      });
+    } catch (err) {
+      if (typeof cleanup === 'function') cleanup();
+      dom.editDeviceTestStatus.innerHTML = `<span style="color:var(--c-danger);">❌ Failed to send ping: ${escapeHtml(err.message || '')}</span>`;
+      return;
+    }
+
+    timer = setTimeout(() => {
+      if (!responded) {
+        if (typeof cleanup === 'function') cleanup();
+        dom.editDeviceTestStatus.innerHTML = `
+          <div style="color:var(--c-danger);font-weight:600;">🔴 No Response from Host</div>
+          <div style="color:var(--c-text-dim);font-size:0.7rem;">Host is offline, asleep, or host.html is closed.</div>
+        `;
+      }
+    }, 6000);
+  }
+
+  async function connectToRemoteDevice(device) {
+    if (!device || !device.pubkey) return;
+
+    if (!NostrTransport.isConnected()) {
+      toast('Connecting to Nostr relays…');
+      await NostrTransport.connect();
+    }
+
+    let pin = device.pin;
+    if (pin === undefined || pin === null || pin === '') {
+      const entered = prompt(`Enter Password / PIN for ${device.name} (leave empty if none configured):`, '');
+      if (entered === null) return; // User cancelled
+      pin = entered.trim();
+    }
+
+    // Close any previous session before starting remote desktop to prevent race conditions
+    if (session && typeof session.close === 'function') {
+      try { session.close(); } catch {}
+      session = null;
+    }
+
+    activeRemoteDesktopDevice = device;
+    isWaitingForRemoteDesktop = true;
+    toast(`Connecting to ${device.name}…`);
+
+    show(dom.connectBanner);
+    dom.connectBannerText.textContent = `Connecting to ${device.name}…`;
+    const dots = dom.connectProgress?.children;
+    if (dots) {
+      dots[0]?.classList.add('done');
+      dots[1]?.classList.add('active');
+    }
+
+    try {
+      nostrActiveSessionId = await NostrSignaling.startSession(device.pubkey, {
+        pin,
+        isUnattended: true,
+      });
+      sessionRemotePubKey = device.pubkey;
+      if (dots) {
+        dots[1]?.classList.replace('active', 'done');
+        dots[2]?.classList.add('active');
+      }
+      dom.connectBannerText.textContent = `Awaiting host desktop stream…`;
+    } catch (err) {
+      console.error('[connectToRemoteDevice] Failed to start session:', err);
+      if (dots) dots[1]?.classList.replace('active', 'error');
+      dom.connectBannerText.textContent = 'Connection failed: ' + (err.message || '');
+      setTimeout(() => hide(dom.connectBanner), 3500);
+      activeRemoteDesktopDevice = null;
+      isWaitingForRemoteDesktop = false;
+      return;
+    }
+
+    // Auto-timeout if host is offline / doesn't answer
+    setTimeout(() => {
+      if (activeRemoteDesktopDevice && (!session || !session.isChannelOpen || !session.isChannelOpen())) {
+        hide(dom.connectBanner);
+        toast(`No response from ${device.name}. Ensure the host daemon is running.`);
+        activeRemoteDesktopDevice = null;
+        isWaitingForRemoteDesktop = false;
+      }
+    }, 20000);
+  }
+
   // ── Message Request Queue ──
   const pendingRequests = [];
   let currentRequest = null;
@@ -311,6 +634,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
   // ── Render Contact List ──
   function renderContacts(filter = '') {
+    if (!dom.contactList) return;
     const contacts = loadContacts();
     const lowerFilter = filter.toLowerCase();
     dom.contactList.innerHTML = '';
@@ -395,18 +719,34 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
         show(dom.btnAudioCall);
         show(dom.btnVideoCall);
+        show(dom.btnRemoteDesktop);
         hide(dom.btnConnectPeer);
     } else if (isConnecting) {
         dom.chatContactStatus.textContent = 'Connecting via Nostr...';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
+        hide(dom.btnRemoteDesktop);
         hide(dom.btnConnectPeer);
+
+        if (!connectionTimeout) {
+            connectionTimeout = setTimeout(() => {
+                if (session && sessionRemotePubKey === pubkey && (!session.isChannelOpen || !session.isChannelOpen())) {
+                    try { session.close(); } catch {}
+                    session = null;
+                }
+                nostrActiveSessionId = null;
+                dom.chatContactStatus.textContent = 'Offline';
+                dom.chatContactStatus.className = 'chat-header__status';
+                show(dom.btnConnectPeer);
+            }, 12000);
+        }
     } else {
         dom.chatContactStatus.textContent = 'Connecting via Nostr...';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
+        hide(dom.btnRemoteDesktop);
         hide(dom.btnConnectPeer);
         
         // Auto connect
@@ -424,12 +764,22 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
                    sessionRemotePubKey = pubkey;
                    connectionTimeout = setTimeout(() => {
                        if (nostrActiveSessionId === sid && (!session || !session.isChannelOpen?.())) {
+                           if (session) {
+                               try { session.close(); } catch {}
+                               session = null;
+                           }
+                           nostrActiveSessionId = null;
                            dom.chatContactStatus.textContent = 'Offline';
                            dom.chatContactStatus.className = 'chat-header__status';
                            show(dom.btnConnectPeer); // allow manual retry
                        }
                    }, 15000);
                }).catch(err => {
+                   if (session) {
+                       try { session.close(); } catch {}
+                       session = null;
+                   }
+                   nostrActiveSessionId = null;
                    dom.chatContactStatus.textContent = 'Offline';
                    dom.chatContactStatus.className = 'chat-header__status';
                    show(dom.btnConnectPeer);
@@ -650,6 +1000,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.fileInput.disabled = false;
     show(dom.btnAudioCall);
     show(dom.btnVideoCall);
+    show(dom.btnRemoteDesktop);
     hide(dom.btnConnectPeer);
     dom.chatInput.focus();
   }
@@ -658,6 +1009,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     // We strictly DO NOT disable chat inputs anymore to allow offline messaging
     hide(dom.btnAudioCall);
     hide(dom.btnVideoCall);
+    hide(dom.btnRemoteDesktop);
     show(dom.btnConnectPeer);
   }
 
@@ -793,6 +1145,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         } else if (Date.now() - startTime > timeoutMs) {
           cleanup();
           hide(dom.connectBanner);
+          if (session && nostrActiveSessionId && sessionRemotePubKey === remotePubKey && (!session.isChannelOpen || !session.isChannelOpen())) {
+            try { session.close(); } catch {}
+            session = null;
+            nostrActiveSessionId = null;
+          }
           resolve(false);
         }
       }, 200);
@@ -886,6 +1243,17 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           enableChat();
           hide(dom.connectBanner);
         }
+        const isRdMatch = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || (isWaitingForRemoteDesktop && sessionRemotePubKey === remotePubKey);
+        if (isRdMatch) {
+          hide(dom.connectBanner);
+          show(dom.callOverlay);
+          dom.callOverlay?.classList.add('call-overlay--rd');
+          show(dom.rdToolbar);
+          dom.btnRdToggle.disabled = false;
+          attachRemoteVideoInputListeners();
+          setRdMode('control');
+          rdControlGranted = true;
+        }
         
         // Flush pending messages
         const offlineMsgs = ChatStore.getMessages(remotePubKey).filter(m => m.sender === 'self' && m.status === 'pending');
@@ -898,12 +1266,16 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
       },
       onChannelClose: () => {
+        if (sessionId !== nostrActiveSessionId) return;
         if (remotePubKey === activeContactPubkey) {
           disableChat();
         }
-        endMediaCall();
+        if (mediaActive || activeRemoteDesktopDevice) {
+          endMediaCall();
+        }
       },
       onCallEnded: () => {
+        if (sessionId !== nostrActiveSessionId) return;
         if (remotePubKey === activeContactPubkey && mediaActive) {
           endMediaCall();
           toast('Peer ended the call.');
@@ -929,12 +1301,39 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, remotePubKey),
       onFileAbort: handleFileAbort,
+      onInputEvent: handleIncomingInputEvent,
       onRemoteStream: (stream) => {
-        // If we already have the call overlay open (we initiated the call), just play
-        if (mediaActive) {
+        // If we already have the call overlay open or active unattended remote desktop or waiting for remote desktop
+        const isRdStream = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || isWaitingForRemoteDesktop;
+        if (mediaActive || isRdStream) {
+          mediaActive = true;
+          isWaitingForRemoteDesktop = false;
           dom.remoteVideo.srcObject = stream;
-          dom.remoteVideo.play().catch(() => {});
+          const playPromise = dom.remoteVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(err => {
+              console.warn('[RD Video] Autoplay with audio was prevented, retrying muted:', err);
+              dom.remoteVideo.muted = true;
+              dom.remoteVideo.play().catch(e => console.warn('[RD Video] Muted play also failed:', e));
+            });
+          }
           hide(dom.remoteNoVideo);
+          if (!dom.remoteVideo._rdVideoReadyBound) {
+            dom.remoteVideo._rdVideoReadyBound = true;
+            dom.remoteVideo.addEventListener('loadeddata', () => hide(dom.remoteNoVideo));
+            dom.remoteVideo.addEventListener('loadedmetadata', () => hide(dom.remoteNoVideo));
+            dom.remoteVideo.addEventListener('playing', () => hide(dom.remoteNoVideo));
+          }
+          show(dom.callOverlay);
+          dom.callOverlay?.classList.add('call-overlay--rd');
+          show(dom.rdToolbar);
+          dom.btnRdToggle.disabled = false;
+          attachRemoteVideoInputListeners();
+          setRdMode('control');
+          rdControlGranted = true;
+          hide(dom.connectBanner);
+          const peerName = activeRemoteDesktopDevice ? activeRemoteDesktopDevice.name : getContactDisplayName(remotePubKey);
+          toast(`Connected to ${peerName}! Remote Desktop streaming.`);
           return;
         }
         // Otherwise, show incoming call prompt — don't auto-play
@@ -943,6 +1342,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         showIncomingCallPrompt(remotePubKey);
       },
       onRemoteStreamEnded: () => {
+        if (sessionId !== nostrActiveSessionId) return;
         dom.remoteVideo.srcObject = null;
         show(dom.remoteNoVideo);
         // If call was active, end it
@@ -952,6 +1352,715 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
       },
     };
+  }
+
+  // ── Remote Desktop Subsystem ──
+  let rdMode = 'view'; // 'view' | 'pointer' | 'control'
+  let rdFitMode = 'contain'; // 'contain' | 'fill' | 'cover'
+  let rdKeyboardLocked = false;
+  let rdControlGranted = false;
+  let rdRemoteLaserTimer = null;
+  let localBridgeWs = null;
+  let bridgeConnected = false;
+
+  function cycleFitMode() {
+    if (rdFitMode === 'contain') {
+      rdFitMode = 'fill';
+      if (dom.remoteVideo) {
+        dom.remoteVideo.classList.remove('rd-fit-cover');
+        dom.remoteVideo.classList.add('rd-fit-fill');
+      }
+      if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Stretch';
+      toast('Display: Stretch to Fill Window');
+    } else if (rdFitMode === 'fill') {
+      rdFitMode = 'cover';
+      if (dom.remoteVideo) {
+        dom.remoteVideo.classList.remove('rd-fit-fill');
+        dom.remoteVideo.classList.add('rd-fit-cover');
+      }
+      if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Zoom';
+      toast('Display: Zoom / Fill Window');
+    } else {
+      rdFitMode = 'contain';
+      if (dom.remoteVideo) {
+        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover');
+      }
+      if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Fit';
+      toast('Display: Fit to Window (Best Quality)');
+    }
+  }
+
+  // ── Mobile Pinch-to-Zoom Subsystem ──
+  let rdZoomScale = 1.0;
+  let rdPanX = 0;
+  let rdPanY = 0;
+
+  function applyRdZoomTransform(animate = false) {
+    if (!dom.remoteVideo) return;
+    if (animate) {
+      dom.remoteVideo.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1)';
+      setTimeout(() => {
+        if (dom.remoteVideo) dom.remoteVideo.style.transition = '';
+      }, 200);
+    } else {
+      dom.remoteVideo.style.transition = '';
+    }
+
+    if (rdZoomScale > 1.02) {
+      dom.remoteVideo.style.transform = `translate(${rdPanX}px, ${rdPanY}px) scale(${rdZoomScale})`;
+      if (dom.rdZoomIndicator) {
+        show(dom.rdZoomIndicator);
+        if (dom.rdZoomLevel) dom.rdZoomLevel.textContent = `${rdZoomScale.toFixed(1)}x`;
+      }
+    } else {
+      dom.remoteVideo.style.transform = '';
+      if (dom.rdZoomIndicator) hide(dom.rdZoomIndicator);
+    }
+  }
+
+  function resetRdZoom(animate = true) {
+    rdZoomScale = 1.0;
+    rdPanX = 0;
+    rdPanY = 0;
+    applyRdZoomTransform(animate);
+  }
+
+  function setRdMode(mode) {
+    rdMode = mode;
+    dom.rdModeView?.classList.toggle('active', mode === 'view');
+    dom.rdModePointer?.classList.toggle('active', mode === 'pointer');
+    dom.rdModeControl?.classList.toggle('active', mode === 'control');
+
+    if (dom.remoteVideo?.parentElement) {
+      dom.remoteVideo.parentElement.classList.toggle('rd-control-active', mode === 'control');
+    }
+
+    if (mode === 'view') {
+      toast('Remote Desktop: View Only mode');
+      if (document.pointerLockElement) document.exitPointerLock?.();
+    } else if (mode === 'pointer') {
+      toast('Remote Desktop: Laser Pointer active');
+    } else if (mode === 'control') {
+      toast('Remote Desktop: Control active! Clicks and keystrokes will be sent.');
+    }
+  }
+
+  function getNormalizedVideoCoordinates(e, videoEl) {
+    if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return null;
+    const rect = videoEl.getBoundingClientRect();
+    const elWidth = rect.width;
+    const elHeight = rect.height;
+    if (elWidth <= 0 || elHeight <= 0) return null;
+
+    const videoRatio = videoEl.videoWidth / videoEl.videoHeight;
+    const elRatio = elWidth / elHeight;
+
+    let actualWidth, actualHeight, offsetX, offsetY;
+    if (elRatio > videoRatio) {
+      actualHeight = elHeight;
+      actualWidth = elHeight * videoRatio;
+      offsetX = (elWidth - actualWidth) / 2;
+      offsetY = 0;
+    } else {
+      actualWidth = elWidth;
+      actualHeight = elWidth / videoRatio;
+      offsetX = 0;
+      offsetY = (elHeight - actualHeight) / 2;
+    }
+
+    const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    const clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
+    const clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
+
+    const clickX = clientX - rect.left - offsetX;
+    const clickY = clientY - rect.top - offsetY;
+
+    if (clickX < 0 || clickX > actualWidth || clickY < 0 || clickY > actualHeight) {
+      return null;
+    }
+
+    return {
+      x: Math.max(0, Math.min(1, clickX / actualWidth)),
+      y: Math.max(0, Math.min(1, clickY / actualHeight)),
+    };
+  }
+
+  function sendRdInput(evt) {
+    if (session && typeof session.sendInput === 'function') {
+      return session.sendInput(evt);
+    }
+    return false;
+  }
+
+  function handleIncomingInputEvent(evt) {
+    if (!evt || !evt.t) return;
+
+    if (evt.t === 'host_status') {
+      if (evt.warning) {
+        toast(evt.warning, 'warn');
+        if (dom.remoteNoVideo) {
+          dom.remoteNoVideo.innerHTML = `
+            <div style="text-align:center;max-width:340px;line-height:1.5;padding:16px;">
+              <div style="font-size:2rem;margin-bottom:8px;">⚠️</div>
+              <div style="font-weight:600;font-size:0.95rem;margin-bottom:6px;color:#fff;">Host Screen Capture Inactive</div>
+              <div style="font-size:0.8rem;color:#aeb7c4;">${escapeHtml(evt.warning)}</div>
+            </div>
+          `;
+          show(dom.remoteNoVideo);
+        }
+      } else {
+        if (dom.remoteNoVideo) {
+          dom.remoteNoVideo.textContent = 'Waiting for peer video…';
+        }
+      }
+      return;
+    }
+
+    if (evt.t === 'remote_desktop_request') {
+      const peerName = sessionRemotePubKey ? getContactDisplayName(sessionRemotePubKey) : 'Peer';
+      SoundEngine.playNotification();
+      if (confirm(`${peerName} requested to view and control your desktop screen.\n\nDo you want to start screen sharing and allow remote control?`)) {
+        startRemoteDesktopSession(true).then(() => {
+          sendRdInput({ t: 'control_granted' });
+        }).catch(err => {
+          toast('Screen sharing cancelled: ' + (err.message || ''));
+        });
+      }
+      return;
+    }
+
+    if (evt.t === 'control_request') {
+      const peerName = sessionRemotePubKey ? getContactDisplayName(sessionRemotePubKey) : 'Peer';
+      if (dom.rdHostPromptText) dom.rdHostPromptText.textContent = `${peerName} requested remote control of your desktop.`;
+      show(dom.rdHostPrompt);
+      SoundEngine.playNotification();
+      return;
+    }
+
+    if (evt.t === 'control_granted') {
+      rdControlGranted = true;
+      toast('Remote control granted! You can now control the peer screen.');
+      setRdMode('control');
+      return;
+    }
+
+    if (evt.t === 'control_revoked') {
+      rdControlGranted = false;
+      toast('Peer revoked remote control.');
+      setRdMode('view');
+      return;
+    }
+
+    if (evt.t === 'clipboard') {
+      if (evt.text && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(evt.text).then(() => {
+          toast('Clipboard received from peer.');
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Laser pointer visualization
+    if (evt.t === 'pointer' || evt.t === 'mouse_move') {
+      renderRemoteLaser(evt.x, evt.y);
+    }
+
+    // Forward to local OS bridge if active
+    if (rdControlGranted && bridgeConnected && localBridgeWs && localBridgeWs.readyState === WebSocket.OPEN) {
+      try {
+        localBridgeWs.send(JSON.stringify(evt));
+      } catch (err) {
+        console.warn('[Bridge] Forward error:', err);
+      }
+    }
+  }
+
+  function renderRemoteLaser(normX, normY) {
+    if (!dom.rdLaserPointer) return;
+    const targetVideo = session?.isScreenSharing?.() ? dom.localVideo : dom.remoteVideo;
+    if (!targetVideo || !targetVideo.videoWidth || !targetVideo.videoHeight) return;
+
+    const rect = targetVideo.getBoundingClientRect();
+    const videoRatio = targetVideo.videoWidth / targetVideo.videoHeight;
+    const elRatio = rect.width / rect.height;
+
+    let actualWidth, actualHeight, offsetX, offsetY;
+    if (elRatio > videoRatio) {
+      actualHeight = rect.height;
+      actualWidth = rect.height * videoRatio;
+      offsetX = (rect.width - actualWidth) / 2;
+      offsetY = 0;
+    } else {
+      actualWidth = rect.width;
+      actualHeight = rect.width / videoRatio;
+      offsetX = 0;
+      offsetY = (rect.height - actualHeight) / 2;
+    }
+
+    const pixelX = rect.left + offsetX + (normX * actualWidth);
+    const pixelY = rect.top + offsetY + (normY * actualHeight);
+
+    show(dom.rdLaserPointer);
+    dom.rdLaserPointer.style.left = `${pixelX}px`;
+    dom.rdLaserPointer.style.top = `${pixelY}px`;
+
+    if (sessionRemotePubKey && dom.rdLaserPointerLabel) {
+      dom.rdLaserPointerLabel.textContent = getContactDisplayName(sessionRemotePubKey);
+    }
+
+    if (rdRemoteLaserTimer) clearTimeout(rdRemoteLaserTimer);
+    rdRemoteLaserTimer = setTimeout(() => {
+      hide(dom.rdLaserPointer);
+    }, 3000);
+  }
+
+  function attachRemoteVideoInputListeners() {
+    const v = dom.remoteVideo;
+    if (!v || v._rdListenersAttached) return;
+    v._rdListenersAttached = true;
+
+    let lastMoveTime = 0;
+    v.addEventListener('mousemove', (e) => {
+      if (rdMode === 'view') return;
+      const now = performance.now();
+      if (now - lastMoveTime < 16) return; // ~60fps
+      lastMoveTime = now;
+
+      const coords = getNormalizedVideoCoordinates(e, v);
+      if (!coords) return;
+
+      if (rdMode === 'pointer') {
+        sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, active: true });
+      } else if (rdMode === 'control') {
+        sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+      }
+    });
+
+    v.addEventListener('mousedown', (e) => {
+      if (rdMode === 'view') return;
+      const coords = getNormalizedVideoCoordinates(e, v);
+      if (!coords) return;
+
+      if (rdMode === 'pointer') {
+        sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
+      } else if (rdMode === 'control') {
+        sendRdInput({ t: 'mouse_down', btn: e.button, x: coords.x, y: coords.y });
+      }
+    });
+
+    v.addEventListener('mouseup', (e) => {
+      if (rdMode === 'control') {
+        const coords = getNormalizedVideoCoordinates(e, v);
+        sendRdInput({ t: 'mouse_up', btn: e.button, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
+      }
+    });
+
+    v.addEventListener('contextmenu', (e) => {
+      if (rdMode === 'control') {
+        e.preventDefault();
+      }
+    });
+
+    v.addEventListener('wheel', (e) => {
+      if (rdMode === 'control') {
+        e.preventDefault();
+        sendRdInput({ t: 'wheel', dx: e.deltaX, dy: e.deltaY });
+      }
+    }, { passive: false });
+
+    v.addEventListener('dblclick', (e) => {
+      if (rdMode === 'control') {
+        const coords = getNormalizedVideoCoordinates(e, v);
+        if (coords) {
+          sendRdInput({ t: 'mouse_click', btn: e.button, dbl: true, x: coords.x, y: coords.y });
+        }
+      }
+    });
+
+    // Touch event support for mobile & tablet remote desktop control
+    let touchStartTime = 0;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+    let longPressTimer = null;
+    let isLongPress = false;
+    let lastTapTime = 0;
+    let lastTapCoords = null;
+
+    // Two-finger pinch-to-zoom and pan variables
+    let isPinching = false;
+    let initialPinchDistance = 0;
+    let initialPinchScale = 1.0;
+    let initialPinchMidX = 0;
+    let initialPinchMidY = 0;
+    let initialPanX = 0;
+    let initialPanY = 0;
+    let lastPinchMidY = null;
+    let pinchMovedSignificantly = false;
+
+    v.addEventListener('touchstart', (e) => {
+      if (rdMode === 'view') return;
+      if (e.touches.length === 1) {
+        isPinching = false;
+        touchStartTime = Date.now();
+        const t0 = e.touches[0];
+        touchStartX = t0.clientX;
+        touchStartY = t0.clientY;
+        touchMoved = false;
+        isLongPress = false;
+
+        const coords = getNormalizedVideoCoordinates(t0, v);
+        if (coords) {
+          if (rdMode === 'pointer') {
+            sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, active: true });
+          } else if (rdMode === 'control') {
+            sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+          }
+
+          // Long press timer (500ms) for Right Click
+          clearTimeout(longPressTimer);
+          longPressTimer = setTimeout(() => {
+            if (!touchMoved && e.touches.length === 1) {
+              isLongPress = true;
+              navigator.vibrate?.(60);
+              if (rdMode === 'control') {
+                sendRdInput({ t: 'mouse_click', btn: 2, x: coords.x, y: coords.y });
+                toast('Right Click sent', 'info');
+              }
+            }
+          }, 500);
+        }
+      } else if (e.touches.length === 2) {
+        clearTimeout(longPressTimer);
+        isPinching = true;
+        pinchMovedSignificantly = false;
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        initialPinchDistance = Math.hypot(dx, dy);
+        initialPinchScale = rdZoomScale;
+        initialPinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        initialPinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        initialPanX = rdPanX;
+        initialPanY = rdPanY;
+        lastPinchMidY = initialPinchMidY;
+      }
+    }, { passive: false });
+
+    v.addEventListener('touchmove', (e) => {
+      if (rdMode === 'view') return;
+      e.preventDefault(); // Prevent page bounce/zoom while interacting
+
+      if (e.touches.length === 1 && !isPinching) {
+        const t0 = e.touches[0];
+        const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
+        if (dist > 8) {
+          touchMoved = true;
+          clearTimeout(longPressTimer);
+        }
+
+        const now = performance.now();
+        if (now - lastMoveTime < 16) return;
+        lastMoveTime = now;
+
+        const coords = getNormalizedVideoCoordinates(t0, v);
+        if (!coords) return;
+
+        if (rdMode === 'pointer') {
+          sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, active: true });
+        } else if (rdMode === 'control') {
+          sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+        }
+      } else if (e.touches.length === 2 && isPinching) {
+        clearTimeout(longPressTimer);
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const currentDistance = Math.hypot(dx, dy);
+        const currentMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+        const distanceDiff = Math.abs(currentDistance - initialPinchDistance);
+        if (distanceDiff > 12) pinchMovedSignificantly = true;
+
+        if (initialPinchDistance > 10) {
+          const scaleFactor = currentDistance / initialPinchDistance;
+          let newScale = Math.min(5.0, Math.max(1.0, initialPinchScale * scaleFactor));
+
+          // If zoomed in, allow panning with two fingers
+          if (newScale > 1.05 || initialPinchScale > 1.05) {
+            const panDeltaX = currentMidX - initialPinchMidX;
+            const panDeltaY = currentMidY - initialPinchMidY;
+            rdPanX = initialPanX + panDeltaX;
+            rdPanY = initialPanY + panDeltaY;
+
+            // Clamping pan bounds to prevent video flying off screen
+            const parent = v.parentElement;
+            const pWidth = parent ? parent.clientWidth : window.innerWidth;
+            const pHeight = parent ? parent.clientHeight : window.innerHeight;
+            const maxPanX = (pWidth * (newScale - 1)) / 1.8;
+            const maxPanY = (pHeight * (newScale - 1)) / 1.8;
+            rdPanX = Math.max(-maxPanX, Math.min(maxPanX, rdPanX));
+            rdPanY = Math.max(-maxPanY, Math.min(maxPanY, rdPanY));
+            rdZoomScale = newScale;
+            applyRdZoomTransform(false);
+          } else {
+            // Not zoomed in and distance not changing much -> Two-finger vertical scroll
+            if (!pinchMovedSignificantly && lastPinchMidY !== null) {
+              const scrollDy = (lastPinchMidY - currentMidY) * 2;
+              if (Math.abs(scrollDy) > 2) {
+                sendRdInput({ t: 'wheel', dy: scrollDy });
+              }
+            }
+          }
+          lastPinchMidY = currentMidY;
+        }
+      }
+    }, { passive: false });
+
+    v.addEventListener('touchend', (e) => {
+      clearTimeout(longPressTimer);
+      if (rdMode === 'view') return;
+
+      if (e.touches.length === 0) {
+        isPinching = false;
+        lastPinchMidY = null;
+
+        // If zoom is very close to 1.0, snap back cleanly
+        if (rdZoomScale < 1.08) {
+          resetRdZoom(true);
+        }
+
+        if (isLongPress) {
+          isLongPress = false;
+          return;
+        }
+
+        if (!touchMoved) {
+          const elapsed = Date.now() - touchStartTime;
+          if (elapsed < 350) {
+            const lastTouch = e.changedTouches[0];
+            const coords = getNormalizedVideoCoordinates(lastTouch, v);
+            if (coords) {
+              const now = Date.now();
+              if (now - lastTapTime < 320 && lastTapCoords && Math.hypot(coords.x - lastTapCoords.x, coords.y - lastTapCoords.y) < 0.05) {
+                // Double tap -> Double click
+                lastTapTime = 0;
+                lastTapCoords = null;
+                if (rdMode === 'control') {
+                  sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+                  sendRdInput({ t: 'mouse_click', btn: 0, dbl: true, x: coords.x, y: coords.y });
+                }
+              } else {
+                // Single tap -> Left click
+                lastTapTime = now;
+                lastTapCoords = coords;
+                if (rdMode === 'pointer') {
+                  sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
+                } else if (rdMode === 'control') {
+                  sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+                  sendRdInput({ t: 'mouse_click', btn: 0, x: coords.x, y: coords.y });
+                }
+              }
+            }
+          }
+        }
+      } else if (e.touches.length === 1) {
+        // One finger lifted from two-finger pinch
+        isPinching = false;
+        lastPinchMidY = null;
+      }
+    }, { passive: false });
+
+    v.addEventListener('touchcancel', () => {
+      clearTimeout(longPressTimer);
+      isLongPress = false;
+      touchMoved = false;
+      isPinching = false;
+      lastPinchMidY = null;
+    });
+  }
+
+  // Window keydown & keyup listeners for remote desktop control
+  window.addEventListener('keydown', (e) => {
+    if (rdMode !== 'control' || !mediaActive) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    sendRdInput({
+      t: 'key_down',
+      key: e.key,
+      code: e.code,
+      ctrl: e.ctrlKey,
+      shift: e.shiftKey,
+      alt: e.altKey,
+      meta: e.metaKey
+    });
+
+    if (rdKeyboardLocked || e.key === 'Tab' || e.key === 'Alt') {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (rdMode !== 'control' || !mediaActive) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    sendRdInput({
+      t: 'key_up',
+      key: e.key,
+      code: e.code,
+      ctrl: e.ctrlKey,
+      shift: e.shiftKey,
+      alt: e.altKey,
+      meta: e.metaKey
+    });
+  });
+
+  async function startRemoteDesktopSession(forceShare = false) {
+    if (!session) { toast('Connect to peer first.'); return; }
+
+    const canShare = !!(navigator.mediaDevices?.getDisplayMedia);
+
+    if (!forceShare && !mediaActive) {
+      if (!canShare) {
+        // Mobile or unsupported browser: automatically request remote screen
+        toast('Requesting desktop screen from peer…');
+        isWaitingForRemoteDesktop = true;
+        sendRdInput({ t: 'remote_desktop_request' });
+        return;
+      }
+
+      // On desktop: ask whether user wants to share their own screen or view/control peer's screen
+      const peerName = sessionRemotePubKey ? getContactDisplayName(sessionRemotePubKey) : 'Peer';
+      const choice = confirm(`Remote Desktop with ${peerName}:\n\n• Click OK to share YOUR screen with ${peerName}.\n• Click Cancel to request ${peerName}'s desktop screen.`);
+      if (!choice) {
+        toast(`Requested desktop screen from ${peerName}…`);
+        isWaitingForRemoteDesktop = true;
+        sendRdInput({ t: 'remote_desktop_request' });
+        return;
+      }
+    }
+
+    if (!mediaActive) {
+      try {
+        const stream = await session.startScreenShare({ captureAudio: true, highFps: true });
+        dom.localVideo.srcObject = stream;
+        mediaActive = true;
+        show(dom.callOverlay);
+        dom.callOverlay?.classList.add('call-overlay--rd');
+        populateDeviceSelectors();
+        dom.btnToggleAudio.disabled = false;
+        dom.btnToggleVideo.disabled = false;
+        dom.btnScreenShare.disabled = false;
+        dom.btnScreenShare.classList.add('call-btn--sharing');
+        dom.btnRdToggle.disabled = false;
+        dom.btnEndCall.disabled = false;
+        show(dom.rdToolbar);
+        toast('Screen sharing started! Peer can now view your desktop.');
+        connectLocalBridge(true);
+      } catch (err) {
+        console.error('Remote Desktop start error:', err);
+        toast('Could not start screen sharing: ' + (err.message || ''));
+        throw err;
+      }
+    } else {
+      if (dom.rdToolbar) {
+        dom.rdToolbar.classList.toggle('hidden');
+      }
+    }
+  }
+
+  function exitRemoteDesktopMode() {
+    setRdMode('view');
+    hide(dom.rdToolbar);
+    dom.rdToolbar?.classList.remove('rd-toolbar--collapsed');
+    hide(dom.rdHostPrompt);
+    hide(dom.rdHostActiveBar);
+    hide(dom.rdLaserPointer);
+    resetRdZoom(false);
+    dom.callOverlay?.classList.remove('call-overlay--rd');
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    if (rdKeyboardLocked && navigator.keyboard?.unlock) {
+      navigator.keyboard.unlock();
+      rdKeyboardLocked = false;
+    }
+  }
+
+  function disconnectRemoteDesktop() {
+    toast('Disconnecting Remote Desktop…');
+    sendRdInput({ t: 'session_ended' });
+    if (activeRemoteDesktopDevice || isWaitingForRemoteDesktop) {
+      if (nostrActiveSessionId) {
+        try {
+          NostrSignaling.closeSession(nostrActiveSessionId);
+        } catch (e) {
+          console.warn('[disconnectRemoteDesktop] Error closing nostr session:', e);
+        }
+      }
+    }
+    endMediaCall(true);
+    if (session) {
+      try { session.close(); } catch {}
+      session = null;
+    }
+    activeRemoteDesktopDevice = null;
+    isWaitingForRemoteDesktop = false;
+    exitRemoteDesktopMode();
+    dom.callOverlay?.classList.remove('call-overlay--rd');
+    hide(dom.callOverlay);
+    hide(dom.connectBanner);
+    toast('Remote Desktop session disconnected.');
+  }
+
+  function connectLocalBridge(silent = false) {
+    if (localBridgeWs && localBridgeWs.readyState === WebSocket.OPEN) return;
+    try {
+      localBridgeWs = new WebSocket('ws://127.0.0.1:9999');
+      localBridgeWs.onopen = () => {
+        bridgeConnected = true;
+        updateBridgeUI(true);
+        if (!silent) toast('Host OS Bridge connected! Native OS control active.');
+      };
+      localBridgeWs.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.t === 'connected' || msg.t === 'auth_ok') {
+            bridgeConnected = true;
+            updateBridgeUI(true);
+          }
+        } catch {}
+      };
+      localBridgeWs.onclose = () => {
+        bridgeConnected = false;
+        updateBridgeUI(false);
+      };
+      localBridgeWs.onerror = () => {
+        bridgeConnected = false;
+        updateBridgeUI(false);
+      };
+    } catch {
+      bridgeConnected = false;
+      updateBridgeUI(false);
+    }
+  }
+
+  function disconnectLocalBridge() {
+    if (localBridgeWs) {
+      try { localBridgeWs.close(); } catch {}
+      localBridgeWs = null;
+    }
+    bridgeConnected = false;
+    updateBridgeUI(false);
+    toast('Host OS Bridge disconnected.');
+  }
+
+  function updateBridgeUI(connected) {
+    if (dom.bridgeStatusPill) {
+      dom.bridgeStatusPill.className = 'badge ' + (connected ? 'badge--connected' : 'badge--idle');
+      dom.bridgeStatusPill.textContent = connected ? 'Active (ws://127.0.0.1:9999)' : 'Disconnected (ws://127.0.0.1:9999)';
+    }
+    if (dom.btnToggleBridge) {
+      dom.btnToggleBridge.textContent = connected ? 'Disconnect Bridge' : 'Connect Bridge';
+      dom.btnToggleBridge.className = 'btn btn--small ' + (connected ? 'btn--outline' : 'btn--primary');
+    }
   }
 
   // ── Media call ──
@@ -1036,7 +2145,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       populateDeviceSelectors();
       dom.btnToggleAudio.disabled = false;
       dom.btnToggleVideo.disabled = false;
-      if (navigator.mediaDevices?.getDisplayMedia) dom.btnScreenShare.disabled = false;
+      if (navigator.mediaDevices?.getDisplayMedia) {
+        dom.btnScreenShare.disabled = false;
+        dom.btnRdToggle.disabled = false;
+      }
       dom.btnEndCall.disabled = false;
       updateCallButtons(true, videoEnabled);
     } catch {
@@ -1048,6 +2160,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         show(dom.callOverlay);
         populateDeviceSelectors();
         dom.btnToggleAudio.disabled = false;
+        if (navigator.mediaDevices?.getDisplayMedia) {
+          dom.btnScreenShare.disabled = false;
+          dom.btnRdToggle.disabled = false;
+        }
         dom.btnEndCall.disabled = false;
         updateCallButtons(true, false);
         toast('Audio-only call (camera unavailable)');
@@ -1065,6 +2181,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.remoteVideo.srcObject = null;
     show(dom.remoteNoVideo);
     mediaActive = false;
+    activeRemoteDesktopDevice = null;
     pendingRemoteStream = null;
     pendingRemoteStreamPubkey = null;
     hide(dom.callOverlay);
@@ -1072,7 +2189,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.btnToggleAudio.disabled = true;
     dom.btnToggleVideo.disabled = true;
     dom.btnScreenShare.disabled = true;
+    dom.btnRdToggle.disabled = true;
     dom.btnEndCall.disabled = true;
+    exitRemoteDesktopMode();
   }
 
   function updateCallButtons(audio, video) {
@@ -1112,7 +2231,12 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     mediaActive = true;
     dom.btnToggleAudio.disabled = false;
     dom.btnToggleVideo.disabled = false;
-    if (navigator.mediaDevices?.getDisplayMedia) dom.btnScreenShare.disabled = false;
+    if (navigator.mediaDevices?.getDisplayMedia) {
+      dom.btnScreenShare.disabled = false;
+      dom.btnRdToggle.disabled = false;
+    }
+    show(dom.rdToolbar);
+    attachRemoteVideoInputListeners();
     dom.btnEndCall.disabled = false;
 
     const hasRemoteVideo = pendingRemoteStream.getVideoTracks().length > 0;
@@ -1336,11 +2460,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
       onError: () => {},
+      onInputEvent: handleIncomingInputEvent,
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
       onFileAbort: handleFileAbort,
       onRemoteStream: (stream) => {
-        if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
+        if (mediaActive) {
+          dom.remoteVideo.srcObject = stream;
+          dom.remoteVideo.play().catch(() => {});
+          hide(dom.remoteNoVideo);
+          show(dom.rdToolbar);
+          dom.btnRdToggle.disabled = false;
+          attachRemoteVideoInputListeners();
+          return;
+        }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
         showIncomingCallPrompt(null);
       },
@@ -1396,11 +2529,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       onChannelClose: () => { disableChat(); },
       onMessage: (data) => { try { const p = JSON.parse(data); if (p._ack) { markDelivered(p._ack); return; } appendChatBubble({ id: p.id, text: p.text, sender: 'peer', ts: Date.now(), status: 'delivered', type: 'text' }); session.send(JSON.stringify({ _ack: p.id })); } catch {} },
       onError: () => {},
+      onInputEvent: handleIncomingInputEvent,
       onFileProgress: handleFileProgress,
       onFileReceived: (blob, filename, meta) => handleFileReceived(blob, filename, meta, null),
       onFileAbort: handleFileAbort,
       onRemoteStream: (stream) => {
-        if (mediaActive) { dom.remoteVideo.srcObject = stream; dom.remoteVideo.play().catch(() => {}); hide(dom.remoteNoVideo); return; }
+        if (mediaActive) {
+          dom.remoteVideo.srcObject = stream;
+          dom.remoteVideo.play().catch(() => {});
+          hide(dom.remoteNoVideo);
+          show(dom.rdToolbar);
+          dom.btnRdToggle.disabled = false;
+          attachRemoteVideoInputListeners();
+          return;
+        }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
         showIncomingCallPrompt(null);
       },
@@ -1452,6 +2594,164 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     renderContacts();
     toast('Contact added!');
   });
+
+  // Remote Computer Modal
+  dom.btnAddRemoteDevice?.addEventListener('click', () => {
+    if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = '';
+    if (dom.remoteDeviceNickname) dom.remoteDeviceNickname.value = '';
+    if (dom.remoteDevicePin) dom.remoteDevicePin.value = '';
+    if (dom.clientIdDisplay && nostrIdentity) {
+      dom.clientIdDisplay.textContent = nostrIdentity.publicKey;
+    }
+    show(dom.addRemoteDeviceModal);
+  });
+  dom.btnCloseAddRemoteDevice?.addEventListener('click', () => hide(dom.addRemoteDeviceModal));
+  dom.btnCopyClientId?.addEventListener('click', () => {
+    if (nostrIdentity) copyText(nostrIdentity.publicKey, 'Client ID');
+  });
+
+  const btnToggleClientPin = document.getElementById('btn-toggle-client-pin-visibility');
+  btnToggleClientPin?.addEventListener('click', () => {
+    if (!dom.remoteDevicePin) return;
+    const isPass = dom.remoteDevicePin.type === 'password';
+    dom.remoteDevicePin.type = isPass ? 'text' : 'password';
+    btnToggleClientPin.innerHTML = isPass ?
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>` :
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  });
+
+  function parseRemoteDeviceToken(val) {
+    if (!val) return;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('P2P-HOST:')) {
+      const parts = trimmed.split(':');
+      const pubkey = parts[1] || '';
+      const name = parts[2] ? decodeURIComponent(parts[2]) : '';
+      if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = pubkey;
+      if (name && dom.remoteDeviceNickname && !dom.remoteDeviceNickname.value) {
+        dom.remoteDeviceNickname.value = name;
+      }
+    }
+  }
+
+  dom.remoteDeviceToken?.addEventListener('input', (e) => parseRemoteDeviceToken(e.target.value));
+  dom.remoteDeviceToken?.addEventListener('paste', () => {
+    setTimeout(() => parseRemoteDeviceToken(dom.remoteDeviceToken?.value || ''), 50);
+  });
+
+  dom.btnScanRemoteQr?.addEventListener('click', () => {
+    openQrScanner((token) => {
+      parseRemoteDeviceToken(token);
+      toast('Host QR scanned!');
+    });
+  });
+
+  dom.btnSaveRemoteDevice?.addEventListener('click', () => {
+    parseRemoteDeviceToken(dom.remoteDeviceToken?.value || '');
+    const pubkey = dom.remoteDeviceToken?.value.trim().toLowerCase();
+    if (!pubkey || !/^[0-9a-f]{64}$/.test(pubkey)) {
+      toast('Invalid public key (must be 64-character hex or P2P-HOST token).');
+      return;
+    }
+    const name = dom.remoteDeviceNickname?.value.trim() || `Host-${pubkey.slice(0, 6)}`;
+    const pin = dom.remoteDevicePin?.value.trim() || '';
+    const icon = dom.remoteDeviceIcon?.value || '🖥️';
+
+    const existing = loadRemoteDevices().find(d => d.pubkey === pubkey);
+    addOrUpdateRemoteDevice(pubkey, name, pin, icon);
+    hide(dom.addRemoteDeviceModal);
+    if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = '';
+    if (dom.remoteDeviceNickname) dom.remoteDeviceNickname.value = '';
+    if (dom.remoteDevicePin) dom.remoteDevicePin.value = '';
+    toast(existing ? `Updated computer "${name}"!` : `Saved computer "${name}"!`);
+  });
+
+  // ── Edit Remote Computer Modal Bindings ──
+  dom.btnCloseEditRemoteDevice?.addEventListener('click', () => hide(dom.editRemoteDeviceModal));
+  dom.btnCancelEditRemoteDevice?.addEventListener('click', () => hide(dom.editRemoteDeviceModal));
+
+  dom.btnToggleEditPinVisibility?.addEventListener('click', () => {
+    if (!dom.editRemoteDevicePin) return;
+    const isPass = dom.editRemoteDevicePin.type === 'password';
+    dom.editRemoteDevicePin.type = isPass ? 'text' : 'password';
+    const btn = dom.btnToggleEditPinVisibility;
+    btn.innerHTML = isPass ?
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>` :
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  });
+
+  dom.btnCopyEditPubkey?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (pk) copyText(pk, 'Host public key');
+  });
+
+  dom.btnCopyQuickConnectLink?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (!pk) return;
+    const pin = dom.editRemoteDevicePin?.value?.trim() || '';
+    const cleanUrl = `${window.location.origin}${window.location.pathname}?remoteHost=${pk}${pin ? '#pin=' + encodeURIComponent(pin) : ''}`;
+    copyText(cleanUrl, '1-Click Quick Connect Link');
+  });
+
+  dom.btnTestRemoteDevice?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (pk) testRemoteDeviceReachability(pk);
+  });
+
+  dom.btnDeleteFromEdit?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (!pk) return;
+    const dev = loadRemoteDevices().find(d => d.pubkey === pk);
+    const name = dev ? dev.name : 'this computer';
+    if (confirm(`Delete "${name}" from your saved computers?`)) {
+      removeRemoteDevice(pk);
+      hide(dom.editRemoteDeviceModal);
+      toast(`Deleted "${name}".`);
+    }
+  });
+
+  dom.btnSaveEditRemoteDevice?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (!pk) return;
+    const name = dom.editRemoteDeviceNickname?.value.trim() || `Host-${pk.slice(0, 6)}`;
+    const icon = dom.editRemoteDeviceIcon?.value || '🖥️';
+    const pin = dom.editRemoteDevicePin?.value?.trim() || '';
+
+    const devices = loadRemoteDevices();
+    const dev = devices.find(d => d.pubkey === pk);
+    if (dev) {
+      dev.name = name;
+      dev.icon = icon;
+      dev.pin = pin;
+      saveRemoteDevices(devices);
+      hide(dom.editRemoteDeviceModal);
+      toast(`Saved changes for "${name}"!`);
+    }
+  });
+
+  function checkUrlRemoteHostParam() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const remoteHost = params.get('remoteHost');
+      if (remoteHost && /^[0-9a-f]{64}$/i.test(remoteHost.trim())) {
+        const pk = remoteHost.trim().toLowerCase();
+        let pin = '';
+        if (window.location.hash && window.location.hash.includes('pin=')) {
+          const match = window.location.hash.match(/pin=([^&]+)/);
+          if (match) pin = decodeURIComponent(match[1]);
+        }
+        addOrUpdateRemoteDevice(pk, `Host-${pk.slice(0, 6)}`, pin);
+        toast(`Configured remote computer from link!`, 'info');
+        const dev = loadRemoteDevices().find(d => d.pubkey === pk);
+        if (dev) {
+          setTimeout(() => connectToRemoteDevice(dev), 800);
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {
+      console.warn('[Remote Host URL Param Error]', e);
+    }
+  }
 
   // Click contact name or pubkey in chat header to copy full pubkey
   dom.chatContactName?.addEventListener('click', () => {
@@ -1683,6 +2983,164 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           : 'Screen share failed.';
         toast(msg); 
       }
+    }
+  });
+
+  // ── Remote Desktop Listeners ──
+  dom.btnRemoteDesktop?.addEventListener('click', () => startRemoteDesktopSession());
+  dom.btnRdToggle?.addEventListener('click', () => {
+    if (dom.rdToolbar) {
+      dom.rdToolbar.classList.toggle('hidden');
+    }
+  });
+
+  dom.rdModeView?.addEventListener('click', () => setRdMode('view'));
+  dom.rdModePointer?.addEventListener('click', () => setRdMode('pointer'));
+  dom.rdModeControl?.addEventListener('click', () => {
+    if (!rdControlGranted) {
+      toast('Requesting remote control permission from peer…');
+      sendRdInput({ t: 'control_request' });
+    } else {
+      setRdMode('control');
+    }
+  });
+
+  dom.rdBtnPointerLock?.addEventListener('click', () => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock?.();
+      dom.rdBtnPointerLock.classList.remove('active');
+    } else {
+      dom.remoteVideo?.requestPointerLock?.();
+      dom.rdBtnPointerLock.classList.add('active');
+    }
+  });
+  document.addEventListener('pointerlockchange', () => {
+    const isLocked = document.pointerLockElement === dom.remoteVideo;
+    dom.rdBtnPointerLock?.classList.toggle('active', isLocked);
+  });
+
+  dom.rdBtnKeyboardLock?.addEventListener('click', async () => {
+    if (rdKeyboardLocked) {
+      if (navigator.keyboard?.unlock) navigator.keyboard.unlock();
+      rdKeyboardLocked = false;
+      dom.rdBtnKeyboardLock.classList.remove('active');
+      toast('Keyboard unlocked');
+    } else {
+      if (navigator.keyboard?.lock) {
+        try {
+          await navigator.keyboard.lock(['Escape', 'Tab', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+          rdKeyboardLocked = true;
+          dom.rdBtnKeyboardLock.classList.add('active');
+          toast('Keyboard locked to remote desktop (Esc, Tab, Alt captured)');
+        } catch {
+          toast('Keyboard lock requires fullscreen mode');
+        }
+      } else {
+        toast('Keyboard lock API not supported in this browser');
+      }
+    }
+  });
+
+  dom.rdBtnSyncClipboard?.addEventListener('click', async () => {
+    try {
+      if (navigator.clipboard?.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          sendRdInput({ t: 'clipboard', text });
+          toast('Clipboard text sent to peer!');
+        } else {
+          toast('Clipboard is empty.');
+        }
+      } else {
+        toast('Clipboard read not permitted.');
+      }
+    } catch (e) {
+      toast('Clipboard access error: ' + (e.message || ''));
+    }
+  });
+
+  dom.rdBtnSpecialKeys?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dom.rdKeysMenu?.classList.toggle('hidden');
+  });
+
+  document.addEventListener('click', () => {
+    hide(dom.rdKeysMenu);
+  });
+
+  dom.rdKeysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.key;
+      hide(dom.rdKeysMenu);
+      if (action) {
+        sendRdInput({ t: 'special_key', key: action });
+        toast(`Sent ${btn.textContent} to remote machine`);
+      }
+    });
+  });
+
+  dom.rdBtnFit?.addEventListener('click', () => cycleFitMode());
+
+  dom.rdBtnFullscreen?.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      dom.callOverlay?.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  });
+
+  dom.rdBtnDisconnect?.addEventListener('click', () => {
+    disconnectRemoteDesktop();
+  });
+
+  dom.rdBtnCollapse?.addEventListener('click', () => {
+    dom.rdToolbar?.classList.toggle('rd-toolbar--collapsed');
+  });
+
+  dom.rdBtnResetZoom?.addEventListener('click', () => {
+    resetRdZoom(true);
+  });
+
+  dom.rdBtnKeyboard?.addEventListener('click', () => {
+    const text = prompt('Enter text to type on the remote desktop:');
+    if (text) {
+      sendRdInput({ t: 'type_text', text });
+      for (const ch of text) {
+        sendRdInput({ t: 'key_down', key: ch });
+        sendRdInput({ t: 'key_up', key: ch });
+      }
+      toast('Text sent to remote host.');
+    }
+  });
+
+  dom.rdBtnGrantControl?.addEventListener('click', () => {
+    hide(dom.rdHostPrompt);
+    rdControlGranted = true;
+    show(dom.rdHostActiveBar);
+    sendRdInput({ t: 'control_granted' });
+    toast('Remote control granted to peer');
+    connectLocalBridge(true);
+  });
+
+  dom.rdBtnDenyControl?.addEventListener('click', () => {
+    hide(dom.rdHostPrompt);
+    sendRdInput({ t: 'control_revoked' });
+    toast('Remote control request denied');
+  });
+
+  dom.rdBtnRevokeControl?.addEventListener('click', () => {
+    hide(dom.rdHostActiveBar);
+    rdControlGranted = false;
+    sendRdInput({ t: 'control_revoked' });
+    toast('Remote control revoked');
+  });
+
+  dom.btnToggleBridge?.addEventListener('click', () => {
+    if (bridgeConnected) {
+      disconnectLocalBridge();
+    } else {
+      connectLocalBridge(false);
     }
   });
 
@@ -1970,6 +3428,17 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           // Update connect progress dots
           const dots = dom.connectProgress?.children;
           if (dots) { for (const d of dots) { d.classList.remove('active'); d.classList.add('done'); } }
+
+          // If this is an unattended remote desktop session, immediately ensure callOverlay & toolbar are displayed!
+          if (activeRemoteDesktopDevice) {
+            show(dom.callOverlay);
+            dom.callOverlay?.classList.add('call-overlay--rd');
+            show(dom.rdToolbar);
+            dom.btnRdToggle.disabled = false;
+            attachRemoteVideoInputListeners();
+            setRdMode('control');
+            rdControlGranted = true;
+          }
         },
         onDisconnected: (sessionId) => {
           if (sessionId !== nostrActiveSessionId) return;
@@ -1979,7 +3448,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         },
         onError: (sessionId, errMsg) => {
           if (sessionId !== nostrActiveSessionId) return;
-          toast('Error: ' + errMsg);
+          hide(dom.connectBanner);
+          if (activeRemoteDesktopDevice) {
+            toast(`Remote Desktop: ${errMsg}`);
+            activeRemoteDesktopDevice = null;
+            isWaitingForRemoteDesktop = false;
+            hide(dom.callOverlay);
+          } else {
+            toast('Error: ' + errMsg);
+          }
         },
         onIncomingRequest: (senderPubKey) => {
           const name = getContactDisplayName(senderPubKey);
@@ -1990,7 +3467,12 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       setBadge('idle', 'Online');
     } catch (err) {
       console.error('[Nostr] Init error:', err);
+      if (dom.myPubkeyShort) {
+        dom.myPubkeyShort.textContent = 'Error loading ID';
+        dom.myPubkeyShort.title = err?.message || String(err);
+      }
       setBadge('failed', 'Offline');
+      toast('Identity error: ' + (err?.message || err));
     }
   }
 
@@ -2056,6 +3538,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   // ═══ INIT ═══
   setBadge('connecting', 'Connecting…');
   renderContacts();
+  renderRemoteDevices();
   initNostr();
+  checkUrlRemoteHostParam();
 
 })();

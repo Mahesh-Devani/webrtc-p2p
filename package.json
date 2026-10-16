@@ -4,6 +4,9 @@
   "description": "",
   "main": "token-codec.js",
   "scripts": {
+    "start": "python3 serve-https.py",
+    "https": "python3 serve-https.py",
+    "http": "python3 -m http.server 8080",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

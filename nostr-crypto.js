@@ -10,20 +10,66 @@
 
 'use strict';
 
-// ── Dynamic imports from esm.sh CDN ─────────────────────────────
-// These are loaded once on first use and cached.
+// ── Nostr cryptographic engine loader ───────────────────────────
+// Prefers window.NostrTools from nostr.bundle.js (local & offline),
+// dynamically injects nostr.bundle.js if needed, with esm.sh CDN as fallback.
 let _nostrTools = null;
 let _nip44 = null;
+let _loadPromise = null;
 
 async function loadNostrTools() {
     if (_nostrTools && _nip44) return { nostrTools: _nostrTools, nip44: _nip44 };
-    const [nostrMod, nip44Mod] = await Promise.all([
-        import('https://esm.sh/nostr-tools@2.10.4/pure'),
-        import('https://esm.sh/nostr-tools@2.10.4/nip44'),
-    ]);
-    _nostrTools = nostrMod;
-    _nip44 = nip44Mod;
-    return { nostrTools: _nostrTools, nip44: _nip44 };
+
+    // 1. Check if window.NostrTools was already loaded via <script> tag
+    const globalNostr = (typeof window !== 'undefined' && window.NostrTools) ||
+                        (typeof globalThis !== 'undefined' && globalThis.NostrTools);
+    if (globalNostr) {
+        _nostrTools = globalNostr;
+        _nip44 = globalNostr.nip44;
+        return { nostrTools: _nostrTools, nip44: _nip44 };
+    }
+
+    if (_loadPromise) return _loadPromise;
+
+    _loadPromise = (async () => {
+        // 2. Try injecting local self-contained nostr.bundle.js
+        if (typeof document !== 'undefined') {
+            try {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = './nostr.bundle.js';
+                    s.onload = () => resolve();
+                    s.onerror = (e) => reject(new Error('Failed to load ./nostr.bundle.js'));
+                    document.head.appendChild(s);
+                });
+                const loaded = (typeof window !== 'undefined' && window.NostrTools) ||
+                               (typeof globalThis !== 'undefined' && globalThis.NostrTools);
+                if (loaded) {
+                    _nostrTools = loaded;
+                    _nip44 = loaded.nip44;
+                    return { nostrTools: _nostrTools, nip44: _nip44 };
+                }
+            } catch (bundleErr) {
+                console.warn('[NostrCrypto] Local bundle load failed, attempting CDN fallback:', bundleErr);
+            }
+        }
+
+        // 3. Last-resort fallback: esm.sh CDN (if online)
+        try {
+            const [nostrMod, nip44Mod] = await Promise.all([
+                import('https://esm.sh/nostr-tools@2.10.4/pure'),
+                import('https://esm.sh/nostr-tools@2.10.4/nip44'),
+            ]);
+            _nostrTools = nostrMod;
+            _nip44 = nip44Mod;
+            return { nostrTools: _nostrTools, nip44: _nip44 };
+        } catch (esmErr) {
+            console.error('[NostrCrypto] All NostrTools load methods failed:', esmErr);
+            throw new Error('Nostr cryptographic library failed to load. Please verify nostr.bundle.js is accessible.');
+        }
+    })();
+
+    return _loadPromise;
 }
 
 // ── Storage keys ─────────────────────────────────────────────────
@@ -53,7 +99,7 @@ export const NostrCrypto = (() => {
         let privHex = localStorage.getItem(STORAGE_KEY_PRIV);
         let pubHex = localStorage.getItem(STORAGE_KEY_PUB);
 
-        if (privHex && pubHex) {
+        if (privHex && pubHex && privHex.length === 64 && pubHex.length === 64) {
             return { privateKey: privHex, publicKey: pubHex };
         }
 

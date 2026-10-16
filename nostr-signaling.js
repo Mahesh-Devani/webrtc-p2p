@@ -81,40 +81,48 @@ export const NostrSignaling = (() => {
      * Initiate a connection to a remote peer.
      * Creates PeerSession, generates offer, sends via Nostr.
      * @param {string} remotePubKey - hex pubkey of remote peer
+     * @param {Object} [extraData={}] - optional extra payload (e.g. { pin, isUnattended: true })
      * @returns {Promise<string>} sessionId
      */
-    async function startSession(remotePubKey) {
+    async function startSession(remotePubKey, extraData = {}) {
         const sessionId = _generateSessionId();
         _log(`[Signaling] Starting session ${sessionId.slice(0, 8)} → ${remotePubKey.slice(0, 8)}…`, 'info');
 
         // Create PeerSession
         const peerSession = _createPeerSession(sessionId, remotePubKey, 'creator');
 
-        // Create offer
-        const offer = await peerSession.createOffer();
+        // Create offer (if unattended remote desktop, request video from host)
+        const isRemoteDesktop = !!(extraData && (extraData.isUnattended || extraData.receiveVideo));
+        const offer = await peerSession.createOffer({ receiveVideo: isRemoteDesktop });
 
         // Wait for ICE candidates (3s allows TURN relay candidates to be discovered)
         await _waitForIce(peerSession, 3000);
         const candidates = peerSession.getLocalCandidates();
 
-        // Compress SDP + candidates
-        const data = _compressSignalData({
+        // Compress SDP + candidates (+ optional extra data like pin / unattended)
+        const payload = {
             sdp: { type: offer.type, sdp: offer.sdp },
             candidates: candidates.map(c => ({
                 candidate: c.candidate,
                 sdpMid: c.sdpMid,
                 sdpMLineIndex: c.sdpMLineIndex,
             })),
-        });
+            ...extraData,
+        };
+        const data = _compressSignalData(payload);
+
+        const signalType = (extraData && (extraData.pin !== undefined || extraData.isUnattended))
+            ? 'unattended_offer'
+            : 'offer';
 
         // Send offer via Nostr
         await NostrTransport.sendSignal(remotePubKey, {
-            type: 'offer',
+            type: signalType,
             session: sessionId,
             data,
         });
 
-        _log(`[Signaling] Offer sent (${candidates.length} ICE candidates bundled)`, 'info');
+        _log(`[Signaling] ${signalType} sent (${candidates.length} ICE candidates bundled)`, 'info');
         return sessionId;
     }
 
@@ -128,16 +136,18 @@ export const NostrSignaling = (() => {
 
         switch (type) {
             case 'offer':
+            case 'unattended_offer':
                 await _handleOffer(sessionId, data, senderPubKey);
                 break;
             case 'answer':
+            case 'unattended_answer':
                 await _handleAnswer(sessionId, data, senderPubKey);
                 break;
             case 'ice':
                 await _handleIce(sessionId, data, senderPubKey);
                 break;
             case 'close':
-                _handleClose(sessionId, senderPubKey);
+                _handleClose(sessionId, senderPubKey, data);
                 break;
         }
     }
@@ -261,12 +271,12 @@ export const NostrSignaling = (() => {
      * Handle close signal — tear down session.
      * @private
      */
-    function _handleClose(sessionId, senderPubKey) {
+    function _handleClose(sessionId, senderPubKey, reason = '') {
         const sessionEntry = _sessions.get(sessionId);
         if (!sessionEntry) return;
         if (sessionEntry.remotePubKey !== senderPubKey) return;
 
-        _log(`[Signaling] Remote peer closed session ${sessionId.slice(0, 8)}`, 'info');
+        _log(`[Signaling] Remote peer closed session ${sessionId.slice(0, 8)}${reason ? ': ' + reason : ''}`, 'info');
         if (sessionEntry.disconnectTimer) {
             clearTimeout(sessionEntry.disconnectTimer);
             sessionEntry.disconnectTimer = null;
@@ -275,7 +285,11 @@ export const NostrSignaling = (() => {
         sessionEntry.state = 'closed';
         NostrTransport.clearSession(sessionId);
         _sessions.delete(sessionId);
-        if (_onDisconnected) _onDisconnected(sessionId);
+        if (reason && _onError) {
+            _onError(sessionId, reason);
+        } else if (_onDisconnected) {
+            _onDisconnected(sessionId);
+        }
     }
 
     /**

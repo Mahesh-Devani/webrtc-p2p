@@ -41,7 +41,7 @@ export const NostrTransport = (() => {
     let _privateKey = null;        // hex
     let _publicKey = null;         // hex
     let _relays = new Map();       // url → NostrRelay instance
-    let _signalHandler = null;     // callback for incoming signals
+    let _signalHandlers = new Set(); // callbacks for incoming signals
     let _messageHandler = null;    // callback for incoming chat messages
     let _statusHandler = null;     // callback for relay status changes
     let _logHandler = (() => { });  // log callback
@@ -50,6 +50,7 @@ export const NostrTransport = (() => {
     let _subscriptionIds = new Map(); // url → subId
     let _iceCounters = new Map();    // sessionId → count
     let _connected = false;
+    let _eventFilter = null;         // optional (senderPubKey, event) => boolean whitelist filter
 
     // ── Relay Config ──────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ export const NostrTransport = (() => {
             onStatusChange: (u, state) => {
                 if (_statusHandler) _statusHandler(u, state);
                 // Re-subscribe on reconnect
-                if (state === RelayState.CONNECTED && _signalHandler && _publicKey) {
+                if (state === RelayState.CONNECTED && _publicKey) {
                     _subscribeOnRelay(relay, url);
                 }
             },
@@ -204,8 +205,8 @@ export const NostrTransport = (() => {
 
         try {
             await relay.connect();
-            // Subscribe if we have a handler
-            if (_signalHandler && _publicKey) {
+            // Subscribe if we have our pubkey
+            if (_publicKey) {
                 _subscribeOnRelay(relay, url);
             }
         } catch (err) {
@@ -226,7 +227,8 @@ export const NostrTransport = (() => {
         }
         _relays.clear();
         _subscriptionIds.clear();
-        _signalHandler = null;
+        _signalHandlers.clear();
+        _messageHandler = null;
         _logHandler('[Nostr] All relays disconnected');
     }
 
@@ -236,14 +238,22 @@ export const NostrTransport = (() => {
      *   { type, session, data, ts, senderPubKey }
      */
     function subscribeSignals(handler) {
-        _signalHandler = handler;
+        if (typeof handler === 'function') {
+            _signalHandlers.add(handler);
+        }
 
-        // Subscribe on all connected relays
-        for (const [url, relay] of _relays) {
-            if (relay.state === RelayState.CONNECTED) {
-                _subscribeOnRelay(relay, url);
+        // Subscribe on all connected relays if not already subscribed
+        if (_publicKey) {
+            for (const [url, relay] of _relays) {
+                if (relay.state === RelayState.CONNECTED && !_subscriptionIds.has(url)) {
+                    _subscribeOnRelay(relay, url);
+                }
             }
         }
+
+        return () => {
+            _signalHandlers.delete(handler);
+        };
     }
 
     /**
@@ -390,6 +400,19 @@ export const NostrTransport = (() => {
             }
         }
 
+        // ── Security Whitelist Gate (Drop unauthorized senders BEFORE decryption) ──
+        if (_eventFilter && typeof _eventFilter === 'function') {
+            try {
+                if (!_eventFilter(event.pubkey, event)) {
+                    _logHandler(`[Nostr Security] Dropped event from unauthorized sender ${event.pubkey.slice(0, 8)}… without decryption`, 'info');
+                    return;
+                }
+            } catch (err) {
+                _logHandler(`[Nostr Security] Whitelist check error: ${err.message}`, 'warn');
+                return;
+            }
+        }
+
         // ── Verify event ──
         const valid = await NostrCrypto.verifyEvent(event);
         if (!valid) {
@@ -420,7 +443,7 @@ export const NostrTransport = (() => {
             _logHandler(`[Nostr] Unknown payload version: ${payload.v}`, 'warn');
             return;
         }
-        if (!['offer', 'answer', 'ice', 'close', 'message'].includes(payload.type)) {
+        if (!['offer', 'answer', 'ice', 'close', 'message', 'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong'].includes(payload.type)) {
             _logHandler(`[Nostr] Unknown signal type: ${payload.type}`, 'warn');
             return;
         }
@@ -453,15 +476,19 @@ export const NostrTransport = (() => {
             localStorage.setItem(STORAGE_LAST_SEEN_KEY, String(event.created_at));
         }
 
-        // ── Dispatch to handler ──
-        if (_signalHandler) {
-            _signalHandler({
-                type: payload.type,
-                session: payload.session,
-                data: payload.data,
-                ts: payload.ts,
-                senderPubKey: event.pubkey,
-            });
+        // ── Dispatch to handlers ──
+        for (const handler of _signalHandlers) {
+            try {
+                handler({
+                    type: payload.type,
+                    session: payload.session,
+                    data: payload.data,
+                    ts: payload.ts,
+                    senderPubKey: event.pubkey,
+                });
+            } catch (err) {
+                _logHandler(`[Nostr] Error in signal handler: ${err.message}`, 'error');
+            }
         }
 
         _logHandler(`[Nostr] Signal received: ${payload.type} from ${NostrCrypto.truncatePubkey(event.pubkey)}`, 'info');
@@ -539,6 +566,21 @@ export const NostrTransport = (() => {
      */
     function subscribeMessages(handler) {
         _messageHandler = handler;
+        if (_publicKey) {
+            for (const [url, relay] of _relays) {
+                if (relay.state === RelayState.CONNECTED && !_subscriptionIds.has(url)) {
+                    _subscribeOnRelay(relay, url);
+                }
+            }
+        }
+    }
+
+    /**
+     * Set an optional whitelist filter to block incoming Nostr events before decryption.
+     * @param {function(string, Object): boolean | null} filterFn - (senderPubKey, event) => boolean
+     */
+    function setEventFilter(filterFn) {
+        _eventFilter = filterFn;
     }
 
     return {
@@ -550,6 +592,7 @@ export const NostrTransport = (() => {
         sendMessage,
         subscribeSignals,
         subscribeMessages,
+        setEventFilter,
         clearSession,
         getRelayList,
         addRelay,

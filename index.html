@@ -61,6 +61,24 @@
         <!-- Contact list -->
         <div id="contact-list" class="contact-list"></div>
 
+        <!-- Remote Desktops / Unattended Hosts -->
+        <details id="remote-devices-section" class="manual-signaling">
+          <summary class="manual-signaling__summary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            My Remote Desktops
+          </summary>
+          <div class="manual-signaling__body">
+            <div id="remote-devices-list" class="remote-devices-list"></div>
+            <button id="btn-add-remote-device" class="btn btn--full btn--small btn--outline" style="margin-top:6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Remote Computer
+            </button>
+            <a href="host.html" target="_blank" class="btn btn--full btn--small" style="margin-top:6px; text-decoration:none; text-align:center; display:block; background:rgba(0,168,132,0.15); color:var(--c-primary); border:1px solid rgba(0,168,132,0.3);">
+              🖥️ Open Host Mode (This PC)
+            </a>
+          </div>
+        </details>
+
         <!-- Manual signaling (collapsed) -->
         <details id="manual-signaling" class="manual-signaling">
           <summary class="manual-signaling__summary">
@@ -132,6 +150,9 @@
               </button>
               <button id="btn-video-call" class="icon-btn hidden" title="Video call">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              </button>
+              <button id="btn-remote-desktop" class="icon-btn hidden" title="Remote Desktop / Screen Control">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M15 10l2 2-2 2"/><path d="M9 10l-2 2 2 2"/></svg>
               </button>
               <button id="btn-chat-menu" class="icon-btn" title="More options">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -221,10 +242,111 @@
     <!-- ═══ MEDIA CALL OVERLAY ═══ -->
     <div id="call-overlay" class="call-overlay hidden">
       <div class="call-overlay__videos">
+        <!-- Remote Desktop Floating Toolbar -->
+        <div id="rd-toolbar" class="rd-toolbar hidden">
+          <div class="rd-toolbar__group">
+            <span class="rd-badge"><span class="rd-badge__dot"></span> Remote Desktop</span>
+            <div class="rd-mode-selector">
+              <button id="rd-mode-view" class="rd-tool-btn active" title="View Only (No input sent)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>View</span>
+              </button>
+              <button id="rd-mode-pointer" class="rd-tool-btn" title="Laser Pointer (Show pointer to peer)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 3 10.07 19.97 12.58 12.58 19.97 10.07 3 3"/><line x1="13" y1="13" x2="22" y2="22"/></svg>
+                <span>Laser</span>
+              </button>
+              <button id="rd-mode-control" class="rd-tool-btn" title="Take Remote Control (Send clicks & keys)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M7 8h10M7 12h4"/></svg>
+                <span>Control</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="rd-toolbar__divider"></div>
+
+          <div class="rd-toolbar__group">
+            <button id="rd-btn-pointer-lock" class="rd-icon-btn" title="Lock Mouse inside remote window">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Lock Mouse</span>
+            </button>
+            <button id="rd-btn-keyboard-lock" class="rd-icon-btn" title="Lock Keyboard (Forward Tab, Alt+Tab, Esc)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+              <span>Key Lock</span>
+            </button>
+            <button id="rd-btn-sync-clipboard" class="rd-icon-btn" title="Send Clipboard to Remote">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              <span>Clipboard</span>
+            </button>
+
+            <!-- Special Keys Menu -->
+            <div class="rd-dropdown-container">
+              <button id="rd-btn-special-keys" class="rd-icon-btn" title="Send Special Keys">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Keys ▾</span>
+              </button>
+              <div id="rd-keys-menu" class="rd-keys-menu hidden">
+                <button class="rd-key-item" data-key="ctrl-alt-del">Ctrl + Alt + Del</button>
+                <button class="rd-key-item" data-key="win">Win / Super</button>
+                <button class="rd-key-item" data-key="alt-tab">Alt + Tab</button>
+                <button class="rd-key-item" data-key="esc">Escape</button>
+                <button class="rd-key-item" data-key="enter">Enter</button>
+                <button class="rd-key-item" data-key="ctrl-c">Ctrl + C</button>
+                <button class="rd-key-item" data-key="ctrl-v">Ctrl + V</button>
+              </div>
+            </div>
+
+            <button id="rd-btn-keyboard" class="rd-icon-btn" title="Type text to remote machine">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="10" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="14" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
+              <span>Type</span>
+            </button>
+            <button id="rd-btn-fit" class="rd-icon-btn" title="Display Scaling: Fit / Fill / Stretch">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              <span id="rd-fit-label">Fit</span>
+            </button>
+            <button id="rd-btn-fullscreen" class="rd-icon-btn" title="Toggle Fullscreen">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            </button>
+            <button id="rd-btn-disconnect" class="rd-icon-btn rd-btn--danger" title="Disconnect Remote Desktop Session">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              <span>Disconnect</span>
+            </button>
+            <button id="rd-btn-collapse" class="rd-icon-btn rd-btn--collapse" title="Collapse / Expand Toolbar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Host Permission Prompt -->
+        <div id="rd-host-prompt" class="rd-host-prompt hidden">
+          <span id="rd-host-prompt-text">Peer requested remote control of your screen.</span>
+          <div class="rd-host-prompt__actions">
+            <button id="rd-btn-grant-control" class="btn btn--primary btn--small">Grant Control</button>
+            <button id="rd-btn-deny-control" class="btn btn--small">Deny</button>
+          </div>
+        </div>
+
+        <!-- Host Active Control Banner -->
+        <div id="rd-host-active-bar" class="rd-host-active-bar hidden">
+          <span class="rd-host-active-bar__dot"></span>
+          <span>Peer is remotely controlling your screen</span>
+          <button id="rd-btn-revoke-control" class="btn btn--danger btn--small">Revoke Control</button>
+        </div>
+
+        <!-- Remote Laser Cursor Overlay -->
+        <div id="rd-laser-pointer" class="rd-laser-pointer hidden">
+          <div class="rd-laser-pointer__dot"></div>
+          <div class="rd-laser-pointer__ring"></div>
+          <span id="rd-laser-pointer-label" class="rd-laser-pointer__label">Peer</span>
+        </div>
+
         <div class="call-overlay__remote">
           <video id="remote-video" autoplay playsinline></video>
           <div id="remote-no-video" class="call-overlay__placeholder">Waiting for peer video…</div>
           <span class="call-overlay__label">Peer</span>
+          <div id="rd-zoom-indicator" class="rd-zoom-indicator hidden">
+            <span id="rd-zoom-level">1.0x</span>
+            <button id="rd-btn-reset-zoom" class="rd-zoom-reset-btn" title="Reset Zoom">Reset</button>
+          </div>
         </div>
         <div class="call-overlay__local">
           <video id="local-video" autoplay muted playsinline></video>
@@ -243,6 +365,10 @@
         <button id="btn-screenshare" class="call-btn" title="Share Screen" disabled>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           <span>Screen</span>
+        </button>
+        <button id="btn-rd-toggle" class="call-btn" title="Remote Desktop Controls" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M15 10l2 2-2 2"/><path d="M9 10l-2 2 2 2"/></svg>
+          <span>Remote</span>
         </button>
         <button id="btn-end-call" class="call-btn call-btn--end" title="End Call" disabled>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -282,6 +408,7 @@
           <button class="settings-tab" data-tab="relays">Relays</button>
           <button class="settings-tab" data-tab="turn">ICE Servers</button>
           <button class="settings-tab" data-tab="security">Security</button>
+          <button class="settings-tab" data-tab="remote">Remote Desktop</button>
           <button class="settings-tab" data-tab="backup">Backup</button>
         </div>
 
@@ -411,6 +538,33 @@
             <div id="storage-info" class="settings-storage"></div>
           </div>
         </div>
+
+        <!-- Remote Desktop tab -->
+        <div id="tab-remote" class="settings-tab-content hidden">
+          <div class="settings-group">
+            <h3>Remote Desktop & Native OS Host Bridge</h3>
+            <p class="settings-hint">Allows controlling this computer from another browser (Chrome Remote Desktop replacement), or controlling a remote computer.</p>
+            
+            <div class="settings-field">
+              <label>Host OS Control Bridge Status</label>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+                <span id="bridge-status-pill" class="badge badge--idle" style="padding:4px 10px;font-size:0.75rem;">Disconnected (ws://127.0.0.1:9999)</span>
+                <button id="btn-toggle-bridge" class="btn btn--small btn--primary">Connect Bridge</button>
+              </div>
+              <p class="settings-hint" style="margin-top:6px;">When connected, remote mouse clicks, scrolls, and keystrokes are executed across the entire operating system.</p>
+            </div>
+
+            <hr class="settings-divider">
+
+            <h4>How to run the Host Agent (30-second setup)</h4>
+            <p class="settings-hint">To allow remote users to control your entire desktop outside the browser (like Chrome Remote Desktop):</p>
+            <div style="background:var(--c-surface);padding:10px 14px;border-radius:var(--radius);font-family:monospace;font-size:0.8rem;margin:8px 0;user-select:all;border:1px solid var(--c-border);line-height:1.6;">
+              # Zero dependencies needed! Run directly with Python 3:<br>
+              python3 remote-desktop-host/bridge.py
+            </div>
+            <p class="settings-hint">Or using Node.js: <code>cd remote-desktop-host &amp;&amp; npm install &amp;&amp; node bridge.js</code></p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -435,6 +589,142 @@
           <div class="modal__actions">
             <button id="btn-scan-contact-qr" class="btn btn--outline">📷 Scan QR</button>
             <button id="btn-add-contact-confirm" class="btn btn--primary">Add Contact</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ADD REMOTE COMPUTER MODAL ═══ -->
+    <div id="add-remote-device-modal" class="modal hidden">
+      <div class="modal__content">
+        <div class="modal__header">
+          <h2>Add Remote Computer</h2>
+          <button id="btn-close-add-remote-device" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <p class="settings-hint">Pair with a remote computer running <strong>Host Mode</strong> (or the background daemon).</p>
+          <div class="settings-field">
+            <label for="remote-device-token">Host Public Key (or scan Host QR)</label>
+            <input id="remote-device-token" type="text" placeholder="64-character hex public key (or paste from host)">
+          </div>
+          <div class="settings-field">
+            <label for="remote-device-nickname">Computer Nickname</label>
+            <input id="remote-device-nickname" type="text" placeholder="e.g. Work Mac, Office PC, Media Server">
+          </div>
+          <div class="settings-field">
+            <label for="remote-device-icon">Device Type / Icon</label>
+            <select id="remote-device-icon" style="width: 100%; background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 8px 10px; font-size: 0.85rem;">
+              <option value="🖥️">🖥️ Desktop / Server</option>
+              <option value="💻">💻 Laptop</option>
+              <option value="🪟">🪟 Windows PC</option>
+              <option value="🍏">🍏 Apple Mac</option>
+              <option value="🐧">🐧 Linux Workstation</option>
+              <option value="🍓">🍓 Raspberry Pi / IoT</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="remote-device-pin">Host Password / PIN</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input id="remote-device-pin" type="password" placeholder="Password configured on host" style="padding-right: 36px; width: 100%;">
+              <button type="button" id="btn-toggle-client-pin-visibility" title="Show / Hide Password" style="position: absolute; right: 6px; background: none; border: none; color: var(--c-text-dim); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+                <svg id="icon-client-pin-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="settings-field" style="background: rgba(0, 168, 132, 0.08); padding: 10px 12px; border-radius: var(--radius); border: 1px solid rgba(0, 168, 132, 0.25); margin-top: 10px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: var(--c-primary);">🛡️ Your Client ID (For Host Whitelist)</span>
+              <button type="button" id="btn-copy-client-id" class="btn btn--small btn--outline" style="padding: 2px 8px; font-size: 0.7rem;">Copy ID</button>
+            </div>
+            <code id="client-id-display" style="font-family: var(--mono); font-size: 0.72rem; color: var(--c-text); word-break: break-all; display: block;">loading…</code>
+            <span style="font-size: 0.68rem; color: var(--c-text-dim); display: block; margin-top: 4px;">If your host has Whitelist enabled, paste this ID into the host's Authorized Clients list.</span>
+          </div>
+          <div class="modal__actions">
+            <button id="btn-scan-remote-qr" class="btn btn--outline">📷 Scan QR</button>
+            <button id="btn-save-remote-device" class="btn btn--primary">Save Computer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EDIT REMOTE COMPUTER MODAL ═══ -->
+    <div id="edit-remote-device-modal" class="modal hidden">
+      <div class="modal__content">
+        <div class="modal__header">
+          <h2>Edit Remote Computer</h2>
+          <button id="btn-close-edit-remote-device" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <input type="hidden" id="edit-remote-device-original-pubkey">
+
+          <div class="settings-field">
+            <label for="edit-remote-device-nickname">Computer Nickname</label>
+            <input id="edit-remote-device-nickname" type="text" placeholder="e.g. Work Mac, Office PC, Media Server">
+          </div>
+
+          <div class="settings-field">
+            <label for="edit-remote-device-icon">Device Type / Icon</label>
+            <select id="edit-remote-device-icon" style="width: 100%; background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 8px 10px; font-size: 0.85rem;">
+              <option value="🖥️">🖥️ Desktop / Server</option>
+              <option value="💻">💻 Laptop</option>
+              <option value="🪟">🪟 Windows PC</option>
+              <option value="🍏">🍏 Apple Mac</option>
+              <option value="🐧">🐧 Linux Workstation</option>
+              <option value="🍓">🍓 Raspberry Pi / IoT</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label>Host Public Key</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <code id="edit-remote-device-pubkey" style="flex: 1; font-family: var(--mono); font-size: 0.7rem; color: var(--c-primary); background: var(--c-surface); padding: 7px 10px; border-radius: var(--radius); border: 1px solid var(--c-border); word-break: break-all; user-select: all;"></code>
+              <button type="button" id="btn-copy-edit-pubkey" class="btn btn--small btn--outline" style="padding: 5px 10px; font-size: 0.72rem; flex-shrink: 0;">Copy</button>
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label for="edit-remote-device-pin">Host Password / PIN</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input id="edit-remote-device-pin" type="password" placeholder="Leave blank if host has no password" style="padding-right: 36px; width: 100%;">
+              <button type="button" id="btn-toggle-edit-pin-visibility" title="Show / Hide Password" style="position: absolute; right: 6px; background: none; border: none; color: var(--c-text-dim); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+                <svg id="icon-edit-pin-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <span style="font-size: 0.68rem; color: var(--c-text-dim); margin-top: 4px; display: block;">Saved locally in your browser for unattended 1-click connect.</span>
+          </div>
+
+          <!-- Direct Quick-Connect Link Box -->
+          <div class="settings-field" style="background: rgba(0, 168, 132, 0.06); padding: 10px 12px; border-radius: var(--radius); border: 1px solid rgba(0, 168, 132, 0.2); margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: var(--c-primary);">🔗 1-Click Quick Connect Link</span>
+              <button type="button" id="btn-copy-quick-connect-link" class="btn btn--small btn--outline" style="padding: 2px 8px; font-size: 0.7rem;">Copy Link</button>
+            </div>
+            <span style="font-size: 0.68rem; color: var(--c-text-dim); line-height: 1.35; display: block;">Open this link on any phone or browser to connect directly with zero typing.</span>
+          </div>
+
+          <!-- Connection Diagnostic Test Box -->
+          <div style="background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.75rem; font-weight: 600; color: var(--c-text);">⚡ Connection Reachability Test</span>
+              <button type="button" id="btn-test-remote-device" class="btn btn--small btn--outline" style="padding: 3px 10px; font-size: 0.72rem;">Test Reachability</button>
+            </div>
+            <div id="edit-device-test-status" style="font-size: 0.72rem; margin-top: 6px; color: var(--c-text-dim); line-height: 1.4;">
+              Click "Test Reachability" to check if the host daemon is online on Nostr relays.
+            </div>
+          </div>
+
+          <div class="modal__actions" style="margin-top: 18px; justify-content: space-between;">
+            <button type="button" id="btn-delete-from-edit" class="btn btn--small" style="background: rgba(239, 68, 68, 0.1); color: var(--c-danger, #ef4444); border: 1px solid rgba(239, 68, 68, 0.3);">
+              Delete
+            </button>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="btn-cancel-edit-remote-device" class="btn btn--outline">Cancel</button>
+              <button type="button" id="btn-save-edit-remote-device" class="btn btn--primary">Save Changes</button>
+            </div>
           </div>
         </div>
       </div>
@@ -539,13 +829,14 @@
     <div id="hidden-qr-reader" class="hidden"></div>
   </div>
 
-  <!-- CDN Scripts -->
+  <!-- External & Bundled Scripts -->
+  <script src="nostr.bundle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=9"></script>
+  <script type="module" src="ui-controller.js?v=33"></script>
 </body>
 
 </html>

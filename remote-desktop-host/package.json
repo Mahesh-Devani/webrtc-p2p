@@ -1,0 +1,13 @@
+{
+  "name": "p2p-connect-remote-host",
+  "version": "1.0.0",
+  "description": "Native OS Remote Desktop Bridge for P2P Connect",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "@nut-tree/nut-js": "^4.1.2"
+  }
+}

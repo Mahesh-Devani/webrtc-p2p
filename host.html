@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Connect — Remote Desktop Host Daemon</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body {
+      height: auto !important;
+      min-height: 100vh !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      scroll-behavior: smooth;
+    }
+    @keyframes pinSavedPulse {
+      0% { transform: scale(0.85); opacity: 0; }
+      60% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pin-saved-active {
+      display: inline-block !important;
+      animation: pinSavedPulse 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    .host-container {
+      max-width: 720px;
+      margin: 40px auto 80px auto;
+      padding: 24px;
+      background: var(--c-sidebar);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+    .host-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--c-border);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .host-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .host-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .host-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) {
+      .host-grid { grid-template-columns: 1fr; }
+    }
+    .host-card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .host-card h3 {
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      color: var(--c-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .host-qr-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .host-qr-canvas {
+      background: #fff;
+      padding: 8px;
+      border-radius: 8px;
+    }
+    .host-preview {
+      margin-top: 20px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--c-border);
+      background: #000;
+      position: relative;
+      aspect-ratio: 16/9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .host-preview video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .host-preview__placeholder {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      text-align: center;
+      color: var(--c-text-dim);
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .authorized-clients-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .auth-client-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--c-bg);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius);
+      transition: border-color .15s;
+    }
+    .auth-client-item:hover {
+      border-color: var(--c-primary);
+    }
+    .auth-client-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .auth-client-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--c-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .auth-client-pubkey {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--c-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .auth-client-empty {
+      font-size: 0.75rem;
+      color: var(--c-text-dim);
+      text-align: center;
+      padding: 12px;
+      font-style: italic;
+    }
+    .auth-client-btn-del {
+      background: none;
+      border: none;
+      color: var(--c-text-dim);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color .15s, background .15s;
+    }
+    .auth-client-btn-del:hover {
+      color: var(--c-danger, #ef4444);
+      background: rgba(239, 68, 68, 0.1);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="host-container">
+    <div class="host-header">
+      <div class="host-title">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--c-primary)" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        <div>
+          <h2 style="font-size: 1.2rem; margin: 0;">P2P Connect — Host Agent</h2>
+          <span style="font-size: 0.75rem; color: var(--c-text-dim);">Unattended Remote Desktop Service</span>
+        </div>
+      </div>
+      <div id="host-status-badge" class="host-status-badge badge--connected">
+        <span class="rd-badge__dot"></span>
+        <span id="host-status-text">Online &amp; Listening</span>
+      </div>
+    </div>
+
+    <div class="host-grid">
+      <!-- Device info & security card -->
+      <div class="host-card">
+        <h3>🔒 Security &amp; Access Controls</h3>
+        <div class="settings-field">
+          <label for="host-name-input">Device Name</label>
+          <input id="host-name-input" type="text" placeholder="e.g. My MacBook Pro">
+        </div>
+        <div class="settings-field">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <label for="host-pin-input" style="margin: 0; font-weight: 600;">Unattended Access Password / PIN</label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span id="pin-status-badge" class="badge badge--connected" style="display: none; font-size: 0.65rem; padding: 2px 8px;">Saved ✓</span>
+              <button type="button" id="btn-generate-pin" class="btn btn--small btn--outline" style="padding: 2px 8px; font-size: 0.68rem;" title="Generate a random secure password meeting complexity rules">🎲 Generate</button>
+              <button type="button" id="btn-copy-pin" class="btn btn--small btn--outline" style="padding: 2px 8px; font-size: 0.68rem;" title="Copy password to clipboard">📋 Copy</button>
+            </div>
+          </div>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input id="host-pin-input" type="text" placeholder="8–24 chars (uppercase, lowercase, number, special)" value="" style="padding-right: 38px; font-family: var(--mono); letter-spacing: 1px;">
+            <button type="button" id="btn-toggle-pin-visibility" title="Show / Hide Password" style="position: absolute; right: 6px; background: none; border: none; color: var(--c-text-dim); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+              <svg id="icon-pin-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div id="pin-validation-msg" style="font-size: 0.72rem; margin-top: 4px; line-height: 1.4; color: var(--c-primary); font-weight: 500;">
+            ✓ Secure password generated
+          </div>
+          <span style="font-size: 0.68rem; color: var(--c-text-dim); margin-top: 4px; display: block; line-height: 1.4;">
+            💡 <strong>Complexity rules:</strong> 8–24 chars, min. 1 uppercase, 1 lowercase, 1 number, 1 special character. A secure random password is generated on first load, or you can type your own or click <strong>🎲 Generate</strong>.
+          </span>
+        </div>
+        <div class="settings-field" style="margin-top: 12px;">
+          <label>Host OS Control Bridge</label>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+            <span id="host-bridge-pill" class="badge badge--idle" style="font-size: 0.72rem;">Connecting...</span>
+            <button id="btn-recheck-bridge" class="btn btn--small btn--outline">Retry</button>
+            <a href="remote-desktop-host/bridge.py" download="bridge.py" class="btn btn--small btn--primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-size:0.75rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download bridge.py
+            </a>
+            <a href="remote-desktop-host.zip" download="remote-desktop-host.zip" class="btn btn--small btn--outline" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-size:0.75rem;" title="Download all scripts, service installers & docs as .zip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              Download Folder (.zip)
+            </a>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+            <span style="font-size: 0.7rem; color: var(--c-text-dim);">Protected with CSWSH Origin filtering &amp; loopback isolation.</span>
+            <a href="#service-guide-card" id="link-show-service-guide" style="font-size:0.71rem; color:var(--c-primary); text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:500;">
+              <span>⚙️</span>
+              <span style="text-decoration:underline;">Run as persistent background service (24/7 access)</span>
+            </a>
+          </div>
+
+          <!-- Expandable setup instructions -->
+          <details id="bridge-setup-details" style="margin-top: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; font-size: 0.75rem; color: var(--c-text-dim);">
+            <summary style="cursor: pointer; font-weight: 600; color: var(--c-primary); display: flex; align-items: center; gap: 6px; user-select: none;">
+              <span>⚡ How to run Host Bridge (Zero Dependencies)</span>
+            </summary>
+            <div style="margin-top: 10px; line-height: 1.5; color: var(--c-text);">
+              <p style="margin: 0 0 8px 0;">
+                The Host Bridge injects native mouse clicks and keyboard typing into your OS.
+                <strong>Requires standard Python 3 only (no <code>pip install</code> required).</strong>
+              </p>
+
+              <div style="margin-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 0.72rem; color: var(--c-text-dim);">Option 1: One-line Terminal Command (macOS / Linux)</span>
+                <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                  <code id="cmd-curl-bridge" style="flex: 1; background: #000; padding: 6px 8px; border-radius: 4px; font-size: 0.7rem; color: #58a6ff; overflow-x: auto; white-space: nowrap;">curl -sSL https://raw.githubusercontent.com/mahesh-devani/webrtc-p2p/main/remote-desktop-host/bridge.py -o bridge.py && python3 bridge.py</code>
+                  <button id="btn-copy-curl-bridge" type="button" class="btn btn--small btn--outline" style="flex-shrink: 0; padding: 3px 8px; font-size: 0.7rem;">Copy</button>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 0.72rem; color: var(--c-text-dim);">Option 2: Windows PowerShell</span>
+                <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                  <code id="cmd-ps-bridge" style="flex: 1; background: #000; padding: 6px 8px; border-radius: 4px; font-size: 0.7rem; color: #58a6ff; overflow-x: auto; white-space: nowrap;">Invoke-WebRequest -Uri "https://raw.githubusercontent.com/mahesh-devani/webrtc-p2p/main/remote-desktop-host/bridge.py" -OutFile "bridge.py"; python bridge.py</code>
+                  <button id="btn-copy-ps-bridge" type="button" class="btn btn--small btn--outline" style="flex-shrink: 0; padding: 3px 8px; font-size: 0.7rem;">Copy</button>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 0.72rem; color: var(--c-text-dim);">Option 3: Download &amp; Run Directly</span>
+                <ol style="margin: 4px 0 0 16px; padding: 0;">
+                  <li>Click <strong>Download bridge.py</strong> or <strong>Download Folder (.zip)</strong> above.</li>
+                  <li>Open Terminal in that folder and run: <code style="color:var(--c-primary);">python3 bridge.py</code></li>
+                  <li><strong>macOS:</strong> Allow <em>Accessibility</em> in <em>System Settings > Privacy &amp; Security</em> when prompted.</li>
+                </ol>
+              </div>
+
+              <div style="margin-bottom: 4px;">
+                <span style="font-weight: 600; font-size: 0.72rem; color: var(--c-text-dim);">Option 4: Run as Persistent Background Service (Auto-Start)</span>
+                <div style="margin-top: 4px; font-size: 0.72rem; line-height: 1.4;">
+                  Starts automatically on login so this PC is always reachable without keeping a terminal open:
+                  <div style="margin-top: 3px;">• <strong>macOS:</strong> <code style="color:var(--c-primary);">./remote-desktop-host/install-service.sh</code></div>
+                  <div style="margin-top: 2px;">• <strong>Linux:</strong> <code style="color:var(--c-primary);">./remote-desktop-host/install-linux-service.sh</code></div>
+                  <div style="margin-top: 2px;">• <strong>Windows:</strong> run <code style="color:var(--c-primary);">remote-desktop-host\install-windows-service.bat</code></div>
+                </div>
+              </div>
+
+              <div style="margin-top: 8px; font-size: 0.7rem; color: var(--c-text-dim); border-top: 1px dashed var(--c-border); padding-top: 6px;">
+                🚨 <strong>Emergency Panic Stop:</strong> Slam your mouse into any screen corner to abort remote control instantly.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Pairing QR & Single Public Key Card -->
+      <div class="host-card">
+        <h3>📱 Pair Remote Controller (Host ID)</h3>
+        <div class="host-qr-wrap">
+          <canvas id="host-qr-canvas" class="host-qr-canvas" width="140" height="140"></canvas>
+          <div style="width: 100%; margin-top: 4px;">
+            <div style="font-size: 0.7rem; color: var(--c-text-dim); margin-bottom: 2px; text-align: left;">Host Public Key:</div>
+            <code id="host-pubkey-box" style="display: block; width: 100%; font-family: var(--mono); font-size: 0.68rem; color: var(--c-primary); background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 4px; border: 1px solid var(--c-border); word-break: break-all; user-select: all; text-align: center;">loading...</code>
+          </div>
+          <button id="btn-copy-pairing-token" class="btn btn--small btn--primary" style="width: 100%;">Copy Host Public Key</button>
+          <button id="btn-copy-connect-link" class="btn btn--small btn--outline" style="width: 100%; margin-top: 6px;">🔗 Copy 1-Click Connect Link</button>
+          <span style="font-size: 0.72rem; color: var(--c-text-dim); text-align: center; line-height: 1.35; margin-top: 2px;">
+            Paste this public key into the client app under <strong>My Remote Desktops &gt; Add Remote Computer</strong>, or send the 1-Click link to your phone.
+          </span>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Authorized Clients Whitelist Card -->
+    <div class="host-card" style="margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+          <span>🛡️</span>
+          <span>Authorized Clients (Public Key Whitelist)</span>
+          <span id="whitelist-count-badge" class="badge badge--failed" style="font-size: 0.7rem; font-weight: 600;">Active (0 Authorized — All Blocked)</span>
+        </h3>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 600; user-select: none;">
+          <input type="checkbox" id="host-whitelist-toggle" checked style="accent-color: var(--c-primary); width: 16px; height: 16px;">
+          <span>Enforce Client Whitelist</span>
+        </label>
+      </div>
+      <p style="font-size: 0.75rem; color: var(--c-text-dim); margin: 0 0 12px 0; line-height: 1.4;">
+        When enforced, incoming Nostr events from non-whitelisted public keys are <strong>dropped instantly without decryption</strong>. If the whitelist is empty, all connections are rejected for maximum security.
+      </p>
+
+      <!-- Add client form -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+        <input id="new-auth-pubkey" type="text" placeholder="Client Nostr Public Key (64 hex characters)…" style="flex: 2; min-width: 220px;">
+        <input id="new-auth-name" type="text" placeholder="Device Nickname (e.g. My MacBook Air)" style="flex: 1; min-width: 140px;">
+        <button id="btn-add-auth-client" class="btn btn--small btn--primary" style="flex-shrink: 0;">+ Authorize Client</button>
+      </div>
+
+      <!-- Authorized clients list -->
+      <div id="authorized-clients-list" class="authorized-clients-list"></div>
+    </div>
+
+    <!-- Screen Capture Stream State -->
+    <div class="host-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h3 style="margin: 0;">🖥️ Active Desktop Capture</h3>
+          <span id="capture-status-badge" class="badge badge--idle" style="font-size: 0.72rem; font-weight: 600;">🔴 Inactive (Click Start)</span>
+        </div>
+        <button id="btn-toggle-capture" class="btn btn--small btn--primary">Start Desktop Capture</button>
+      </div>
+      <div class="host-preview">
+        <video id="host-screen-video" autoplay muted playsinline style="display: none;"></video>
+        <div id="host-screen-placeholder" class="host-preview__placeholder" style="text-align: center; padding: 24px; line-height: 1.5; cursor: pointer;" title="Click to start desktop capture">
+          <div style="font-size: 2.4rem; margin-bottom: 8px;">🖥️</div>
+          <strong style="color: var(--c-text); font-size: 1.05rem;">Desktop Capture is Inactive</strong><br>
+          <span style="font-size: 0.8rem; color: var(--c-text-dim); margin-top: 6px; display: inline-block;">Click <strong>"Start Desktop Capture"</strong> above (or click here) so remote clients can see and control this screen unattended.</span>
+        </div>
+      </div>
+      <div id="host-active-session-info" style="margin-top: 12px; font-size: 0.8rem; color: var(--c-text-dim); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <span>Connected Controller: <strong id="host-connected-peer">None</strong></span>
+        <span>Resolution: <strong id="host-stream-res">0 x 0</strong></span>
+        <span>Audio: <strong id="host-stream-audio">⚪ Inactive</strong></span>
+      </div>
+    </div>
+
+    <!-- Persistent Background Service Guide Card -->
+    <div id="service-guide-card" class="host-card" style="margin-top: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>⚙️</span>
+            <span>Run as a Persistent Background Service</span>
+          </h3>
+          <span class="badge badge--connected" style="font-size: 0.7rem; font-weight: 600;">24/7 Unattended Access</span>
+        </div>
+        <button type="button" id="btn-toggle-service-card" class="btn btn--small btn--outline" style="font-size: 0.72rem;">Show Guide ▾</button>
+      </div>
+      <p style="font-size: 0.75rem; color: var(--c-text-dim); margin: 0 0 12px 0; line-height: 1.45;">
+        Like Chrome Remote Desktop or TeamViewer, you can install P2P Connect as an <strong>automatic system background service</strong>. It starts on boot/login, runs silently without keeping an open terminal, and automatically recovers if closed.
+      </p>
+
+      <div id="service-guide-body" class="hidden" style="margin-top: 14px;">
+        <!-- Browser Tab Requirement Notice -->
+        <div style="background: rgba(234, 67, 53, 0.1); border: 1px solid rgba(234, 67, 53, 0.35); border-left: 3px solid var(--c-red); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; font-size: 0.74rem; line-height: 1.5; color: var(--c-text);">
+          <strong style="color: var(--c-red);">⚠️ Browser Tab Requirement: Keeping <code>host.html</code> Open is Required</strong><br>
+          <span>The <code>host.html</code> browser tab must remain running for Remote Desktop to work. It holds your active WebRTC 60 FPS video capture stream and listens for encrypted Nostr connection signals. You can minimize or hide Chrome, but <strong>do not close this tab/window</strong>. The automated background service launcher (<code>start-host.sh</code>) automatically opens and keeps Chrome running for this reason.</span>
+        </div>
+
+        <!-- Download Entire Host Folder as ZIP -->
+        <div style="background: rgba(0, 168, 132, 0.08); border: 1px solid rgba(0, 168, 132, 0.25); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; font-size: 0.74rem; line-height: 1.5; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <strong style="color: var(--c-primary);">📦 Download Complete Host Folder (.zip):</strong><br>
+            <span style="color: var(--c-text-dim);">Includes all scripts, <code>bridge.py</code>, macOS LaunchAgent, Linux systemd, and Windows Task Scheduler installers in a single zip archive.</span>
+          </div>
+          <a href="remote-desktop-host.zip" download="remote-desktop-host.zip" class="btn btn--small btn--primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            Download remote-desktop-host.zip
+          </a>
+        </div>
+
+        <!-- OS Switcher Tabs -->
+        <div class="settings-tabs" style="margin-bottom: 14px;">
+          <button type="button" class="settings-tab active" data-service-tab="macos">🍏 macOS (LaunchAgent)</button>
+          <button type="button" class="settings-tab" data-service-tab="linux">🐧 Linux (systemd)</button>
+          <button type="button" class="settings-tab" data-service-tab="windows">🪟 Windows (Task Scheduler)</button>
+        </div>
+
+        <!-- macOS Tab Pane -->
+        <div id="service-tab-macos" class="service-tab-pane">
+          <div style="font-size: 0.76rem; color: var(--c-text); line-height: 1.5;">
+            <div style="margin-bottom: 12px;">
+              <strong style="color: var(--c-primary); display: block; margin-bottom: 4px;">1. Install &amp; Start Service</strong>
+              <span style="color: var(--c-text-dim);">Registers a user LaunchAgent (<code>~/Library/LaunchAgents/com.p2pconnect.host.plist</code>) that auto-starts on login:</span>
+              <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center;">
+                <code style="flex: 1; background: #000; padding: 6px 10px; border-radius: 4px; font-size: 0.72rem; color: #58a6ff; font-family: var(--mono); overflow-x: auto; white-space: nowrap;">cd remote-desktop-host && ./install-service.sh</code>
+                <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="cd remote-desktop-host && ./install-service.sh" style="flex-shrink: 0; padding: 4px 8px; font-size: 0.7rem;">Copy</button>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <strong style="display: block; margin-bottom: 4px;">2. Service Management Commands</strong>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Check Status</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">launchctl list | grep com.p2pconnect.host</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="launchctl list | grep com.p2pconnect.host" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">View Live Logs</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">tail -f /tmp/p2pconnect-host.log</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="tail -f /tmp/p2pconnect-host.log" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Uninstall / Stop</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">./remote-desktop-host/uninstall-service.sh</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="./remote-desktop-host/uninstall-service.sh" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(0, 168, 132, 0.08); border-left: 3px solid var(--c-primary); padding: 8px 10px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 0.72rem; color: var(--c-text-dim);">
+              💡 <strong>macOS Permissions:</strong> On first run, grant <strong>Accessibility</strong> and <strong>Screen Recording</strong> to Terminal / Python in <em>System Settings &gt; Privacy &amp; Security</em>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Linux Tab Pane -->
+        <div id="service-tab-linux" class="service-tab-pane hidden">
+          <div style="font-size: 0.76rem; color: var(--c-text); line-height: 1.5;">
+            <div style="margin-bottom: 12px;">
+              <strong style="color: var(--c-primary); display: block; margin-bottom: 4px;">1. Install &amp; Start Service (systemd User Unit)</strong>
+              <span style="color: var(--c-text-dim);">Creates <code>~/.config/systemd/user/p2pconnect-host.service</code> and enables lingering:</span>
+              <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center;">
+                <code style="flex: 1; background: #000; padding: 6px 10px; border-radius: 4px; font-size: 0.72rem; color: #58a6ff; font-family: var(--mono); overflow-x: auto; white-space: nowrap;">cd remote-desktop-host && ./install-linux-service.sh</code>
+                <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="cd remote-desktop-host && ./install-linux-service.sh" style="flex-shrink: 0; padding: 4px 8px; font-size: 0.7rem;">Copy</button>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <strong style="display: block; margin-bottom: 4px;">2. systemd Management Commands</strong>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Check Status</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">systemctl --user status p2pconnect-host</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="systemctl --user status p2pconnect-host" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">View Live Journal Logs</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">journalctl --user -u p2pconnect-host -f</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="journalctl --user -u p2pconnect-host -f" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Stop Service</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">systemctl --user stop p2pconnect-host</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="systemctl --user stop p2pconnect-host" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Uninstall Service</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">./remote-desktop-host/uninstall-service.sh</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code="./remote-desktop-host/uninstall-service.sh" style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(0, 168, 132, 0.08); border-left: 3px solid var(--c-primary); padding: 8px 10px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 0.72rem; color: var(--c-text-dim);">
+              💡 <strong>Headless / Remote Login:</strong> The installer runs <code>loginctl enable-linger $USER</code> so the service runs in the background even before graphical desktop login.
+            </div>
+          </div>
+        </div>
+
+        <!-- Windows Tab Pane -->
+        <div id="service-tab-windows" class="service-tab-pane hidden">
+          <div style="font-size: 0.76rem; color: var(--c-text); line-height: 1.5;">
+            <div style="margin-bottom: 12px;">
+              <strong style="color: var(--c-primary); display: block; margin-bottom: 4px;">1. Install via Batch Script (Fastest)</strong>
+              <span style="color: var(--c-text-dim);">Registers a Windows Scheduled Task using <code>pythonw.exe</code> (runs completely silently with NO command prompt window):</span>
+              <ol style="margin: 6px 0 0 16px; padding: 0;">
+                <li>Navigate to the <code>remote-desktop-host</code> directory.</li>
+                <li>Right-click <strong><code>install-windows-service.bat</code></strong> and select <strong>Run as administrator</strong>.</li>
+                <li>The bridge will start immediately and automatically run whenever you log in.</li>
+              </ol>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <strong style="display: block; margin-bottom: 4px;">2. Manual Setup (Command Prompt / PowerShell)</strong>
+              <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                <code style="flex: 1; background: #000; padding: 6px 10px; border-radius: 4px; font-size: 0.7rem; color: #58a6ff; font-family: var(--mono); overflow-x: auto; white-space: nowrap;">schtasks /Create /TN "P2PConnectHost" /TR "pythonw.exe bridge.py" /SC ONLOGON /RL HIGHEST /F</code>
+                <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code='schtasks /Create /TN "P2PConnectHost" /TR "pythonw.exe bridge.py" /SC ONLOGON /RL HIGHEST /F' style="flex-shrink: 0; padding: 4px 8px; font-size: 0.7rem;">Copy</button>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <strong style="display: block; margin-bottom: 4px;">3. Manage or Uninstall</strong>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Check in Task Scheduler</span>
+                    <span style="font-size: 0.72rem;">Press <kbd>Win+R</kbd>, type <code>taskschd.msc</code>, locate <strong>P2PConnectHost</strong>.</span>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 4px; border: 1px solid var(--c-border);">
+                  <div>
+                    <span style="color: var(--c-text-dim); font-size: 0.7rem; display: block;">Uninstall / Stop</span>
+                    <code style="font-size: 0.7rem; color: #58a6ff;">schtasks /Delete /TN "P2PConnectHost" /F</code>
+                  </div>
+                  <button type="button" class="btn btn--small btn--outline btn-copy-code" data-code='schtasks /Delete /TN "P2PConnectHost" /F' style="padding: 2px 6px; font-size: 0.68rem;">Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <a href="index.html" class="btn btn--outline btn--small">← Back to P2P Connect Client</a>
+      <span style="font-size: 0.75rem; color: var(--c-text-dim);">Host Pubkey: <code id="host-pubkey-display">loading...</code></span>
+    </div>
+  </div>
+
+  <!-- Modal: Initial Prompt to Start Desktop Capture -->
+  <div id="modal-start-capture-prompt" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 9999; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal__content" style="max-width: 480px; width: 90%; text-align: center; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); padding: 28px; box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
+      <div style="font-size: 2.8rem; margin-bottom: 12px;">🖥️</div>
+      <h2 style="font-size: 1.25rem; margin: 0 0 10px 0; color: var(--c-text);">Start Desktop Remote Capture</h2>
+      <p style="color: var(--c-text-dim); font-size: 0.85rem; line-height: 1.5; margin-bottom: 18px;">
+        To allow remote devices to view and control this computer unattended, please start screen capture now.
+      </p>
+      <div style="background: rgba(0, 168, 132, 0.1); border: 1px solid rgba(0, 168, 132, 0.3); border-radius: var(--radius); padding: 12px 16px; font-size: 0.8rem; color: var(--c-primary); margin-bottom: 22px; text-align: left; line-height: 1.6;">
+        <div>✓ <strong>Entire Screen</strong> is requested by default</div>
+        <div>✓ <strong>System Audio</strong> is enabled by default (toggle "Share audio" in prompt)</div>
+        <div>✓ <strong>Zero Server</strong>: 60 FPS video streams directly peer-to-peer</div>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        <button type="button" id="btn-modal-start-capture" class="btn btn--primary" style="padding: 10px 24px; font-size: 0.95rem; font-weight: 600;">
+          🚀 Start Desktop Capture
+        </button>
+        <button type="button" id="btn-modal-dismiss-capture" class="btn btn--outline" style="padding: 10px 16px; font-size: 0.85rem;">
+          Later
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Scroll to Top button -->
+  <button type="button" id="btn-scroll-top" title="Scroll to Top" style="position: fixed; bottom: 24px; right: 24px; background: var(--c-surface); border: 1px solid var(--c-border); color: var(--c-text); padding: 8px 14px; border-radius: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-size: 0.75rem; font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px; z-index: 1000; transition: transform 0.2s, background 0.2s;">
+    ↑ Top
+  </button>
+
+  <!-- External & Bundled libraries -->
+  <script src="nostr.bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <!-- Host Controller -->
+  <script type="module" src="host-controller.js?v=37"></script>
+</body>
+
+</html>

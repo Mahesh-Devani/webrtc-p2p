@@ -65,6 +65,8 @@ export const PeerSession = (() => {
     let dcChat = null;
     /** @type {RTCDataChannel|null} */
     let dcFiles = null;
+    /** @type {RTCDataChannel|null} */
+    let dcInput = null;
 
     /** @type {MediaStream|null} */
     let localStream = null;
@@ -268,6 +270,21 @@ export const PeerSession = (() => {
               }));
             } catch { }
           }
+
+          // If local media tracks were attached before dcSig opened, trigger renegotiation only if not yet negotiated
+          const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+          const hasUnnegotiatedSenders = Array.from(senders.values()).some(sender => {
+            const tr = transceivers.find(t => t.sender === sender);
+            return !tr || !tr.currentDirection || tr.currentDirection === 'inactive' || tr.currentDirection === 'recvonly';
+          });
+          if (pc.signalingState === 'stable' && hasUnnegotiatedSenders && senders.size > 0) {
+            setTimeout(() => {
+              if (pc.signalingState === 'stable') {
+                log('Triggering deferred renegotiation for local tracks not yet negotiated');
+                pc.onnegotiationneeded?.();
+              }
+            }, 300);
+          }
         };
         dcSig.onclose = () => log('Signaling DataChannel closed');
         dcSig.onerror = (err) => log(`Signaling DC error: ${err.error?.message || err}`, 'error');
@@ -353,6 +370,27 @@ export const PeerSession = (() => {
             }
           }
         };
+      } else if (channel.label === 'p2p-input') {
+        dcInput = channel;
+        dcInput.onopen = () => {
+          log('Input DataChannel open (Remote Desktop enabled)', 'success');
+          if (cfg.onInputChannelOpen) cfg.onInputChannelOpen();
+        };
+        dcInput.onclose = () => {
+          log('Input DataChannel closed');
+          if (cfg.onInputChannelClose) cfg.onInputChannelClose();
+        };
+        dcInput.onerror = (err) => {
+          log(`Input DataChannel error: ${err.error?.message || err}`, 'warn');
+        };
+        dcInput.onmessage = (e) => {
+          if (typeof e.data === 'string') {
+            try {
+              const evt = JSON.parse(e.data);
+              if (cfg.onInputEvent) cfg.onInputEvent(evt);
+            } catch { }
+          }
+        };
       }
     }
 
@@ -400,26 +438,65 @@ export const PeerSession = (() => {
           existingSender.replaceTrack(track);
           log(`Replaced local ${track.kind} track`);
         } else {
-          const sender = pc.addTrack(track, stream);
-          senders.set(track.kind, sender);
-          log(`Added local ${track.kind} track`);
+          try {
+            const sender = pc.addTrack(track, stream);
+            senders.set(track.kind, sender);
+            log(`Added local ${track.kind} track with stream association`);
+          } catch (err) {
+            // Fallback: If addTrack throws because a transceiver exists, attach via replaceTrack
+            const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+            const match = transceivers.find(t =>
+              t.receiver?.track?.kind === track.kind && !t.sender.track
+            );
+            if (match) {
+              match.sender.replaceTrack(track);
+              senders.set(track.kind, match.sender);
+              log(`Attached local ${track.kind} track to existing transceiver fallback (${match.mid || 'pending'})`);
+            } else {
+              log(`addTrack error: ${err.message}`, 'warn');
+            }
+          }
+        }
+      }
+
+      // Ensure transceiver directions match active media: sendonly for tracks, inactive for unused
+      if (pc.getTransceivers) {
+        for (const tc of pc.getTransceivers()) {
+          if (tc.sender?.track) {
+            if (tc.direction !== 'sendonly') {
+              tc.direction = 'sendonly';
+            }
+          } else {
+            if (tc.direction !== 'inactive') {
+              tc.direction = 'inactive';
+            }
+          }
         }
       }
     }
 
     /**
      * Stop and remove all local media tracks.
+     * @param {{ stopTracks?: boolean }} [options]
      */
-    function removeMedia() {
+    function removeMedia(options = {}) {
+      const shouldStopTracks = options.stopTracks !== undefined
+        ? options.stopTracks
+        : !cfg.dontStopTracksOnClose;
+
       if (localStream) {
-        for (const track of localStream.getTracks()) {
-          track.stop();
+        if (shouldStopTracks) {
+          for (const track of localStream.getTracks()) {
+            track.stop();
+          }
         }
         localStream = null;
       }
       if (screenStream) {
-        for (const track of screenStream.getTracks()) {
-          track.stop();
+        if (shouldStopTracks) {
+          for (const track of screenStream.getTracks()) {
+            track.stop();
+          }
         }
         screenStream = null;
       }
@@ -427,7 +504,7 @@ export const PeerSession = (() => {
         try { pc.removeTrack(sender); } catch { }
       }
       senders.clear();
-      log('All local media removed');
+      log(`All local media removed (stopTracks: ${shouldStopTracks})`);
     }
 
     /**
@@ -457,22 +534,113 @@ export const PeerSession = (() => {
     }
 
     /**
-     * Replace video track with screen capture (screen share).
+     * Replace video track with screen capture (screen share / remote desktop).
+     * Supports optional audio capture and high frame rate (up to 60fps).
+     * @param {{ captureAudio?: boolean, highFps?: boolean }} [options]
      * @returns {Promise<MediaStream>}
      */
-    async function startScreenShare() {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    async function startScreenShare(options = {}) {
+      const displayMediaOptions = {
+        video: {
+          cursor: options.cursor || 'never', // 'never' prevents blurry double cursor lag
+          frameRate: { ideal: 60, max: 60 },
+          width: { ideal: 1920, max: 3840 },
+          height: { ideal: 1080, max: 2160 },
+          ...(options.video || {})
+        },
+        audio: options.captureAudio ?? true,
+      };
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+      } catch (err) {
+        // Fallback: If system audio capture is not supported or was rejected, retry video-only
+        if (displayMediaOptions.audio) {
+          log('Screen capture with audio failed, falling back to video-only', 'warn');
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: displayMediaOptions.video,
+            audio: false,
+          });
+        } else {
+          throw err;
+        }
+      }
+
       screenStream = stream;
       const screenTrack = stream.getVideoTracks()[0];
+      
+      // Force WebRTC encoder to prioritize crisp text and fine details over motion blur
+      if (screenTrack && 'contentHint' in screenTrack) {
+        screenTrack.contentHint = 'detail';
+        log('Set screen track contentHint to "detail" for crystal-clear text');
+      }
+
       const videoSender = senders.get('video');
+      let activeVideoSender;
       if (videoSender) {
         await videoSender.replaceTrack(screenTrack);
+        activeVideoSender = videoSender;
         log('Screen share started (replaced camera track)');
       } else {
         const sender = pc.addTrack(screenTrack, stream);
         senders.set('video', sender);
+        activeVideoSender = sender;
         log('Screen share started (new video track)');
       }
+
+      // Boost video sender bitrate up to 15 Mbps for crisp, artifact-free remote desktop
+      if (activeVideoSender && activeVideoSender.getParameters) {
+        try {
+          const params = activeVideoSender.getParameters();
+          if (!params.encodings || params.encodings.length === 0) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = 15_000_000; // 15 Mbps (vs default 1.5 Mbps!)
+          params.encodings[0].maxFramerate = 60;
+          params.encodings[0].networkPriority = 'high';
+          params.encodings[0].priority = 'high';
+          await activeVideoSender.setParameters(params);
+          log('Configured video sender for 15 Mbps / 60 FPS desktop streaming', 'success');
+        } catch (e) {
+          log(`Video encoder bitrate parameter warning: ${e.message}`, 'warn');
+        }
+      }
+
+      // Set codec preferences on transceiver to VP9 or H.264 High Profile (better text compression than VP8)
+      if (pc.getTransceivers && window.RTCRtpReceiver?.getCapabilities) {
+        for (const transceiver of pc.getTransceivers()) {
+          if (transceiver.sender?.track?.kind === 'video' && 'setCodecPreferences' in transceiver) {
+            try {
+              const codecs = RTCRtpReceiver.getCapabilities('video')?.codecs || [];
+              const preferred = codecs.filter(c =>
+                c.mimeType.toLowerCase() === 'video/vp9' ||
+                (c.mimeType.toLowerCase() === 'video/h264' && (c.sdpFmtpLine?.includes('profile-level-id=42e0') || c.sdpFmtpLine?.includes('packetization-mode=1')))
+              );
+              const others = codecs.filter(c => !preferred.includes(c));
+              if (preferred.length > 0) {
+                transceiver.setCodecPreferences([...preferred, ...others]);
+                log(`Preferred screen codec: ${preferred[0].mimeType}`);
+              }
+            } catch { }
+          }
+        }
+      }
+
+      // If screen stream includes an audio track, transmit it
+      const screenAudioTrack = stream.getAudioTracks()[0];
+      if (screenAudioTrack) {
+        const audioSender = senders.get('audio');
+        if (audioSender) {
+          await audioSender.replaceTrack(screenAudioTrack);
+          log('Screen audio sharing started');
+        } else {
+          const sender = pc.addTrack(screenAudioTrack, stream);
+          senders.set('audio', sender);
+          log('Screen audio added to connection');
+        }
+      }
+
       // When user stops sharing via browser UI
       screenTrack.onended = () => {
         stopScreenShare();
@@ -500,9 +668,19 @@ export const PeerSession = (() => {
           await videoSender.replaceTrack(null);
           log('Screen share stopped (no camera to restore)');
         }
-      } else {
-        log('Screen share ended');
       }
+      // restore microphone if screen audio replaced it
+      const audioSender = senders.get('audio');
+      if (audioSender) {
+        const micTrack = localStream ? localStream.getAudioTracks()[0] : null;
+        if (micTrack) {
+          await audioSender.replaceTrack(micTrack);
+          log('Microphone restored after screen share');
+        } else {
+          await audioSender.replaceTrack(null);
+        }
+      }
+      log('Screen share ended');
     }
 
     /**
@@ -532,11 +710,24 @@ export const PeerSession = (() => {
 
     /**
      * Create an offer (caller / session creator).
-     * Creates a DataChannel and returns the local SDP offer.
+     * Creates DataChannels, optional recvonly media transceivers, and returns local SDP offer.
+     * @param {{ receiveVideo?: boolean }} [options]
      * @returns {Promise<RTCSessionDescription>}
      */
-    async function createOffer() {
+    async function createOffer(options = {}) {
       isPolite = false; // creator is the impolite peer
+
+      // If client wants to receive video (e.g. Remote Desktop viewing)
+      const wantRecv = options.receiveVideo || cfg.receiveVideo;
+      if (wantRecv && pc.addTransceiver) {
+        try {
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
+          log('Added recvonly transceivers (video+audio) to initial offer for remote desktop stream');
+        } catch (e) {
+          log(`Failed to add recvonly transceiver: ${e.message}`, 'warn');
+        }
+      }
 
       const sigChannel = pc.createDataChannel('p2p-sig', { negotiated: false });
       wireChannel(sigChannel);
@@ -546,6 +737,9 @@ export const PeerSession = (() => {
 
       const fileChannel = pc.createDataChannel('p2p-files', { negotiated: false, ordered: true });
       wireChannel(fileChannel);
+
+      const inputChannel = pc.createDataChannel('p2p-input', { negotiated: false, ordered: true });
+      wireChannel(inputChannel);
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -562,10 +756,16 @@ export const PeerSession = (() => {
      * @param {RTCSessionDescriptionInit} offerSdp
      * @returns {Promise<RTCSessionDescription>}
      */
-    async function acceptOffer(offerSdp) {
+    async function acceptOffer(offerSdp, options = {}) {
       isPolite = true; // joiner is the polite peer
       await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
       log('Remote offer accepted');
+
+      const streamToAttach = options.stream || localStream;
+      if (streamToAttach) {
+        addLocalStream(streamToAttach);
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       log('Local answer created');
@@ -833,15 +1033,39 @@ export const PeerSession = (() => {
       return iceComplete;
     }
 
-    /** Close peer connection and channel. */
-    function close() {
-      removeMedia();
+    /**
+     * Close peer connection and channel.
+     * @param {{ stopTracks?: boolean }} [options]
+     */
+    function close(options = {}) {
+      removeMedia(options);
       if (dcChat) { try { dcChat.close(); } catch { } }
       if (dcSig) { try { dcSig.close(); } catch { } }
       if (dcFiles) { try { dcFiles.close(); } catch { } }
+      if (dcInput) { try { dcInput.close(); } catch { } }
       pc.close();
       log('Session closed');
       stateChange('closed');
+    }
+
+    /**
+     * Send an input / remote desktop event over p2p-input DataChannel.
+     * @param {object} evt
+     * @returns {boolean} true if sent
+     */
+    function sendInput(evt) {
+      if (!dcInput || dcInput.readyState !== 'open') return false;
+      try {
+        dcInput.send(JSON.stringify(evt));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    /** @returns {boolean} */
+    function isInputOpen() {
+      return !!(dcInput && dcInput.readyState === 'open');
     }
 
     /** @returns {boolean} */
@@ -905,6 +1129,8 @@ export const PeerSession = (() => {
       sendFiles,
       sendCallEnded,
       sendPing,
+      sendInput,
+      isInputOpen,
       getLocalCandidates,
       isIceComplete,
       isChannelOpen,
