@@ -52,3 +52,6 @@ Thumbs.db
 *.bak
 *.orig
 *.rej
+
+# Graphify cache
+graphify-out/cache/

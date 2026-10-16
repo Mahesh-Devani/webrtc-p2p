@@ -1,0 +1,128 @@
+{
+  "chat-store.js": {
+    "mtime": 1791973427.8610823,
+    "seen": 1792181220.542253,
+    "ast_hash": "2ba99877809b7a87004629a7961e3a66",
+    "semantic_hash": "2ba99877809b7a87004629a7961e3a66"
+  },
+  "check-invariants.py": {
+    "mtime": 1792181055.1691961,
+    "seen": 1792181220.5422552,
+    "ast_hash": "d86c8c0cfd79fd6e10597fc493c04990",
+    "semantic_hash": "d86c8c0cfd79fd6e10597fc493c04990"
+  },
+  "host-controller.js": {
+    "mtime": 1792176509.3507657,
+    "seen": 1792181220.5422568,
+    "ast_hash": "2325ada20d16aa5e9593e46efa161206",
+    "semantic_hash": "2325ada20d16aa5e9593e46efa161206"
+  },
+  "nostr-crypto.js": {
+    "mtime": 1792058576.2879395,
+    "seen": 1792181220.5422568,
+    "ast_hash": "2306e5c7610148e94fda5f75af15457b",
+    "semantic_hash": "2306e5c7610148e94fda5f75af15457b"
+  },
+  "nostr-relay.js": {
+    "mtime": 1791973427.8623638,
+    "seen": 1792181220.542258,
+    "ast_hash": "d55ba9730f6f8c91ef7e283a6297ca97",
+    "semantic_hash": "d55ba9730f6f8c91ef7e283a6297ca97"
+  },
+  "nostr-signaling.js": {
+    "mtime": 1792175379.928392,
+    "seen": 1792181220.542258,
+    "ast_hash": "1caa31f82b79358123bf7f7fe66d9722",
+    "semantic_hash": "1caa31f82b79358123bf7f7fe66d9722"
+  },
+  "nostr-transport.js": {
+    "mtime": 1792173486.4699006,
+    "seen": 1792181220.542259,
+    "ast_hash": "d2b1be69c97f45cb14cd9cbb15e1dcf8",
+    "semantic_hash": "d2b1be69c97f45cb14cd9cbb15e1dcf8"
+  },
+  "nostr.bundle.js": {
+    "mtime": 1792055794.2488718,
+    "seen": 1792181220.54226,
+    "ast_hash": "db37893dd39e64a1b2c2bc74d5b5ca10",
+    "semantic_hash": "db37893dd39e64a1b2c2bc74d5b5ca10"
+  },
+  "package.json": {
+    "mtime": 1792054411.7017477,
+    "seen": 1792181220.54226,
+    "ast_hash": "4174bee53d63f3b5b812b2714383d3d3",
+    "semantic_hash": "4174bee53d63f3b5b812b2714383d3d3"
+  },
+  "remote-desktop-host/bridge.js": {
+    "mtime": 1791981200.2153113,
+    "seen": 1792181220.542261,
+    "ast_hash": "f7645025f59797aa9a7ff5b7e8020198",
+    "semantic_hash": "f7645025f59797aa9a7ff5b7e8020198"
+  },
+  "remote-desktop-host/bridge.py": {
+    "mtime": 1792142307.3873832,
+    "seen": 1792181220.542261,
+    "ast_hash": "c26323e1f39dfd904800e1fca11a404c",
+    "semantic_hash": "c26323e1f39dfd904800e1fca11a404c"
+  },
+  "remote-desktop-host/install-linux-service.sh": {
+    "mtime": 1792145013.3644805,
+    "seen": 1792181220.542262,
+    "ast_hash": "33eeb85805609b57c50ba2fc14392f6e",
+    "semantic_hash": "33eeb85805609b57c50ba2fc14392f6e"
+  },
+  "remote-desktop-host/install-macos-agent.sh": {
+    "mtime": 1792145107.038008,
+    "seen": 1792181220.542262,
+    "ast_hash": "82c5e2a9e3f98bd640b81d99b709c634",
+    "semantic_hash": "82c5e2a9e3f98bd640b81d99b709c634"
+  },
+  "remote-desktop-host/install-service.sh": {
+    "mtime": 1792112680.119304,
+    "seen": 1792181220.542263,
+    "ast_hash": "2d5a3d343c9be9137c3024e42e06c709",
+    "semantic_hash": "2d5a3d343c9be9137c3024e42e06c709"
+  },
+  "remote-desktop-host/package.json": {
+    "mtime": 1791981190.8194013,
+    "seen": 1792181220.542264,
+    "ast_hash": "77ab2ff645b70f470e7fc93f7b69706f",
+    "semantic_hash": "77ab2ff645b70f470e7fc93f7b69706f"
+  },
+  "remote-desktop-host/start-host.sh": {
+    "mtime": 1792142813.9846213,
+    "seen": 1792181220.542264,
+    "ast_hash": "3ef2a05b85f04284db1046864941d022",
+    "semantic_hash": "3ef2a05b85f04284db1046864941d022"
+  },
+  "remote-desktop-host/uninstall-service.sh": {
+    "mtime": 1792145040.4251986,
+    "seen": 1792181220.542264,
+    "ast_hash": "3e2924fadf221efdaf87b230b085e964",
+    "semantic_hash": "3e2924fadf221efdaf87b230b085e964"
+  },
+  "serve-https.py": {
+    "mtime": 1792054464.2508776,
+    "seen": 1792181220.5422652,
+    "ast_hash": "79897368bc31eb2a6a3219bfb13eb588",
+    "semantic_hash": "79897368bc31eb2a6a3219bfb13eb588"
+  },
+  "token-codec.js": {
+    "mtime": 1791973427.8632302,
+    "seen": 1792181220.5422652,
+    "ast_hash": "b42c2eaf8b8baac729e4d2a42d008d78",
+    "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
+  },
+  "ui-controller.js": {
+    "mtime": 1792176549.2745948,
+    "seen": 1792181220.5422661,
+    "ast_hash": "d120dab6b10655eeb83189d965c13619",
+    "semantic_hash": "d120dab6b10655eeb83189d965c13619"
+  },
+  "webrtc-core.js": {
+    "mtime": 1792176528.247328,
+    "seen": 1792181220.5422661,
+    "ast_hash": "042ddd130af1df6c71014d1c3fbefd97",
+    "semantic_hash": "042ddd130af1df6c71014d1c3fbefd97"
+  }
+}
