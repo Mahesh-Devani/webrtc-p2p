@@ -6,10 +6,10 @@
     "semantic_hash": "2ba99877809b7a87004629a7961e3a66"
   },
   "check-invariants.py": {
-    "mtime": 1792181055.1691961,
-    "seen": 1792181220.5422552,
-    "ast_hash": "d86c8c0cfd79fd6e10597fc493c04990",
-    "semantic_hash": "d86c8c0cfd79fd6e10597fc493c04990"
+    "mtime": 1792181301.1259987,
+    "seen": 1792181424.2872791,
+    "ast_hash": "7d73f64a9ee5e44316ac4aedb3281300",
+    "semantic_hash": ""
   },
   "host-controller.js": {
     "mtime": 1792176509.3507657,
@@ -124,5 +124,71 @@
     "seen": 1792181220.5422661,
     "ast_hash": "042ddd130af1df6c71014d1c3fbefd97",
     "semantic_hash": "042ddd130af1df6c71014d1c3fbefd97"
+  },
+  "AGENTS.md": {
+    "mtime": 1792181366.9258482,
+    "seen": 1792181424.287292,
+    "ast_hash": "d52d9fd4329f2ed586231e4d4b9738a2",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1792153137.0950263,
+    "seen": 1792181424.287293,
+    "ast_hash": "4eac3ec04fe5eb5032fd6e980a508075",
+    "semantic_hash": ""
+  },
+  "docs/architecture.md": {
+    "mtime": 1791973427.8612616,
+    "seen": 1792181424.287294,
+    "ast_hash": "f5960a1613e34dae3737f0ef46c37c12",
+    "semantic_hash": ""
+  },
+  "docs/archive/ARCHITECTURE.md": {
+    "mtime": 1791973427.8614388,
+    "seen": 1792181424.287294,
+    "ast_hash": "9a933fce985830b953aabbd5af11bcdb",
+    "semantic_hash": ""
+  },
+  "docs/archive/HIGH_LEVEL_DESIGN.md": {
+    "mtime": 1791973427.86156,
+    "seen": 1792181424.2872949,
+    "ast_hash": "57ec3b891d55585db1a6836260cd83f8",
+    "semantic_hash": ""
+  },
+  "docs/concepts-guide.md": {
+    "mtime": 1791973427.8616765,
+    "seen": 1792181424.2872949,
+    "ast_hash": "9f3b5aef6766579aec67a9f84453c3ad",
+    "semantic_hash": ""
+  },
+  "docs/roadmap.md": {
+    "mtime": 1791973427.8617969,
+    "seen": 1792181424.2872949,
+    "ast_hash": "76b841a6fa35f698310ffabb9bfeb1ba",
+    "semantic_hash": ""
+  },
+  "docs/system-design.md": {
+    "mtime": 1791973427.8619676,
+    "seen": 1792181424.287296,
+    "ast_hash": "c7fefcf67edce32a708d309099f5dd86",
+    "semantic_hash": ""
+  },
+  "host.html": {
+    "mtime": 1792176583.507584,
+    "seen": 1792181424.287296,
+    "ast_hash": "d45d2e7d09d9b8d8caee0372ec8437d1",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1792176579.0052984,
+    "seen": 1792181424.287297,
+    "ast_hash": "4514dfa963ba9fbba413326ff1aa268f",
+    "semantic_hash": ""
+  },
+  "remote-desktop-host/README.md": {
+    "mtime": 1792153113.5778794,
+    "seen": 1792181424.287297,
+    "ast_hash": "5674d6b7b5902d7e20fef6bc48aafccc",
+    "semantic_hash": ""
   }
 }
