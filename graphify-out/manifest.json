@@ -12,10 +12,10 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792176509.3507657,
-    "seen": 1792181220.5422568,
-    "ast_hash": "2325ada20d16aa5e9593e46efa161206",
-    "semantic_hash": "2325ada20d16aa5e9593e46efa161206"
+    "mtime": 1792207125.2377481,
+    "seen": 1792207574.251457,
+    "ast_hash": "4dee958f6303e6f3e8bfa804b37f78a6",
+    "semantic_hash": ""
   },
   "nostr-crypto.js": {
     "mtime": 1792058576.2879395,
@@ -60,10 +60,10 @@
     "semantic_hash": "f7645025f59797aa9a7ff5b7e8020198"
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1792142307.3873832,
-    "seen": 1792181220.542261,
-    "ast_hash": "c26323e1f39dfd904800e1fca11a404c",
-    "semantic_hash": "c26323e1f39dfd904800e1fca11a404c"
+    "mtime": 1792206843.763684,
+    "seen": 1792207574.251462,
+    "ast_hash": "a52c418548a7c6bf85edca2e38fe9c02",
+    "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
     "mtime": 1792145013.3644805,
@@ -114,16 +114,16 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792176549.2745948,
-    "seen": 1792181220.5422661,
-    "ast_hash": "d120dab6b10655eeb83189d965c13619",
-    "semantic_hash": "d120dab6b10655eeb83189d965c13619"
+    "mtime": 1792207515.6128702,
+    "seen": 1792207574.251471,
+    "ast_hash": "c8d3185a79242345aaa349bfd19aef83",
+    "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1792176528.247328,
-    "seen": 1792181220.5422661,
-    "ast_hash": "042ddd130af1df6c71014d1c3fbefd97",
-    "semantic_hash": "042ddd130af1df6c71014d1c3fbefd97"
+    "mtime": 1792207089.5866265,
+    "seen": 1792207574.251471,
+    "ast_hash": "af1922ded091bbf77d4852c303eb06b7",
+    "semantic_hash": ""
   },
   "AGENTS.md": {
     "mtime": 1792182221.6618738,
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792176583.507584,
-    "seen": 1792181424.287296,
-    "ast_hash": "d45d2e7d09d9b8d8caee0372ec8437d1",
+    "mtime": 1792206852.4161358,
+    "seen": 1792207574.251477,
+    "ast_hash": "05fc04ea0775edc58c2680654a274bcf",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792176579.0052984,
-    "seen": 1792181424.287297,
-    "ast_hash": "4514dfa963ba9fbba413326ff1aa268f",
+    "mtime": 1792207210.5591092,
+    "seen": 1792207574.251477,
+    "ast_hash": "65c6018759aa7ced62074bc8e9643dfa",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {

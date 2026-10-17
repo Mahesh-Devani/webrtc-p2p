@@ -201,7 +201,7 @@ else:
     try:
         import pyautogui
         pyautogui.PAUSE = 0.0
-        pyautogui.FAILSAFE = True
+        pyautogui.FAILSAFE = False  # Disabled so moving mouse to screen corners (menus/buttons) does not crash bridge
         SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
         def native_mouse_move(x, y):
@@ -238,6 +238,67 @@ else:
         def native_scroll(units): pass
         def native_key(key, is_down): pass
         def native_type_text(text): pass
+
+
+# ── Native Clipboard Functions ───────────────────────────────────────────────
+def native_set_clipboard(text):
+    if not text:
+        return False
+    if PLATFORM == 'darwin':
+        try:
+            p = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+            p.communicate(text.encode('utf-8'))
+            return True
+        except Exception:
+            pass
+    elif PLATFORM == 'windows':
+        try:
+            p = subprocess.Popen(['clip'], stdin=subprocess.PIPE, shell=True)
+            p.communicate(text.encode('utf-8'))
+            return True
+        except Exception:
+            pass
+    elif PLATFORM == 'linux':
+        try:
+            p = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+            p.communicate(text.encode('utf-8'))
+            return True
+        except Exception:
+            pass
+    try:
+        import pyperclip
+        pyperclip.copy(text)
+        return True
+    except Exception:
+        pass
+    return False
+
+
+def native_get_clipboard():
+    if PLATFORM == 'darwin':
+        try:
+            res = subprocess.run(['pbpaste'], capture_output=True, text=True, check=False, timeout=1)
+            return res.stdout
+        except Exception:
+            pass
+    elif PLATFORM == 'windows':
+        try:
+            res = subprocess.run(['powershell', '-NoProfile', '-Command', 'Get-Clipboard'], capture_output=True, text=True, check=False, timeout=1)
+            return res.stdout.rstrip('\r\n')
+        except Exception:
+            pass
+    elif PLATFORM == 'linux':
+        try:
+            res = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], capture_output=True, text=True, check=False, timeout=1)
+            return res.stdout
+        except Exception:
+            pass
+    try:
+        import pyperclip
+        return pyperclip.paste()
+    except Exception:
+        pass
+    return ""
 
 
 # ── 2. Security Configuration ────────────────────────────────────────────────
@@ -444,19 +505,8 @@ async def handle_client(reader, writer):
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
                 ny = float(data.get('y', 0))
-                target_x = int(nx * SCREEN_WIDTH)
-                target_y = int(ny * SCREEN_HEIGHT)
-
-                # Emergency Corner Failsafe
-                if (target_x <= 5 and target_y <= 5) or \
-                   (target_x >= SCREEN_WIDTH - 5 and target_y <= 5) or \
-                   (target_x <= 5 and target_y >= SCREEN_HEIGHT - 5) or \
-                   (target_x >= SCREEN_WIDTH - 5 and target_y >= SCREEN_HEIGHT - 5):
-                    print("\n[🚨 EMERGENCY STOP TRIGGERED] Mouse hit screen corner!")
-                    print("    Aborting active remote desktop session immediately for safety.")
-                    writer.write(make_ws_frame(b'', opcode=0x08))
-                    await writer.drain()
-                    break
+                target_x = max(0, min(SCREEN_WIDTH - 1, int(nx * SCREEN_WIDTH)))
+                target_y = max(0, min(SCREEN_HEIGHT - 1, int(ny * SCREEN_HEIGHT)))
 
                 latest_mouse_coord = (target_x, target_y)
                 latest_mouse_updated = True
@@ -503,6 +553,43 @@ async def handle_client(reader, writer):
             elif evt_type == 'type_text':
                 t_str = data.get('text', '')
                 if t_str: native_type_text(t_str)
+
+            elif evt_type == 'clipboard':
+                clip_text = data.get('text', '')
+                if clip_text:
+                    native_set_clipboard(clip_text)
+                    writer.write(make_ws_frame(json.dumps({'t': 'clipboard_ack', 'status': 'ok'})))
+                    await writer.drain()
+
+            elif evt_type == 'get_clipboard':
+                curr_clip = native_get_clipboard()
+                writer.write(make_ws_frame(json.dumps({'t': 'clipboard', 'text': curr_clip})))
+                await writer.drain()
+
+            elif evt_type == 'get_monitors':
+                monitors = []
+                if PLATFORM == 'darwin':
+                    try:
+                        max_displays = 16
+                        active_displays = (ctypes.c_uint32 * max_displays)()
+                        display_count = ctypes.c_uint32()
+                        if cg.CGGetActiveDisplayList(max_displays, active_displays, ctypes.byref(display_count)) == 0:
+                            for i in range(display_count.value):
+                                d_id = active_displays[i]
+                                w = int(cg.CGDisplayPixelsWide(d_id))
+                                h = int(cg.CGDisplayPixelsHigh(d_id))
+                                monitors.append({
+                                    'id': i + 1,
+                                    'name': f"Display {i + 1} ({w}x{h})",
+                                    'width': w,
+                                    'height': h,
+                                })
+                    except Exception:
+                        pass
+                if not monitors:
+                    monitors = [{'id': 1, 'name': f"Main Display ({SCREEN_WIDTH}x{SCREEN_HEIGHT})", 'width': SCREEN_WIDTH, 'height': SCREEN_HEIGHT}]
+                writer.write(make_ws_frame(json.dumps({'t': 'monitors', 'monitors': monitors})))
+                await writer.drain()
 
             elif evt_type == 'ping':
                 writer.write(make_ws_frame(json.dumps({'t': 'pong'})))
@@ -554,7 +641,7 @@ async def main(host, port, token, extra_origins, allow_all):
         print("    ⚠️  Origin Check: DISABLED (Warning: vulnerable to CSWSH)")
     else:
         print(f"    ✓ Origin Filtering: ENFORCED (allowed domains & LAN IPs)")
-    print("    ✓ Emergency Failsafe: ACTIVE (slam mouse to corner to abort)")
+    print("    ✓ Emergency Stop: Available via Host UI & Disconnect button")
     print("=" * 68)
     print("Ready! Waiting for authenticated browser remote control session...\n")
 

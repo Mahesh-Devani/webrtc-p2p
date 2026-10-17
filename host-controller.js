@@ -492,6 +492,9 @@ function connectBridge() {
             }
             document.getElementById('bridge-setup-details')?.removeAttribute('open');
           }
+          if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors')) {
+            try { activeSession.sendInput(msg); } catch {}
+          }
         } catch {}
       };
 
@@ -862,6 +865,62 @@ async function initSignaling() {
             if (evt.t === 'control_request') {
               // Immediately grant control to authorized client
               peerSession.sendInput({ t: 'control_granted' });
+              return;
+            }
+            if (evt.t === 'set_quality') {
+              const preset = evt.preset;
+              let bitrate = 8_000_000;
+              let fps = 60;
+              if (preset === 'crisp') {
+                bitrate = 15_000_000;
+                fps = 30;
+              } else if (preset === 'balanced') {
+                bitrate = 8_000_000;
+                fps = 60;
+              } else if (preset === 'low') {
+                bitrate = 2_000_000;
+                fps = 30;
+              }
+              if (peerSession?.setVideoQuality) {
+                peerSession.setVideoQuality(bitrate, fps);
+              }
+              peerSession.sendInput({ t: 'quality_ack', preset, bitrate, fps });
+              return;
+            }
+            if (evt.t === 'clipboard') {
+              const text = evt.text || '';
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify({ t: 'clipboard', text })); } catch {}
+              } else if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(text).catch(() => {});
+              }
+              peerSession.sendInput({ t: 'clipboard_ack', status: 'ok' });
+              return;
+            }
+            if (evt.t === 'get_clipboard') {
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify({ t: 'get_clipboard' })); } catch {}
+              } else if (navigator.clipboard?.readText) {
+                navigator.clipboard.readText().then(text => {
+                  peerSession.sendInput({ t: 'clipboard', text });
+                }).catch(() => {
+                  peerSession.sendInput({ t: 'clipboard', text: '' });
+                });
+              }
+              return;
+            }
+            if (evt.t === 'get_monitors') {
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify({ t: 'get_monitors' })); } catch {}
+              } else {
+                peerSession.sendInput({ t: 'monitors', monitors: [{ id: 1, name: 'Main Display' }] });
+              }
+              return;
+            }
+            if (evt.t === 'reselect_screen') {
+              if (dom.btnToggleCapture) {
+                startDesktopCapture(true);
+              }
               return;
             }
             if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {

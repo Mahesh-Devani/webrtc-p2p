@@ -114,10 +114,31 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdBtnPointerLock: $('#rd-btn-pointer-lock'),
     rdBtnKeyboardLock: $('#rd-btn-keyboard-lock'),
     rdBtnSyncClipboard: $('#rd-btn-sync-clipboard'),
+    rdClipboardMenu: $('#rd-clipboard-menu'),
+    rdClipSend: $('#rd-clip-send'),
+    rdClipFetch: $('#rd-clip-fetch'),
+    rdClipAutoSync: $('#rd-clip-autosync'),
+    rdBtnQuality: $('#rd-btn-quality'),
+    rdQualityLabel: $('#rd-quality-label'),
+    rdQualityMenu: $('#rd-quality-menu'),
+    rdBtnDisplays: $('#rd-btn-displays'),
+    rdDisplaysLabel: $('#rd-displays-label'),
+    rdDisplaysMenu: $('#rd-displays-menu'),
     rdBtnSpecialKeys: $('#rd-btn-special-keys'),
     rdKeysMenu: $('#rd-keys-menu'),
     rdBtnFit: $('#rd-btn-fit'),
     rdFitLabel: $('#rd-fit-label'),
+    rdReconnectBanner: $('#rd-reconnect-banner'),
+    rdReconnectStatus: $('#rd-reconnect-status'),
+    btnRdReconnectNow: $('#btn-rd-reconnect-now'),
+    btnRdReconnectCancel: $('#btn-rd-reconnect-cancel'),
+    btnExportFleet: $('#btn-export-fleet'),
+    btnImportFleet: $('#btn-import-fleet'),
+    fleetImportFile: $('#fleet-import-file'),
+    btnOpenSleepGuide: $('#btn-open-sleep-guide'),
+    hostSleepGuideModal: $('#host-sleep-guide-modal'),
+    btnCloseSleepGuide: $('#btn-close-sleep-guide'),
+    btnAckSleepGuide: $('#btn-ack-sleep-guide'),
     rdBtnFullscreen: $('#rd-btn-fullscreen'),
     rdBtnDisconnect: $('#rd-btn-disconnect'),
     rdBtnCollapse: $('#rd-btn-collapse'),
@@ -362,6 +383,37 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     saveRemoteDevices(devices);
   }
 
+  function formatRelativeTime(ts) {
+    if (!ts) return 'Never connected';
+    const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (diff < 60) return 'Just now';
+    const mins = Math.floor(diff / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+  }
+
+  function formatDuration(sec) {
+    if (!sec || sec <= 0) return '';
+    if (sec < 60) return `${sec}s`;
+    const mins = Math.floor(sec / 60);
+    const remSec = sec % 60;
+    if (mins < 60) return remSec > 0 ? `${mins}m ${remSec}s` : `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const remMin = mins % 60;
+    return remMin > 0 ? `${hrs}h ${remMin}m` : `${hrs}h`;
+  }
+
+  function formatConnectionTime(lastConnected, lastDuration) {
+    if (!lastConnected) return 'Never connected';
+    const rel = formatRelativeTime(lastConnected);
+    const dur = formatDuration(lastDuration);
+    return dur ? `Connected ${rel} (Duration: ${dur})` : `Connected ${rel}`;
+  }
+
   function renderRemoteDevices() {
     if (!dom.remoteDevicesList) return;
     const devices = loadRemoteDevices();
@@ -379,6 +431,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           </div>
           <div class="remote-device-meta">
             ${escapeHtml(d.pubkey.slice(0, 8))}…${escapeHtml(d.pubkey.slice(-6))} ${d.pin ? '🔒' : ''}
+          </div>
+          <div class="remote-device-time">
+            🕒 ${escapeHtml(formatConnectionTime(d.lastConnected, d.lastDuration))}
           </div>
         </div>
         <div class="remote-device-actions">
@@ -425,6 +480,147 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
       });
     });
+  }
+
+  let rdSessionStartTime = null;
+
+  function recordRdSessionEnd() {
+    if (activeRemoteDesktopDevice && rdSessionStartTime) {
+      const durationSec = Math.max(1, Math.round((Date.now() - rdSessionStartTime) / 1000));
+      const devices = loadRemoteDevices();
+      const dev = devices.find(d => d.pubkey === activeRemoteDesktopDevice.pubkey);
+      if (dev) {
+        dev.lastConnected = Date.now();
+        dev.lastDuration = durationSec;
+        saveRemoteDevices(devices);
+      }
+    }
+    rdSessionStartTime = null;
+  }
+
+  async function exportFleet() {
+    const devices = loadRemoteDevices();
+    if (devices.length === 0) {
+      toast('No remote computers saved to export.');
+      return;
+    }
+    const encrypt = confirm('Would you like to encrypt this fleet backup with a password?\n\nOK = Encrypted with password\nCancel = Plain JSON backup');
+    const backupData = {
+      app: 'P2P Connect',
+      version: 2,
+      type: 'fleet_backup',
+      exportedAt: new Date().toISOString(),
+      devices
+    };
+
+    let fileContent = '';
+    const fileName = `p2p-fleet-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+    if (encrypt) {
+      const pwd = prompt('Enter a secure password to encrypt this fleet backup:');
+      if (!pwd) {
+        toast('Export cancelled.');
+        return;
+      }
+      try {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw', enc.encode(pwd), { name: 'PBKDF2' }, false, ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+          keyMaterial,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt']
+        );
+        const encrypted = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv },
+          key,
+          enc.encode(JSON.stringify(backupData))
+        );
+        const payload = {
+          encrypted: true,
+          salt: Array.from(salt),
+          iv: Array.from(iv),
+          data: Array.from(new Uint8Array(encrypted))
+        };
+        fileContent = JSON.stringify(payload, null, 2);
+      } catch (err) {
+        toast('Encryption failed: ' + err.message);
+        return;
+      }
+    } else {
+      fileContent = JSON.stringify(backupData, null, 2);
+    }
+
+    const blob = new Blob([fileContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${devices.length} remote computer(s) successfully!`);
+  }
+
+  async function importFleet(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      let parsed = JSON.parse(text);
+
+      if (parsed.encrypted) {
+        const pwd = prompt('This backup is encrypted. Enter password to decrypt:');
+        if (!pwd) {
+          toast('Import cancelled.');
+          return;
+        }
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw', enc.encode(pwd), { name: 'PBKDF2' }, false, ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt: new Uint8Array(parsed.salt), iterations: 100000, hash: 'SHA-256' },
+          keyMaterial,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['decrypt']
+        );
+        const decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: new Uint8Array(parsed.iv) },
+          key,
+          new Uint8Array(parsed.data)
+        );
+        parsed = JSON.parse(new TextDecoder().decode(decrypted));
+      }
+
+      const incomingDevices = Array.isArray(parsed.devices) ? parsed.devices : (Array.isArray(parsed) ? parsed : []);
+      if (incomingDevices.length === 0) {
+        toast('No valid devices found in backup file.');
+        return;
+      }
+
+      const existingDevices = loadRemoteDevices();
+      let importedCount = 0;
+      for (const dev of incomingDevices) {
+        if (!dev.pubkey) continue;
+        const idx = existingDevices.findIndex(d => d.pubkey === dev.pubkey);
+        if (idx >= 0) {
+          existingDevices[idx] = { ...existingDevices[idx], ...dev };
+        } else {
+          existingDevices.push(dev);
+        }
+        importedCount++;
+      }
+
+      saveRemoteDevices(existingDevices);
+      toast(`Imported ${importedCount} remote computers!`);
+    } catch (err) {
+      toast('Failed to import backup: ' + (err.message || 'Invalid format'));
+    }
   }
 
   function openEditRemoteDeviceModal(dev) {
@@ -970,6 +1166,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       case 'connecting': setBadge('connecting', 'Connecting'); break;
       case 'connected':
         setBadge('connected', 'Connected');
+        hideRdReconnectBanner();
         break;
       case 'failed':
         setBadge('failed', 'Failed');
@@ -977,9 +1174,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         if (recentTurnErrors.length > 0) {
           toast('P2P failed: TURN relay reported allocate/auth error. Check Settings → ICE Servers.');
         }
+        if (dom.callOverlay?.classList.contains('call-overlay--rd')) {
+          showRdReconnectBanner();
+        }
         break;
-      case 'disconnected': setBadge('failed', 'Disconnected'); break;
-      case 'closed': setBadge('closed', 'Closed'); break;
+      case 'disconnected':
+        setBadge('failed', 'Disconnected');
+        if (dom.callOverlay?.classList.contains('call-overlay--rd')) {
+          showRdReconnectBanner();
+        }
+        break;
+      case 'closed':
+        setBadge('closed', 'Closed');
+        hideRdReconnectBanner();
+        break;
     }
     
     // Only update chat header if we are looking at the person this session belongs to
@@ -1365,9 +1573,17 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
   function cycleFitMode() {
     if (rdFitMode === 'contain') {
+      rdFitMode = 'native';
+      if (dom.remoteVideo) {
+        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover');
+        dom.remoteVideo.classList.add('rd-fit-native');
+      }
+      if (dom.rdFitLabel) dom.rdFitLabel.textContent = '1:1';
+      toast('Display: 1:1 Native Resolution (Click & drag to pan)');
+    } else if (rdFitMode === 'native') {
       rdFitMode = 'fill';
       if (dom.remoteVideo) {
-        dom.remoteVideo.classList.remove('rd-fit-cover');
+        dom.remoteVideo.classList.remove('rd-fit-native', 'rd-fit-cover');
         dom.remoteVideo.classList.add('rd-fit-fill');
       }
       if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Stretch';
@@ -1375,7 +1591,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     } else if (rdFitMode === 'fill') {
       rdFitMode = 'cover';
       if (dom.remoteVideo) {
-        dom.remoteVideo.classList.remove('rd-fit-fill');
+        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-native');
         dom.remoteVideo.classList.add('rd-fit-cover');
       }
       if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Zoom';
@@ -1383,11 +1599,26 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     } else {
       rdFitMode = 'contain';
       if (dom.remoteVideo) {
-        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover');
+        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover', 'rd-fit-native');
       }
       if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Fit';
       toast('Display: Fit to Window (Best Quality)');
     }
+  }
+
+  let rdQualityPreset = 'balanced';
+
+  function setRdQualityPreset(preset) {
+    rdQualityPreset = preset;
+    dom.rdQualityMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.quality === preset);
+    });
+    if (dom.rdQualityLabel) {
+      dom.rdQualityLabel.textContent = preset === 'crisp' ? '15M ▾' : (preset === 'low' ? '2M ▾' : '8M ▾');
+    }
+    sendRdInput({ t: 'set_quality', preset });
+    const desc = preset === 'crisp' ? 'Crisp Text (15 Mbps / 30 FPS)' : (preset === 'low' ? 'Data Saver (2 Mbps / 30 FPS)' : 'Balanced (8 Mbps / 60 FPS)');
+    toast(`Stream Quality: ${desc}`);
   }
 
   // ── Mobile Pinch-to-Zoom Subsystem ──
@@ -1554,9 +1785,41 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (evt.t === 'clipboard') {
       if (evt.text && navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(evt.text).then(() => {
-          toast('Clipboard received from peer.');
-        }).catch(() => {});
+          toast('Copied remote clipboard text to local clipboard!');
+        }).catch(() => {
+          toast('Clipboard received from host.');
+        });
       }
+      return;
+    }
+
+    if (evt.t === 'clipboard_ack') {
+      toast('Remote host received clipboard text.');
+      return;
+    }
+
+    if (evt.t === 'monitors') {
+      const monitors = Array.isArray(evt.monitors) ? evt.monitors : [];
+      if (dom.rdDisplaysMenu) {
+        let html = '';
+        if (monitors.length > 0) {
+          html = monitors.map(m => `
+            <button class="rd-key-item" data-display="${escapeHtml(String(m.id))}">🖥️ ${escapeHtml(m.name)}</button>
+          `).join('');
+        } else {
+          html = `<button class="rd-key-item active" data-display="all">🖥️ Main Display</button>`;
+        }
+        html += `<div style="border-top:1px solid var(--c-border);margin:3px 0;"></div>
+                 <button class="rd-key-item" data-display="reselect">🔄 Change Screen on Host</button>`;
+        dom.rdDisplaysMenu.innerHTML = html;
+        attachDisplaysMenuListeners();
+      }
+      return;
+    }
+
+    if (evt.t === 'quality_ack') {
+      const desc = evt.preset === 'crisp' ? '15 Mbps / 30 FPS' : (evt.preset === 'low' ? '2 Mbps / 30 FPS' : '8 Mbps / 60 FPS');
+      toast(`Host adjusted video stream to ${desc}`);
       return;
     }
 
@@ -1612,6 +1875,80 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdRemoteLaserTimer = setTimeout(() => {
       hide(dom.rdLaserPointer);
     }, 3000);
+  }
+
+  function attachDisplaysMenuListeners() {
+    dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hide(dom.rdDisplaysMenu);
+        const action = btn.dataset.display;
+        if (action === 'reselect') {
+          sendRdInput({ t: 'reselect_screen' });
+          toast('Requested host to re-select screen / window.');
+        } else {
+          dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if (dom.rdDisplaysLabel) dom.rdDisplaysLabel.textContent = `Disp ${action} ▾`;
+          sendRdInput({ t: 'switch_display', displayId: action });
+          toast(`Switched display view.`);
+        }
+      });
+    });
+  }
+
+  let rdReconnectTimer = null;
+  let rdReconnectCountdown = 4;
+
+  function showRdReconnectBanner() {
+    if (!dom.callOverlay?.classList.contains('call-overlay--rd')) return;
+    if (dom.rdReconnectBanner) {
+      show(dom.rdReconnectBanner);
+      rdReconnectCountdown = 4;
+      updateRdReconnectCountdown();
+      if (rdReconnectTimer) clearInterval(rdReconnectTimer);
+      rdReconnectTimer = setInterval(() => {
+        rdReconnectCountdown--;
+        if (rdReconnectCountdown <= 0) {
+          clearInterval(rdReconnectTimer);
+          rdReconnectTimer = null;
+          attemptRdReconnect();
+        } else {
+          updateRdReconnectCountdown();
+        }
+      }, 1000);
+    }
+  }
+
+  function hideRdReconnectBanner() {
+    if (rdReconnectTimer) {
+      clearInterval(rdReconnectTimer);
+      rdReconnectTimer = null;
+    }
+    hide(dom.rdReconnectBanner);
+  }
+
+  function updateRdReconnectCountdown() {
+    if (dom.rdReconnectStatus) {
+      dom.rdReconnectStatus.textContent = `Auto-reconnecting in ${rdReconnectCountdown}s…`;
+    }
+  }
+
+  async function attemptRdReconnect() {
+    if (!activeRemoteDesktopDevice) return;
+    toast(`Attempting to resume connection with ${activeRemoteDesktopDevice.name}…`);
+    if (dom.rdReconnectStatus) dom.rdReconnectStatus.textContent = 'Connecting to host…';
+    try {
+      if (!NostrTransport.isConnected()) await NostrTransport.connect();
+      nostrActiveSessionId = await NostrSignaling.startSession(activeRemoteDesktopDevice.pubkey, {
+        pin: activeRemoteDesktopDevice.pin || '',
+        isUnattended: true,
+      });
+      sessionRemotePubKey = activeRemoteDesktopDevice.pubkey;
+    } catch (e) {
+      toast(`Reconnect failed: ${e.message}`);
+      if (dom.rdReconnectStatus) dom.rdReconnectStatus.textContent = 'Reconnect failed. Tap Reconnect to retry.';
+    }
   }
 
   function attachRemoteVideoInputListeners() {
@@ -1884,6 +2221,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (rdMode !== 'control' || !mediaActive) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+    // Clipboard auto-sync on Paste (Ctrl+V / Cmd+V)
+    if ((e.key === 'v' || e.key === 'V') && (e.ctrlKey || e.metaKey)) {
+      if (localStorage.getItem('rd-clip-autosync') === 'true' && navigator.clipboard?.readText) {
+        navigator.clipboard.readText().then(text => {
+          if (text) sendRdInput({ t: 'clipboard', text });
+        }).catch(() => {});
+      }
+    }
+
     sendRdInput({
       t: 'key_down',
       key: e.key,
@@ -1969,6 +2315,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   }
 
   function exitRemoteDesktopMode() {
+    recordRdSessionEnd();
+    hideRdReconnectBanner();
     setRdMode('view');
     hide(dom.rdToolbar);
     dom.rdToolbar?.classList.remove('rd-toolbar--collapsed');
@@ -1987,6 +2335,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   function disconnectRemoteDesktop() {
     toast('Disconnecting Remote Desktop…');
     sendRdInput({ t: 'session_ended' });
+    recordRdSessionEnd();
+    hideRdReconnectBanner();
     if (activeRemoteDesktopDevice || isWaitingForRemoteDesktop) {
       if (nostrActiveSessionId) {
         try {
@@ -3041,31 +3391,89 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     }
   });
 
-  dom.rdBtnSyncClipboard?.addEventListener('click', async () => {
+  dom.rdBtnSyncClipboard?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdKeysMenu);
+    hide(dom.rdQualityMenu);
+    hide(dom.rdDisplaysMenu);
+    dom.rdClipboardMenu?.classList.toggle('hidden');
+  });
+
+  dom.rdClipSend?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    hide(dom.rdClipboardMenu);
     try {
       if (navigator.clipboard?.readText) {
         const text = await navigator.clipboard.readText();
         if (text) {
           sendRdInput({ t: 'clipboard', text });
-          toast('Clipboard text sent to peer!');
+          toast('Clipboard text sent to remote host!');
         } else {
           toast('Clipboard is empty.');
         }
       } else {
-        toast('Clipboard read not permitted.');
+        toast('Clipboard read not permitted in this browser.');
       }
     } catch (e) {
-      toast('Clipboard access error: ' + (e.message || ''));
+      toast('Clipboard read error: ' + (e.message || ''));
     }
   });
 
+  dom.rdClipFetch?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdClipboardMenu);
+    sendRdInput({ t: 'get_clipboard' });
+    toast('Requested remote host clipboard…');
+  });
+
+  if (dom.rdClipAutoSync) {
+    dom.rdClipAutoSync.checked = localStorage.getItem('rd-clip-autosync') === 'true';
+    dom.rdClipAutoSync.addEventListener('change', () => {
+      localStorage.setItem('rd-clip-autosync', dom.rdClipAutoSync.checked ? 'true' : 'false');
+      toast(dom.rdClipAutoSync.checked ? 'Clipboard auto-sync enabled on Ctrl+V' : 'Clipboard auto-sync disabled');
+    });
+  }
+
+  dom.rdBtnQuality?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdKeysMenu);
+    hide(dom.rdClipboardMenu);
+    hide(dom.rdDisplaysMenu);
+    dom.rdQualityMenu?.classList.toggle('hidden');
+  });
+
+  dom.rdQualityMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hide(dom.rdQualityMenu);
+      const quality = btn.dataset.quality;
+      if (quality) setRdQualityPreset(quality);
+    });
+  });
+
+  dom.rdBtnDisplays?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdKeysMenu);
+    hide(dom.rdClipboardMenu);
+    hide(dom.rdQualityMenu);
+    dom.rdDisplaysMenu?.classList.toggle('hidden');
+    sendRdInput({ t: 'get_monitors' });
+  });
+  attachDisplaysMenuListeners();
+
   dom.rdBtnSpecialKeys?.addEventListener('click', (e) => {
     e.stopPropagation();
+    hide(dom.rdClipboardMenu);
+    hide(dom.rdQualityMenu);
+    hide(dom.rdDisplaysMenu);
     dom.rdKeysMenu?.classList.toggle('hidden');
   });
 
   document.addEventListener('click', () => {
     hide(dom.rdKeysMenu);
+    hide(dom.rdClipboardMenu);
+    hide(dom.rdQualityMenu);
+    hide(dom.rdDisplaysMenu);
   });
 
   dom.rdKeysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
@@ -3079,6 +3487,26 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       }
     });
   });
+
+  dom.btnRdReconnectNow?.addEventListener('click', () => {
+    attemptRdReconnect();
+  });
+
+  dom.btnRdReconnectCancel?.addEventListener('click', () => {
+    disconnectRemoteDesktop();
+  });
+
+  dom.btnExportFleet?.addEventListener('click', () => exportFleet());
+  dom.btnImportFleet?.addEventListener('click', () => dom.fleetImportFile?.click());
+  dom.fleetImportFile?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) importFleet(file);
+  });
+
+  dom.btnOpenSleepGuide?.addEventListener('click', () => show(dom.hostSleepGuideModal));
+  dom.btnCloseSleepGuide?.addEventListener('click', () => hide(dom.hostSleepGuideModal));
+  dom.btnAckSleepGuide?.addEventListener('click', () => hide(dom.hostSleepGuideModal));
 
   dom.rdBtnFit?.addEventListener('click', () => cycleFitMode());
 

@@ -73,6 +73,15 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add Remote Computer
             </button>
+            <div class="remote-devices-header-actions" style="display:flex; gap:6px; margin-top:6px;">
+              <button type="button" id="btn-export-fleet" class="btn btn--small btn--outline" style="flex:1; padding:4px 6px; font-size:0.7rem;" title="Export Fleet to Encrypted/Plain JSON">
+                📥 Export Fleet
+              </button>
+              <button type="button" id="btn-import-fleet" class="btn btn--small btn--outline" style="flex:1; padding:4px 6px; font-size:0.7rem;" title="Import Fleet from JSON">
+                📤 Import Fleet
+              </button>
+              <input type="file" id="fleet-import-file" accept=".json" style="display:none;" />
+            </div>
             <a href="host.html" target="_blank" class="btn btn--full btn--small" style="margin-top:6px; text-decoration:none; text-align:center; display:block; background:rgba(0,168,132,0.15); color:var(--c-primary); border:1px solid rgba(0,168,132,0.3);">
               🖥️ Open Host Mode (This PC)
             </a>
@@ -273,10 +282,47 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
               <span>Key Lock</span>
             </button>
-            <button id="rd-btn-sync-clipboard" class="rd-icon-btn" title="Send Clipboard to Remote">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-              <span>Clipboard</span>
-            </button>
+            <!-- Clipboard Sync Menu -->
+            <div class="rd-dropdown-container">
+              <button id="rd-btn-sync-clipboard" class="rd-icon-btn" title="Clipboard Sync Options">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                <span>Clip ▾</span>
+              </button>
+              <div id="rd-clipboard-menu" class="rd-keys-menu hidden">
+                <button class="rd-key-item" id="rd-clip-send">📤 Send to Remote</button>
+                <button class="rd-key-item" id="rd-clip-fetch">📥 Fetch Remote Clip</button>
+                <div style="border-top: 1px solid var(--c-border); margin: 3px 0;"></div>
+                <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; font-size:0.72rem; cursor:pointer; color:var(--c-text); white-space:nowrap;">
+                  <input type="checkbox" id="rd-clip-autosync" style="accent-color:var(--c-primary);" />
+                  <span>Auto-sync on Paste</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Stream Quality Presets Menu -->
+            <div class="rd-dropdown-container">
+              <button id="rd-btn-quality" class="rd-icon-btn" title="Stream Quality / Bitrate">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <span id="rd-quality-label">HD ▾</span>
+              </button>
+              <div id="rd-quality-menu" class="rd-keys-menu hidden">
+                <button class="rd-key-item" data-quality="crisp">⚡ Crisp Text (15M / 30fps)</button>
+                <button class="rd-key-item active" data-quality="balanced">⚖️ Balanced (8M / 60fps)</button>
+                <button class="rd-key-item" data-quality="low">📱 Data Saver (2M / 30fps)</button>
+              </div>
+            </div>
+
+            <!-- Displays / Multi-Monitor Switcher Menu -->
+            <div class="rd-dropdown-container">
+              <button id="rd-btn-displays" class="rd-icon-btn" title="Displays / Monitors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <span id="rd-displays-label">Screen ▾</span>
+              </button>
+              <div id="rd-displays-menu" class="rd-keys-menu hidden">
+                <button class="rd-key-item active" data-display="current">🖥️ Current Screen</button>
+                <button class="rd-key-item" data-display="reselect">🔄 Change Screen on Host</button>
+              </div>
+            </div>
 
             <!-- Special Keys Menu -->
             <div class="rd-dropdown-container">
@@ -299,7 +345,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="10" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="14" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
               <span>Type</span>
             </button>
-            <button id="rd-btn-fit" class="rd-icon-btn" title="Display Scaling: Fit / Fill / Stretch">
+            <button id="rd-btn-fit" class="rd-icon-btn" title="Display Scaling: Fit / 1:1 Native / Stretch / Zoom">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
               <span id="rd-fit-label">Fit</span>
             </button>
@@ -346,6 +392,20 @@
           <div id="rd-zoom-indicator" class="rd-zoom-indicator hidden">
             <span id="rd-zoom-level">1.0x</span>
             <button id="rd-btn-reset-zoom" class="rd-zoom-reset-btn" title="Reset Zoom">Reset</button>
+          </div>
+          <!-- Transient Disconnect Auto-Resume Banner -->
+          <div id="rd-reconnect-banner" class="rd-reconnect-banner hidden">
+            <div class="rd-reconnect-card">
+              <span class="rd-reconnect-spinner"></span>
+              <div class="rd-reconnect-info">
+                <strong>Connection Interrupted</strong>
+                <span id="rd-reconnect-status">Auto-reconnecting in 4s…</span>
+              </div>
+              <div class="rd-reconnect-actions">
+                <button type="button" id="btn-rd-reconnect-now" class="btn btn--small btn--primary">Reconnect</button>
+                <button type="button" id="btn-rd-reconnect-cancel" class="btn btn--small btn--outline">Exit</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="call-overlay__local">
@@ -715,6 +775,11 @@
             <div id="edit-device-test-status" style="font-size: 0.72rem; margin-top: 6px; color: var(--c-text-dim); line-height: 1.4;">
               Click "Test Reachability" to check if the host daemon is online on Nostr relays.
             </div>
+            <div style="margin-top: 6px; border-top: 1px dashed var(--c-border); padding-top: 6px; display: flex; justify-content: flex-end;">
+              <button type="button" id="btn-open-sleep-guide" class="btn-link" style="background:none; border:none; color:var(--c-primary); font-size:0.7rem; cursor:pointer; text-decoration:underline;">
+                💡 Host sleeping? View 24/7 power settings guide
+              </button>
+            </div>
           </div>
 
           <div class="modal__actions" style="margin-top: 18px; justify-content: space-between;">
@@ -725,6 +790,45 @@
               <button type="button" id="btn-cancel-edit-remote-device" class="btn btn--outline">Cancel</button>
               <button type="button" id="btn-save-edit-remote-device" class="btn btn--primary">Save Changes</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ HOST SLEEPING & 24/7 ACCESS GUIDE MODAL ═══ -->
+    <div id="host-sleep-guide-modal" class="modal hidden">
+      <div class="modal__content" style="max-width: 520px;">
+        <div class="modal__header">
+          <h2>💡 Keeping Your Host Awake 24/7</h2>
+          <button id="btn-close-sleep-guide" class="icon-btn" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body" style="font-size: 0.8rem; line-height: 1.5; color: var(--c-text-dim);">
+          <p style="margin-bottom: 12px; color: var(--c-text);">When a computer enters Sleep, Modern Standby, or Hibernation, the CPU and network adapters power down, making remote desktop and Nostr relays unreachable.</p>
+
+          <div style="background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px;">
+            <strong style="color: var(--c-text); display: block; margin-bottom: 4px;">🪟 Windows Configuration:</strong>
+            1. Open <strong>Settings &gt; System &gt; Power &amp; battery</strong>.<br>
+            2. Under "Screen and sleep", set <em>"When plugged in, put my device to sleep after"</em> to <strong>Never</strong>.<br>
+            3. In Device Manager &gt; Network adapters &gt; Properties &gt; Power Management, uncheck <em>"Allow the computer to turn off this device to save power"</em>.
+          </div>
+
+          <div style="background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px;">
+            <strong style="color: var(--c-text); display: block; margin-bottom: 4px;">🍏 macOS Configuration:</strong>
+            1. Open <strong>System Settings &gt; Energy Saver / Battery</strong>.<br>
+            2. Enable <strong>"Prevent automatic sleeping when the display is off"</strong>.<br>
+            3. Enable <strong>"Wake for network access"</strong>.<br>
+            4. <em>Terminal Tip:</em> Run <code>sudo pmset -a disablesleep 1</code> or use apps like <em>Amphetamine</em> or <em>Caffeine</em>.
+          </div>
+
+          <div style="background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px;">
+            <strong style="color: var(--c-text); display: block; margin-bottom: 4px;">🐧 Linux Configuration:</strong>
+            Run: <code>sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target</code>
+          </div>
+
+          <div class="modal__actions" style="margin-top: 14px; justify-content: flex-end;">
+            <button type="button" id="btn-ack-sleep-guide" class="btn btn--primary">Got It</button>
           </div>
         </div>
       </div>
