@@ -22,7 +22,6 @@
   "25": "lift_x",
   "26": "bytes2",
   "27": "getInt",
-  "28": "hash2",
   "30": "unwrapEvent",
   "31": "install-linux-service.sh",
   "32": "install-macos-agent.sh",

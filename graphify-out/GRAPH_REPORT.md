@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6a331495`
+- Built from commit: `b60e450a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -34,7 +34,7 @@
 - assertNumber
 - handleNext
 - get
-- send
+- verifyEvent
 - classifyKind
 - getHash
 - binarySearch
@@ -44,8 +44,8 @@
 - lift_x
 - bytes2
 - getInt
-- hash2
-- subscribe
+- createCipher
+- isValid
 - unwrapEvent
 - install-linux-service.sh
 - install-macos-agent.sh
@@ -81,20 +81,20 @@
 6. `buildNostrSessionConfig()` - 20 edges
 7. `showCreateSession()` - 19 edges
 8. `showJoinSession()` - 19 edges
-9. `update()` - 18 edges
-10. `encode()` - 18 edges
+9. `encode()` - 18 edges
+10. `update()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
-  docs/concepts-guide.md → nostr-relay.js
 - `Public API` --references--> `close()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
+- `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
+  docs/concepts-guide.md → nostr-relay.js
+- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
+  AGENTS.md → ui-controller.js
 - `Connection State Badge` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
 - `Session Cleanup` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
-- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
-  AGENTS.md → ui-controller.js
 
 ## Import Cycles
 - None detected.
@@ -102,8 +102,8 @@
 ## Communities (56 total, 16 thin omitted)
 
 ### Community 0 - "ui-controller.js"
-Cohesion: 0.06
-Nodes (100): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), appendChatBubble(), applyRdZoomTransform(), attachDisplaysMenuListeners() (+92 more)
+Cohesion: 0.07
+Nodes (99): ChatStore, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), appendChatBubble(), applyRdZoomTransform(), attachDisplaysMenuListeners(), attachRemoteVideoInputListeners() (+91 more)
 
 ### Community 1 - "weierstrass"
 Cohesion: 0.07
@@ -126,8 +126,8 @@ Cohesion: 0.08
 Nodes (15): check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist(), check_storage_key_isolation() (+7 more)
 
 ### Community 7 - "decode"
-Cohesion: 0.12
-Nodes (22): bytesToHex2(), createRumor(), createSeal(), createWrap(), fastEventHash(), finalizeEvent(), finishReactionEvent(), finishRepostEvent() (+14 more)
+Cohesion: 0.19
+Nodes (15): bytesToHex2(), createRumor(), createSeal(), createWrap(), fastEventHash(), finalizeEvent(), finishReactionEvent(), finishRepostEvent() (+7 more)
 
 ### Community 8 - "NostrRelay"
 Cohesion: 0.07
@@ -138,16 +138,16 @@ Cohesion: 0.09
 Nodes (21): author, bugs, url, description, devDependencies, serve, homepage, keywords (+13 more)
 
 ### Community 10 - "encode"
-Cohesion: 0.19
-Nodes (17): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+9 more)
+Cohesion: 0.18
+Nodes (18): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+10 more)
 
 ### Community 11 - "remote-desktop-host/package.json"
 Cohesion: 0.14
 Nodes (13): @nut-tree/nut-js, ws, BUTTON_MAP, wss, dependencies, @nut-tree/nut-js, ws, description (+5 more)
 
 ### Community 12 - "close"
-Cohesion: 0.21
-Nodes (12): 1. `webrtc-core.js` — PeerSession, DataChannels, File Transfer Protocol, Public API, Renegotiation (Perfect Negotiation Pattern), close(), closeAllSubscriptions(), connect() (+4 more)
+Cohesion: 0.18
+Nodes (14): auth(), close(), closeAllSubscriptions(), connect(), count(), ensureRelay(), fire(), makeAuthEvent() (+6 more)
 
 ### Community 13 - "decrypt3"
 Cohesion: 0.19
@@ -155,7 +155,7 @@ Nodes (14): calcPaddedLen(), concatBytes3(), decodePayload(), decrypt3(), encryp
 
 ### Community 14 - "P2P Connect — System Design"
 Cohesion: 0.05
-Nodes (39): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 2. `nostr-crypto.js` — NostrCrypto, 3. `nostr-relay.js` — NostrRelay, 4. `nostr-transport.js` — NostrTransport, 5. `nostr-signaling.js` — NostrSignaling, 6. `token-codec.js` — TokenCodec (+31 more)
+Nodes (44): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 1. `webrtc-core.js` — PeerSession, 2. `nostr-crypto.js` — NostrCrypto, 3. `nostr-relay.js` — NostrRelay, 4. `nostr-transport.js` — NostrTransport, 5. `nostr-signaling.js` — NostrSignaling (+36 more)
 
 ### Community 15 - "assertNumber"
 Cohesion: 0.21
@@ -169,9 +169,9 @@ Nodes (11): getHex64(), getSubscriptionId(), handleNext(), matchEventId(), match
 Cohesion: 0.29
 Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
 
-### Community 18 - "send"
-Cohesion: 0.50
-Nodes (4): auth(), count(), makeAuthEvent(), send()
+### Community 18 - "verifyEvent"
+Cohesion: 0.14
+Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
 
 ### Community 19 - "classifyKind"
 Cohesion: 0.40
@@ -201,13 +201,13 @@ Nodes (25): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview
 Cohesion: 0.67
 Nodes (3): lift_x(), pow2(), sqrtMod()
 
-### Community 29 - "subscribe"
-Cohesion: 0.67
-Nodes (3): fire(), prepareSubscription(), subscribe()
+### Community 28 - "createCipher"
+Cohesion: 0.40
+Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
 
 ### Community 38 - "decode"
-Cohesion: 0.13
-Nodes (16): decode(), getZapEndpoint(), matchAll(), matchAll2(), parse2(), parseReferences(), parseTLV(), replaceAll() (+8 more)
+Cohesion: 0.20
+Nodes (10): decode(), getZapEndpoint(), matchAll(), matchAll2(), parse2(), parseReferences(), parseTLV(), replaceAll() (+2 more)
 
 ### Community 39 - "TestArchitecturalInvariants"
 Cohesion: 0.07
@@ -218,8 +218,8 @@ Cohesion: 0.13
 Nodes (14): Architecture Overview, Connection Flow, Long-term (production infrastructure), Medium-term (minimal server), Module Responsibilities, P2P Connect — Architecture & Production Notes, Real-World Limitations of No-Signaling-Server Design, Risks of Manual Signaling (+6 more)
 
 ### Community 41 - "bytes3"
-Cohesion: 0.10
-Nodes (28): apply0123(), applySbox(), bool2(), bytes3(), checkOpts(), createCipher(), ctr32(), ctrCounter() (+20 more)
+Cohesion: 0.14
+Nodes (21): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+13 more)
 
 ### Community 43 - "P2P Connect — High-Level Design"
 Cohesion: 0.14
@@ -276,7 +276,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.06489155351789808 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06684981684981685 - nodes in this community are weakly interconnected._
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
   _High betweenness centrality (0.097) - this node is a cross-community bridge._
 - **Are the 4 inferred relationships involving `weierstrass()` (e.g. with `getPublicKey2()` and `getSharedSecret()`) actually correct?**
