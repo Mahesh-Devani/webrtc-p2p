@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792306665.6445527,
-    "seen": 1792306737.563199,
-    "ast_hash": "122fcf5c284ce7e272a6167ffe08a9f1",
+    "mtime": 1792309712.6790297,
+    "seen": 1792309814.489869,
+    "ast_hash": "4a17a6feee99d9291f161f9cdfa922f2",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -30,16 +30,16 @@
     "semantic_hash": "d55ba9730f6f8c91ef7e283a6297ca97"
   },
   "nostr-signaling.js": {
-    "mtime": 1792175379.928392,
-    "seen": 1792181220.542258,
-    "ast_hash": "1caa31f82b79358123bf7f7fe66d9722",
-    "semantic_hash": "1caa31f82b79358123bf7f7fe66d9722"
+    "mtime": 1792309139.23829,
+    "seen": 1792309814.489871,
+    "ast_hash": "7b5869074572b6ec5ec7ae07bc9d7471",
+    "semantic_hash": ""
   },
   "nostr-transport.js": {
-    "mtime": 1792173486.4699006,
-    "seen": 1792181220.542259,
-    "ast_hash": "d2b1be69c97f45cb14cd9cbb15e1dcf8",
-    "semantic_hash": "d2b1be69c97f45cb14cd9cbb15e1dcf8"
+    "mtime": 1792309282.6451719,
+    "seen": 1792309814.489872,
+    "ast_hash": "189cfac72f9396cfd6b7188e572369b5",
+    "semantic_hash": ""
   },
   "nostr.bundle.js": {
     "mtime": 1792055794.2488718,
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792207515.6128702,
-    "seen": 1792207574.251471,
-    "ast_hash": "c8d3185a79242345aaa349bfd19aef83",
+    "mtime": 1792309650.1651628,
+    "seen": 1792309814.489887,
+    "ast_hash": "e941ebdca59650bafc8c68747ecf7572",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792306681.6196558,
-    "seen": 1792306737.563221,
-    "ast_hash": "f65e3d2c6066f1b404545367931a5f9a",
+    "mtime": 1792309724.3200145,
+    "seen": 1792309814.4898932,
+    "ast_hash": "c0666b44026299ff896823b26c9b2aec",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792207210.5591092,
-    "seen": 1792207574.251477,
-    "ast_hash": "65c6018759aa7ced62074bc8e9643dfa",
+    "mtime": 1792309734.8195486,
+    "seen": 1792309814.489894,
+    "ast_hash": "585530a799f3c5dbb6c44ddc3ea2df2d",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "run-regressions.py": {
-    "mtime": 1792182255.9753716,
-    "seen": 1792182260.692543,
-    "ast_hash": "cea3ee6ddbce46595dd6bd5efa1bd6eb",
+    "mtime": 1792309773.3151104,
+    "seen": 1792309814.48988,
+    "ast_hash": "b2b2395c4acfa3fadf4dd68a7ae69eda",
     "semantic_hash": ""
   },
   "tests/test_host_security.py": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "tests/test_invariants.py": {
-    "mtime": 1792181841.2072284,
-    "seen": 1792182245.594222,
-    "ast_hash": "2653c06142b5d3b6240db5ef9026b058",
+    "mtime": 1792309300.1359806,
+    "seen": 1792309814.489884,
+    "ast_hash": "66bdc79e0cc3fedefb275deefc7f9613",
     "semantic_hash": ""
   },
   "tests/test_mobile_lifecycle.py": {
@@ -237,6 +237,24 @@
     "mtime": 1792182134.2628775,
     "seen": 1792182245.594226,
     "ast_hash": "b5a498fff041c9ad384e57b1228a1494",
+    "semantic_hash": ""
+  },
+  "diagnostic-logger.js": {
+    "mtime": 1792309274.9095194,
+    "seen": 1792309814.489868,
+    "ast_hash": "01266af733ea5d0fdd99d3973251fc9c",
+    "semantic_hash": ""
+  },
+  "support-agent/ai-diagnostic-agent.py": {
+    "mtime": 1792309430.7610579,
+    "seen": 1792309814.4898822,
+    "ast_hash": "1b608957ab9a6074e1383b16ed66be91",
+    "semantic_hash": ""
+  },
+  "tests/test_diagnostics.py": {
+    "mtime": 1792309792.5832732,
+    "seen": 1792309814.4898822,
+    "ast_hash": "0797220ea90c685c6935d11941be7625",
     "semantic_hash": ""
   }
 }

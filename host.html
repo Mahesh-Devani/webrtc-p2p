@@ -204,9 +204,14 @@
           <span style="font-size: 0.75rem; color: var(--c-text-dim);">Unattended Remote Desktop Service</span>
         </div>
       </div>
-      <div id="host-status-badge" class="host-status-badge badge--connected">
-        <span class="rd-badge__dot"></span>
-        <span id="host-status-text">Online &amp; Listening</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button id="btn-host-download-logpkg" class="btn btn--small btn--outline" style="font-size:0.75rem; padding:4px 10px;" title="Download diagnostic package with bridge and WebRTC logs">
+          🐞 Log Package
+        </button>
+        <div id="host-status-badge" class="host-status-badge badge--connected">
+          <span class="rd-badge__dot"></span>
+          <span id="host-status-text">Online &amp; Listening</span>
+        </div>
       </div>
     </div>
 
@@ -610,7 +615,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- Host Controller -->
-  <script type="module" src="host-controller.js?v=38"></script>
+  <script type="module" src="host-controller.js?v=39"></script>
 </body>
 
 </html>

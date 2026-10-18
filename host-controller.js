@@ -11,6 +11,9 @@
 import { NostrCrypto } from './nostr-crypto.js';
 import { NostrTransport } from './nostr-transport.js';
 import { PeerSession } from './webrtc-core.js';
+import { DiagnosticLogger } from './diagnostic-logger.js';
+
+DiagnosticLogger.installConsoleInterceptor();
 
 const STORAGE_HOST_PRIV = 'p2p-host-privkey';
 const STORAGE_HOST_PUB = 'p2p-host-pubkey';
@@ -1309,6 +1312,27 @@ dom.hostScreenPlaceholder?.addEventListener('click', async () => {
         console.warn('[Host] Screen capture cancelled or failed from placeholder click:', err);
       }
     }
+  }
+});
+
+// Host Log Package Download Listener
+document.getElementById('btn-host-download-logpkg')?.addEventListener('click', async () => {
+  try {
+    showToast('Generating host diagnostic package…');
+    const pkg = await DiagnosticLogger.generateLogPackage({
+      session: hostSession,
+      relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : [],
+      extra: {
+        role: 'host',
+        bridgeConnected: isBridgeConnected(),
+        streamLive: isHostStreamLive(),
+        whitelistEnabled: isWhitelistEnabled()
+      }
+    });
+    DiagnosticLogger.downloadLogPackage(pkg, `p2p-host-diagnostic-${Date.now()}.json`);
+    showToast('Host diagnostic package downloaded! 📥');
+  } catch (e) {
+    showToast('Failed to export diagnostics: ' + e.message);
   }
 });
 

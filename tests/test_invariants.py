@@ -24,6 +24,7 @@ JS_FILES = [
     'token-codec.js',
     'chat-store.js',
     'host-controller.js',
+    'diagnostic-logger.js',
 ]
 HTML_FILES = ['index.html', 'host.html']
 
@@ -150,7 +151,8 @@ class TestArchitecturalInvariants(unittest.TestCase):
 
         required = [
             'offer', 'answer', 'ice', 'close', 'message',
-            'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong'
+            'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong',
+            'diagnostic_logpkg'
         ]
         for t in required:
             self.assertTrue(

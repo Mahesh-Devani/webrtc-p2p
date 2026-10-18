@@ -85,6 +85,13 @@ FILE_TO_TESTS_MAP = {
     'chat-store.js': [
         'tests.test_invariants',
     ],
+    'diagnostic-logger.js': [
+        'tests.test_diagnostics',
+        'tests.test_invariants',
+    ],
+    'support-agent': [
+        'tests.test_diagnostics',
+    ],
 }
 
 ALL_TEST_MODULES = [
@@ -93,6 +100,7 @@ ALL_TEST_MODULES = [
     'tests.test_webrtc_contracts',
     'tests.test_token_codec',
     'tests.test_mobile_lifecycle',
+    'tests.test_diagnostics',
 ]
 
 

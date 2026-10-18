@@ -85,6 +85,15 @@ export const NostrSignaling = (() => {
      * @returns {Promise<string>} sessionId
      */
     async function startSession(remotePubKey, extraData = {}) {
+        // Clean up any stale / pending sessions with this peer
+        for (const [id, e] of _sessions) {
+            if (e.remotePubKey === remotePubKey && e.state !== 'connected') {
+                _log(`[Signaling] Cleaning up existing non-connected session ${id.slice(0, 8)} before startSession`, 'info');
+                try { e.session.close(); } catch {}
+                _sessions.delete(id);
+            }
+        }
+
         const sessionId = _generateSessionId();
         _log(`[Signaling] Starting session ${sessionId.slice(0, 8)} → ${remotePubKey.slice(0, 8)}…`, 'info');
 
@@ -95,8 +104,8 @@ export const NostrSignaling = (() => {
         const isRemoteDesktop = !!(extraData && (extraData.isUnattended || extraData.receiveVideo));
         const offer = await peerSession.createOffer({ receiveVideo: isRemoteDesktop });
 
-        // Wait for ICE candidates (3s allows TURN relay candidates to be discovered)
-        await _waitForIce(peerSession, 3000);
+        // Wait for early ICE candidates (1s bundles host & srflx candidates; remaining candidates trickle)
+        await _waitForIce(peerSession, 1000);
         const candidates = peerSession.getLocalCandidates();
 
         // Compress SDP + candidates (+ optional extra data like pin / unattended)
@@ -159,10 +168,35 @@ export const NostrSignaling = (() => {
     async function _handleOffer(sessionId, compressedData, senderPubKey) {
         _log(`[Signaling] Incoming offer from ${senderPubKey.slice(0, 8)}… (session ${sessionId.slice(0, 8)})`, 'info');
 
-        // Check if we already have this session (duplicate)
+        // Check if we already have this exact session (duplicate event)
         if (_sessions.has(sessionId)) {
-            _log('[Signaling] Duplicate offer — ignoring', 'warn');
+            _log('[Signaling] Duplicate offer for session — ignoring', 'warn');
             return;
+        }
+
+        // Glare & collision handling for concurrent connection attempts
+        const myPubKey = NostrTransport.getPublicKey ? NostrTransport.getPublicKey() : '';
+        for (const [id, e] of _sessions) {
+            if (e.remotePubKey === senderPubKey) {
+                if (e.state === 'pending') {
+                    // Both peers initiated an offer concurrently! Tie-break with pubkey comparison:
+                    const isPolite = myPubKey > senderPubKey;
+                    if (isPolite) {
+                        _log(`[Signaling] Offer collision with ${senderPubKey.slice(0, 8)}: we are polite (yielding to incoming offer)`, 'info');
+                        try { e.session.close(); } catch {}
+                        _sessions.delete(id);
+                        break;
+                    } else {
+                        _log(`[Signaling] Offer collision with ${senderPubKey.slice(0, 8)}: we are impolite (holding our offer, ignoring incoming)`, 'info');
+                        return;
+                    }
+                } else if (e.state !== 'connected') {
+                    _log(`[Signaling] Cleaning up stale session ${id.slice(0, 8)} for ${senderPubKey.slice(0, 8)}`, 'info');
+                    try { e.session.close(); } catch {}
+                    _sessions.delete(id);
+                    break;
+                }
+            }
         }
 
         // Notify UI of incoming request
@@ -185,8 +219,8 @@ export const NostrSignaling = (() => {
                 await peerSession.addIceCandidates(candidates);
             }
 
-            // Wait for our ICE candidates (3s for TURN relay discovery)
-            await _waitForIce(peerSession, 3000);
+            // Wait for early ICE candidates (800ms bundles host & srflx candidates; remaining candidates trickle)
+            await _waitForIce(peerSession, 800);
             const localCandidates = peerSession.getLocalCandidates();
 
             // Compress answer + our candidates

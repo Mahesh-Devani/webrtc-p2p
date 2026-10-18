@@ -11,10 +11,12 @@ import { NostrCrypto } from './nostr-crypto.js';
 import { NostrTransport } from './nostr-transport.js';
 import { NostrSignaling } from './nostr-signaling.js';
 import { ChatStore } from './chat-store.js';
+import { DiagnosticLogger } from './diagnostic-logger.js';
 
 console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Active');
 
 (() => {
+  DiagnosticLogger.installConsoleInterceptor();
   const $ = (sel) => document.querySelector(sel);
 
   const dom = {
@@ -213,6 +215,26 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     inspectType: $('#inspect-type'), inspectVersion: $('#inspect-version'),
     inspectTs: $('#inspect-ts'), inspectIceCount: $('#inspect-ice-count'),
     inspectSdp: $('#inspect-sdp'), inspectCandidates: $('#inspect-candidates'),
+    // Diagnostics Modal
+    diagnosticsModal: $('#diagnostics-modal'),
+    btnCloseDiagnostics: $('#btn-close-diagnostics'),
+    btnHeaderDiagnostics: $('#btn-header-diagnostics'),
+    btnMenuDiagnostics: $('#btn-menu-diagnostics'),
+    btnRdDiagnostics: $('#rd-btn-diagnostics'),
+    btnOpenDiagnosticsFull: $('#btn-open-diagnostics-full'),
+    diagRelayStatus: $('#diag-relay-status'),
+    diagRelayDetail: $('#diag-relay-detail'),
+    diagWebrtcStatus: $('#diag-webrtc-status'),
+    diagWebrtcDetail: $('#diag-webrtc-detail'),
+    diagCandidatePair: $('#diag-candidate-pair'),
+    diagCandidateDetail: $('#diag-candidate-detail'),
+    btnDownloadLogpkg: $('#btn-download-logpkg'),
+    btnCopyDiagSummary: $('#btn-copy-diag-summary'),
+    btnSendAiAgent: $('#btn-send-ai-agent'),
+    btnTestNetworkStun: $('#btn-test-network-stun'),
+    diagLogFilter: $('#diag-log-filter'),
+    btnClearDiagLogs: $('#btn-clear-diag-logs'),
+    diagLogTerminal: $('#diag-log-terminal'),
   };
 
   // ── State ──
@@ -230,6 +252,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   let pendingRemoteStreamPubkey = null; // Who the incoming call is from
   const pendingMsgs = new Map();
   const lastIceErrors = []; // Diagnostic tracking for candidate errors (TURN/STUN)
+  let connectingPromise = null;
+  let connectingPromisePubKey = null;
+  let pendingAutoConnectPubKey = null;
 
   // ── SOUND ENGINE (Synthesized) ──
   const SoundEngine = (() => {
@@ -908,7 +933,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.chatInput.focus();
 
     const isConnected = session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.isChannelOpen?.();
-    const isConnecting = session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.getState?.() !== 'closed' && session.getState?.() !== 'failed';
+    const isConnecting = (connectingPromisePubKey === pubkey) || (session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.getState?.() !== 'closed' && session.getState?.() !== 'failed');
     
     if (isConnected) {
         dom.chatContactStatus.textContent = 'Connected';
@@ -918,27 +943,14 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         show(dom.btnRemoteDesktop);
         hide(dom.btnConnectPeer);
     } else if (isConnecting) {
-        dom.chatContactStatus.textContent = 'Connecting via Nostr...';
+        dom.chatContactStatus.textContent = 'Connecting via Nostr…';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
         hide(dom.btnRemoteDesktop);
         hide(dom.btnConnectPeer);
-
-        if (!connectionTimeout) {
-            connectionTimeout = setTimeout(() => {
-                if (session && sessionRemotePubKey === pubkey && (!session.isChannelOpen || !session.isChannelOpen())) {
-                    try { session.close(); } catch {}
-                    session = null;
-                }
-                nostrActiveSessionId = null;
-                dom.chatContactStatus.textContent = 'Offline';
-                dom.chatContactStatus.className = 'chat-header__status';
-                show(dom.btnConnectPeer);
-            }, 12000);
-        }
     } else {
-        dom.chatContactStatus.textContent = 'Connecting via Nostr...';
+        dom.chatContactStatus.textContent = 'Connecting via Nostr…';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
@@ -947,40 +959,16 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         
         // Auto connect
         if (nostrIdentity) {
-            clearTimeout(connectionTimeout);
-            
             // If we already have an active session with someone else, do not auto-connect and orphan them!
             if (session && session.getState?.() !== 'closed' && session.getState?.() !== 'failed' && sessionRemotePubKey !== pubkey) {
                dom.chatContactStatus.textContent = 'Offline (Busy)';
                dom.chatContactStatus.className = 'chat-header__status';
                show(dom.btnConnectPeer);
             } else {
-               NostrSignaling.startSession(pubkey).then(sid => {
-                   nostrActiveSessionId = sid;
-                   sessionRemotePubKey = pubkey;
-                   connectionTimeout = setTimeout(() => {
-                       if (nostrActiveSessionId === sid && (!session || !session.isChannelOpen?.())) {
-                           if (session) {
-                               try { session.close(); } catch {}
-                               session = null;
-                           }
-                           nostrActiveSessionId = null;
-                           dom.chatContactStatus.textContent = 'Offline';
-                           dom.chatContactStatus.className = 'chat-header__status';
-                           show(dom.btnConnectPeer); // allow manual retry
-                       }
-                   }, 15000);
-               }).catch(err => {
-                   if (session) {
-                       try { session.close(); } catch {}
-                       session = null;
-                   }
-                   nostrActiveSessionId = null;
-                   dom.chatContactStatus.textContent = 'Offline';
-                   dom.chatContactStatus.className = 'chat-header__status';
-                   show(dom.btnConnectPeer);
-               });
+               ensurePeerConnected(pubkey).catch(() => {});
             }
+        } else {
+            pendingAutoConnectPubKey = pubkey;
         }
     }
   }
@@ -1067,8 +1055,12 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
               if (ticks) { ticks.textContent = '✓'; ticks.classList.remove('chat-msg__ticks--pending'); }
             }
           })
-          .catch(() => { /* stay pending */ });
         status = 'pending'; // will update to 'sent' on relay acceptance
+
+        // Peer is being messaged — auto-initiate P2P connection in background
+        if (!session || !session.isChannelOpen?.()) {
+          ensurePeerConnected(targetPubKey).catch(() => {});
+        }
     }
 
     const msg = { id, text, sender: 'self', ts: Date.now(), status, type: 'text' };
@@ -1300,72 +1292,130 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     // 1. If already open and active with this contact
     if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
+      if (activeContactPubkey === remotePubKey) {
+        dom.chatContactStatus.textContent = 'Connected';
+        dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+        show(dom.btnAudioCall);
+        show(dom.btnVideoCall);
+        show(dom.btnRemoteDesktop);
+        hide(dom.btnConnectPeer);
+      }
       return true;
     }
 
-    // 2. If session exists and is recovering (e.g. transient disconnect during app switch)
-    if (session && sessionRemotePubKey === remotePubKey && typeof session.waitForOpen === 'function') {
-      const quicklyRecovered = await session.waitForOpen(2000);
-      if (quicklyRecovered) return true;
+    // 2. If already in flight for this pubkey, reuse the in-flight promise
+    if (connectingPromise && connectingPromisePubKey === remotePubKey) {
+      return connectingPromise;
     }
 
-    // 3. Need to establish session via Nostr
+    // 3. If session exists and is recovering (e.g. transient disconnect during app switch)
+    if (session && sessionRemotePubKey === remotePubKey && typeof session.waitForOpen === 'function') {
+      const quicklyRecovered = await session.waitForOpen(2000);
+      if (quicklyRecovered) {
+        if (activeContactPubkey === remotePubKey) {
+          dom.chatContactStatus.textContent = 'Connected';
+          dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+          show(dom.btnAudioCall);
+          show(dom.btnVideoCall);
+          show(dom.btnRemoteDesktop);
+          hide(dom.btnConnectPeer);
+        }
+        return true;
+      }
+    }
+
+    // 4. Need to establish session via Nostr
     if (!nostrIdentity) return false;
 
-    // Close any previous session with this contact to avoid conflicting state
-    if (session && typeof session.close === 'function') {
+    // Close any previous session with a different contact to avoid conflicting state
+    if (session && sessionRemotePubKey !== remotePubKey && typeof session.close === 'function') {
       try { session.close(); } catch { }
       session = null;
     }
 
-    show(dom.connectBanner);
-    dom.connectBannerText.textContent = `Connecting with ${getContactDisplayName(remotePubKey)}…`;
-    const dots = dom.connectProgress?.children;
-    if (dots) {
-      dots[0]?.classList.add('done');
-      dots[1]?.classList.add('active');
-    }
-
-    try {
-      nostrActiveSessionId = await NostrSignaling.startSession(remotePubKey);
-      sessionRemotePubKey = remotePubKey;
+    connectingPromisePubKey = remotePubKey;
+    connectingPromise = (async () => {
+      show(dom.connectBanner);
+      dom.connectBannerText.textContent = `Connecting with ${getContactDisplayName(remotePubKey)}…`;
+      const dots = dom.connectProgress?.children;
       if (dots) {
-        dots[1]?.classList.replace('active', 'done');
-        dots[2]?.classList.add('active');
+        dots[0]?.classList.add('done');
+        dots[1]?.classList.add('active');
       }
-      dom.connectBannerText.textContent = 'Waiting for peer response…';
-    } catch (err) {
-      console.error('[ensurePeerConnected] Failed to start session:', err);
-      if (dots) dots[1]?.classList.replace('active', 'error');
-      dom.connectBannerText.textContent = 'Connection failed';
-      setTimeout(() => hide(dom.connectBanner), 3000);
-      return false;
-    }
 
-    // Wait for the session channel to open
-    const startTime = Date.now();
-    return new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
-          cleanup();
-          hide(dom.connectBanner);
-          resolve(true);
-        } else if (Date.now() - startTime > timeoutMs) {
-          cleanup();
-          hide(dom.connectBanner);
-          if (session && nostrActiveSessionId && sessionRemotePubKey === remotePubKey && (!session.isChannelOpen || !session.isChannelOpen())) {
-            try { session.close(); } catch {}
-            session = null;
-            nostrActiveSessionId = null;
-          }
-          resolve(false);
+      if (activeContactPubkey === remotePubKey) {
+        dom.chatContactStatus.textContent = 'Connecting via Nostr…';
+        dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
+        hide(dom.btnAudioCall);
+        hide(dom.btnVideoCall);
+        hide(dom.btnRemoteDesktop);
+        hide(dom.btnConnectPeer);
+      }
+
+      try {
+        nostrActiveSessionId = await NostrSignaling.startSession(remotePubKey);
+        sessionRemotePubKey = remotePubKey;
+        if (dots) {
+          dots[1]?.classList.replace('active', 'done');
+          dots[2]?.classList.add('active');
         }
-      }, 200);
-
-      function cleanup() {
-        clearInterval(interval);
+        dom.connectBannerText.textContent = 'Waiting for peer response…';
+      } catch (err) {
+        console.error('[ensurePeerConnected] Failed to start session:', err);
+        if (dots) dots[1]?.classList.replace('active', 'error');
+        dom.connectBannerText.textContent = 'Connection failed';
+        setTimeout(() => hide(dom.connectBanner), 3000);
+        if (activeContactPubkey === remotePubKey) {
+          dom.chatContactStatus.textContent = 'Offline';
+          dom.chatContactStatus.className = 'chat-header__status';
+          show(dom.btnConnectPeer);
+        }
+        return false;
       }
+
+      // Wait for the session channel to open
+      const startTime = Date.now();
+      return new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
+            cleanup();
+            hide(dom.connectBanner);
+            if (activeContactPubkey === remotePubKey) {
+              dom.chatContactStatus.textContent = 'Connected';
+              dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+              show(dom.btnAudioCall);
+              show(dom.btnVideoCall);
+              show(dom.btnRemoteDesktop);
+              hide(dom.btnConnectPeer);
+            }
+            resolve(true);
+          } else if (Date.now() - startTime > timeoutMs) {
+            cleanup();
+            hide(dom.connectBanner);
+            if (session && nostrActiveSessionId && sessionRemotePubKey === remotePubKey && (!session.isChannelOpen || !session.isChannelOpen())) {
+              try { session.close(); } catch {}
+              session = null;
+              nostrActiveSessionId = null;
+            }
+            if (activeContactPubkey === remotePubKey) {
+              dom.chatContactStatus.textContent = 'Offline';
+              dom.chatContactStatus.className = 'chat-header__status';
+              show(dom.btnConnectPeer);
+            }
+            resolve(false);
+          }
+        }, 200);
+
+        function cleanup() {
+          clearInterval(interval);
+        }
+      });
+    })().finally(() => {
+      connectingPromise = null;
+      connectingPromisePubKey = null;
     });
+
+    return connectingPromise;
   }
 
   async function sendSelectedFiles(fileList) {
@@ -3776,6 +3826,211 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     } catch (err) { toast('Decode failed: ' + err.message); }
   });
 
+  // ── Diagnostics & Logpkg System ──
+  let diagLogUnsubscribe = null;
+
+  async function updateDiagnosticsDashboard() {
+    // 1. Relays
+    const states = NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : [];
+    const connectedCount = states.filter(s => s.state === 'connected').length;
+    if (dom.diagRelayStatus) {
+      dom.diagRelayStatus.textContent = `${connectedCount}/${states.length} Connected`;
+      dom.diagRelayStatus.style.color = connectedCount > 0 ? 'var(--c-primary)' : 'var(--c-danger)';
+    }
+    if (dom.diagRelayDetail) {
+      dom.diagRelayDetail.textContent = connectedCount === states.length && states.length > 0
+        ? 'All relays healthy & operational'
+        : (connectedCount > 0 ? 'Some relays connecting/failed' : 'All relays disconnected');
+    }
+
+    // 2. WebRTC P2P Direct
+    const isConn = session && session.isChannelOpen && session.isChannelOpen();
+    const pc = session && session.getRawPC ? session.getRawPC() : null;
+    if (dom.diagWebrtcStatus) {
+      if (isConn) {
+        dom.diagWebrtcStatus.textContent = '🟢 Connected (Active)';
+        dom.diagWebrtcStatus.style.color = 'var(--c-primary)';
+      } else if (session && session.getState && session.getState() === 'connecting') {
+        dom.diagWebrtcStatus.textContent = '🟡 Connecting…';
+        dom.diagWebrtcStatus.style.color = '#e3b341';
+      } else {
+        dom.diagWebrtcStatus.textContent = '⚪ Offline (Relay Only)';
+        dom.diagWebrtcStatus.style.color = 'var(--c-text-dim)';
+      }
+    }
+    if (dom.diagWebrtcDetail) {
+      if (isConn) {
+        dom.diagWebrtcDetail.textContent = `Peer: ${getContactDisplayName(activeContactPubkey || sessionRemotePubKey || 'Direct Peer')}`;
+      } else {
+        dom.diagWebrtcDetail.textContent = activeContactPubkey ? `Awaiting P2P with ${getContactDisplayName(activeContactPubkey)}` : 'Select a contact to connect';
+      }
+    }
+
+    // 3. Candidate Pair & Stats
+    if (pc && typeof pc.getStats === 'function') {
+      try {
+        const stats = await pc.getStats();
+        let foundPair = false;
+        stats.forEach(report => {
+          if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+            foundPair = true;
+            const rtt = report.currentRoundTripTime ? Math.round(report.currentRoundTripTime * 1000) : null;
+            if (dom.diagCandidatePair) {
+              dom.diagCandidatePair.textContent = `Pair: ${report.state || 'succeeded'}`;
+            }
+            if (dom.diagCandidateDetail) {
+              dom.diagCandidateDetail.textContent = rtt !== null ? `Round-trip latency: ${rtt}ms` : `Bytes Sent: ${report.bytesSent || 0}`;
+            }
+          }
+        });
+        if (!foundPair && dom.diagCandidatePair) {
+          dom.diagCandidatePair.textContent = 'None active';
+          dom.diagCandidateDetail.textContent = 'No selected candidate pair yet';
+        }
+      } catch { }
+    } else {
+      if (dom.diagCandidatePair) dom.diagCandidatePair.textContent = 'None active';
+      if (dom.diagCandidateDetail) dom.diagCandidateDetail.textContent = 'No active RTCPeerConnection';
+    }
+
+    // 4. Render Terminal Logs
+    renderDiagLogs();
+  }
+
+  function renderDiagLogs() {
+    if (!dom.diagLogTerminal) return;
+    const filter = dom.diagLogFilter ? dom.diagLogFilter.value : 'all';
+    const logs = DiagnosticLogger.getLogs();
+    const filtered = logs.filter(l => {
+      if (filter === 'error') return l.level === 'error' || l.level === 'warn';
+      if (filter === 'WebRTC') return l.tag === 'WebRTC';
+      if (filter === 'Signaling') return l.tag === 'Signaling';
+      if (filter === 'Nostr') return l.tag.startsWith('Nostr');
+      return true;
+    });
+
+    const lines = filtered.slice(-150).map(l => {
+      const timeStr = l.time ? l.time.slice(11, 19) : '';
+      const lvl = l.level.toUpperCase().padEnd(5);
+      return `[${timeStr}] [${lvl}] [${l.tag}] ${l.message}`;
+    });
+
+    dom.diagLogTerminal.textContent = lines.join('\n') || '(no logs recorded yet)';
+    dom.diagLogTerminal.scrollTop = dom.diagLogTerminal.scrollHeight;
+  }
+
+  function openDiagnosticsModal() {
+    show(dom.diagnosticsModal);
+    updateDiagnosticsDashboard();
+    if (!diagLogUnsubscribe) {
+      diagLogUnsubscribe = DiagnosticLogger.subscribe(() => {
+        if (!dom.diagnosticsModal?.classList.contains('hidden')) {
+          renderDiagLogs();
+        }
+      });
+    }
+  }
+
+  function closeDiagnosticsModal() {
+    hide(dom.diagnosticsModal);
+  }
+
+  // Diagnostic Modal Button Listeners
+  dom.btnHeaderDiagnostics?.addEventListener('click', openDiagnosticsModal);
+  dom.btnMenuDiagnostics?.addEventListener('click', () => { hide(dom.chatMenu); openDiagnosticsModal(); });
+  dom.btnRdDiagnostics?.addEventListener('click', openDiagnosticsModal);
+  dom.btnOpenDiagnosticsFull?.addEventListener('click', () => { hide(dom.settingsModal); openDiagnosticsModal(); });
+  dom.btnCloseDiagnostics?.addEventListener('click', closeDiagnosticsModal);
+  dom.diagLogFilter?.addEventListener('change', renderDiagLogs);
+  dom.btnClearDiagLogs?.addEventListener('click', () => { DiagnosticLogger.clearLogs(); renderDiagLogs(); });
+
+  dom.btnDownloadLogpkg?.addEventListener('click', async () => {
+    try {
+      toast('Generating diagnostic log package…');
+      const pkg = await DiagnosticLogger.generateLogPackage({
+        session,
+        remotePubKey: activeContactPubkey,
+        relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : [],
+        extra: { activeContact: activeContactPubkey, appName: 'P2P Connect' }
+      });
+      DiagnosticLogger.downloadLogPackage(pkg);
+      toast('Diagnostic logpkg downloaded! 📥');
+    } catch (err) {
+      toast('Export failed: ' + err.message);
+    }
+  });
+
+  dom.btnCopyDiagSummary?.addEventListener('click', async () => {
+    try {
+      const pkg = await DiagnosticLogger.generateLogPackage({
+        session,
+        remotePubKey: activeContactPubkey,
+        relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : []
+      });
+      const summary = DiagnosticLogger.formatMarkdownSummary(pkg);
+      await navigator.clipboard.writeText(summary);
+      toast('Diagnostic summary copied to clipboard! 📋');
+    } catch (err) {
+      toast('Copy failed: ' + err.message);
+    }
+  });
+
+  dom.btnSendAiAgent?.addEventListener('click', async () => {
+    try {
+      toast('Attempting to transmit diagnostics to AI Support Agent…');
+      const pkg = await DiagnosticLogger.generateLogPackage({
+        session,
+        remotePubKey: activeContactPubkey,
+        relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : []
+      });
+
+      // 1. Try local AI diagnostic agent server on http://127.0.0.1:9998/api/logpkg
+      try {
+        const resp = await fetch('http://127.0.0.1:9998/api/logpkg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pkg),
+        });
+        if (resp.ok) {
+          const result = await resp.json();
+          const status = result.analysis?.overallStatus || 'Analyzed';
+          toast(`AI Agent: ${status}! Check terminal report.`);
+          DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested successfully:', JSON.stringify(result.analysis?.rootCauses || [])]);
+          updateDiagnosticsDashboard();
+          return;
+        }
+      } catch {
+        // Local server not reachable
+      }
+
+      // 2. Fallback: prompt user to download file
+      toast('AI Agent daemon not running on port 9998. Downloading logpkg instead…');
+      DiagnosticLogger.downloadLogPackage(pkg);
+    } catch (err) {
+      toast('Transmission failed: ' + err.message);
+    }
+  });
+
+  dom.btnTestNetworkStun?.addEventListener('click', async () => {
+    toast('Testing STUN/TURN servers & discovering public IP…');
+    if (dom.btnTestNetworkStun) dom.btnTestNetworkStun.disabled = true;
+    try {
+      const servers = buildIceServers();
+      const result = await PeerSession.testIceServers(servers);
+      DiagnosticLogger.record('info', [
+        `[Diagnostic Network Test] Discovered ${result.candidates?.length || 0} candidate(s), IPs: ${result.discoveredIps?.join(', ') || 'none'}`,
+        result.hasRelay ? 'TURN relay operational ✓' : 'No TURN relay candidates (STUN-only)'
+      ]);
+      toast(`Discovered ${result.candidates?.length || 0} candidate(s)! Public IP: ${result.discoveredIps?.[0] || 'Unknown'}`);
+      updateDiagnosticsDashboard();
+    } catch (err) {
+      DiagnosticLogger.record('error', [`[Diagnostic Network Test Failed]: ${err.message}`]);
+      toast('Network test failed: ' + err.message);
+    } finally {
+      if (dom.btnTestNetworkStun) dom.btnTestNetworkStun.disabled = false;
+    }
+  });
+
   // ═══ NOSTR INITIALIZATION ═══
   async function initNostr() {
     try {
@@ -3811,6 +4066,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           if (activeContactPubkey === senderPubKey) {
             appendChatBubble(msg);
             if (document.hidden) SoundEngine.playMessage();
+            // Active chatting: peer is online, auto-establish P2P if not connected
+            if (!session || !session.isChannelOpen?.()) {
+              ensurePeerConnected(senderPubKey).catch(() => {});
+            }
           } else {
             SoundEngine.playMessage();
           }
@@ -3893,6 +4152,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       });
 
       setBadge('idle', 'Online');
+
+      // If user selected a contact before Nostr finished initializing, connect now!
+      if (pendingAutoConnectPubKey && pendingAutoConnectPubKey === activeContactPubkey) {
+        const pk = pendingAutoConnectPubKey;
+        pendingAutoConnectPubKey = null;
+        ensurePeerConnected(pk).catch(() => {});
+      }
     } catch (err) {
       console.error('[Nostr] Init error:', err);
       if (dom.myPubkeyShort) {
