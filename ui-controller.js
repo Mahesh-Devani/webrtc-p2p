@@ -1057,9 +1057,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           })
         status = 'pending'; // will update to 'sent' on relay acceptance
 
-        // Peer is being messaged — auto-initiate P2P connection in background
+        // Peer is being messaged — auto-initiate P2P connection in background (slight 500ms delay so sendMessage finishes publishing first)
         if (!session || !session.isChannelOpen?.()) {
-          ensurePeerConnected(targetPubKey).catch(() => {});
+          setTimeout(() => {
+            if (!session || !session.isChannelOpen?.()) {
+              ensurePeerConnected(targetPubKey).catch(() => {});
+            }
+          }, 500);
         }
     }
 
@@ -1327,8 +1331,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     // 4. Need to establish session via Nostr
     if (!nostrIdentity) return false;
 
-    // Close any previous session with a different contact to avoid conflicting state
-    if (session && sessionRemotePubKey !== remotePubKey && typeof session.close === 'function') {
+    // Close any previous session that is not actively connected to avoid conflicting state
+    if (session && (!session.isChannelOpen || !session.isChannelOpen())) {
       try { session.close(); } catch { }
       session = null;
     }
@@ -1488,7 +1492,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   // ── Build Nostr session config (callbacks for PeerSession) ──
   function buildNostrSessionConfig(sessionId, remotePubKey, sessionRole) {
     return {
-      onLog: () => {},
+      onLog: (msg, level) => {
+        if (level === 'error') console.error(`[WebRTC] ${msg}`);
+        else if (level === 'warn') console.warn(`[WebRTC] ${msg}`);
+        else console.log(`[WebRTC] ${msg}`);
+      },
       onStateChange: handleStateChange,
       onIceCandidate: () => {},
       onIceCandidateError: (err) => {
@@ -4044,7 +4052,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
       // Init transport
       NostrTransport.init(nostrIdentity.privateKey, nostrIdentity.publicKey, {
-        onLog: () => {},
+        onLog: (msg, level) => {
+          if (level === 'error') console.error(msg);
+          else if (level === 'warn') console.warn(msg);
+          else console.log(msg);
+        },
         onRelayStatus: () => renderRelayList(),
       });
 
@@ -4085,7 +4097,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
       // Init signaling
       NostrSignaling.init({
-        onLog: () => {},
+        onLog: (msg, level) => {
+          if (level === 'error') console.error(msg);
+          else if (level === 'warn') console.warn(msg);
+          else console.log(msg);
+        },
         buildIceServers,
         getSessionConfig: buildNostrSessionConfig,
         onSessionCreated: (sessionId, peerSession, remotePubKey, sessionRole) => {

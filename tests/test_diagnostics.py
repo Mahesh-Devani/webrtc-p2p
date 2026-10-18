@@ -96,6 +96,33 @@ class TestDiagnosticSystem(unittest.TestCase):
         root_causes_str = ' '.join(analysis['rootCauses']).lower()
         self.assertIn('relay', root_causes_str)
 
+    def test_ai_agent_session_fail_rule(self):
+        """DiagnosticEngine must detect signaling session initiation failures in logs."""
+        mock_pkg = {
+            'generatedAt': '2026-10-18T12:00:00Z',
+            'version': 'v7',
+            'webrtc': {'connectionState': 'new'},
+            'relays': [
+                {'url': 'wss://relay.primal.net', 'state': 'connected'},
+            ],
+            'recentLogs': [
+                {'level': 'error', 'message': '[ensurePeerConnected] Failed to start session: All relays rejected the signaling event'}
+            ],
+            'identity': {'clientPubKey': 'aabbcc112233', 'targetPubKey': 'ddeeff445566'}
+        }
+
+        analysis = DiagnosticEngine.analyze(mock_pkg)
+        self.assertEqual(analysis['overallStatus'], 'CRITICAL')
+        root_causes_str = ' '.join(analysis['rootCauses']).lower()
+        self.assertIn('failed to start session', root_causes_str)
+
+    def test_diagnostic_logger_error_serialization(self):
+        """diagnostic-logger.js must define formatArg to extract Error name, message, and stack."""
+        content = (PROJECT_ROOT / 'diagnostic-logger.js').read_text(encoding='utf-8')
+        self.assertIn('function formatArg', content, "formatArg helper missing in diagnostic-logger.js")
+        self.assertIn('instanceof Error', content, "Error instance check missing in diagnostic-logger.js")
+        self.assertIn('a.stack', content, "Error stack preservation missing in diagnostic-logger.js")
+
 
 if __name__ == '__main__':
     unittest.main()

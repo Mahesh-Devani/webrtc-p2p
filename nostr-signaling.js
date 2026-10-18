@@ -98,40 +98,73 @@ export const NostrSignaling = (() => {
         _log(`[Signaling] Starting session ${sessionId.slice(0, 8)} → ${remotePubKey.slice(0, 8)}…`, 'info');
 
         // Create PeerSession
-        const peerSession = _createPeerSession(sessionId, remotePubKey, 'creator');
+        let peerSession;
+        try {
+            peerSession = _createPeerSession(sessionId, remotePubKey, 'creator');
+        } catch (err) {
+            _log(`[Signaling] Failed to create PeerSession: ${err.message}`, 'error');
+            throw err;
+        }
 
         // Create offer (if unattended remote desktop, request video from host)
-        const isRemoteDesktop = !!(extraData && (extraData.isUnattended || extraData.receiveVideo));
-        const offer = await peerSession.createOffer({ receiveVideo: isRemoteDesktop });
+        let offer;
+        try {
+            const isRemoteDesktop = !!(extraData && (extraData.isUnattended || extraData.receiveVideo));
+            offer = await peerSession.createOffer({ receiveVideo: isRemoteDesktop });
+            _log(`[Signaling] Local offer created for session ${sessionId.slice(0, 8)}`, 'info');
+        } catch (err) {
+            _log(`[Signaling] Failed to create local offer: ${err.message}`, 'error');
+            throw err;
+        }
 
         // Wait for early ICE candidates (1s bundles host & srflx candidates; remaining candidates trickle)
-        await _waitForIce(peerSession, 1000);
-        const candidates = peerSession.getLocalCandidates();
+        try {
+            await _waitForIce(peerSession, 1000);
+        } catch (err) {
+            _log(`[Signaling] Early ICE gather warning: ${err.message}`, 'warn');
+        }
 
-        // Compress SDP + candidates (+ optional extra data like pin / unattended)
-        const payload = {
-            sdp: { type: offer.type, sdp: offer.sdp },
-            candidates: candidates.map(c => ({
-                candidate: c.candidate,
-                sdpMid: c.sdpMid,
-                sdpMLineIndex: c.sdpMLineIndex,
-            })),
-            ...extraData,
-        };
-        const data = _compressSignalData(payload);
+        let candidates = [];
+        let data = '';
+        try {
+            candidates = peerSession.getLocalCandidates();
+            // Compress SDP + candidates (+ optional extra data like pin / unattended)
+            const payload = {
+                sdp: { type: offer.type, sdp: offer.sdp },
+                candidates: candidates.map(c => ({
+                    candidate: c.candidate,
+                    sdpMid: c.sdpMid,
+                    sdpMLineIndex: c.sdpMLineIndex,
+                })),
+                ...extraData,
+            };
+            data = _compressSignalData(payload);
+        } catch (err) {
+            _log(`[Signaling] Failed to compress offer SDP/candidates: ${err.message}`, 'error');
+            throw err;
+        }
 
         const signalType = (extraData && (extraData.pin !== undefined || extraData.isUnattended))
             ? 'unattended_offer'
             : 'offer';
 
         // Send offer via Nostr
-        await NostrTransport.sendSignal(remotePubKey, {
-            type: signalType,
-            session: sessionId,
-            data,
-        });
+        try {
+            await NostrTransport.sendSignal(remotePubKey, {
+                type: signalType,
+                session: sessionId,
+                data,
+            });
+            const entry = _sessions.get(sessionId);
+            if (entry) {
+                entry.initialSignalingSent = true;
+            }
+            _log(`[Signaling] ${signalType} sent (${candidates.length} ICE candidates bundled)`, 'info');
+        } catch (err) {
+            _log(`[Signaling] Failed to send ${signalType} via Nostr: ${err.message}`, 'error');
+            throw err;
+        }
 
-        _log(`[Signaling] ${signalType} sent (${candidates.length} ICE candidates bundled)`, 'info');
         return sessionId;
     }
 
@@ -239,6 +272,11 @@ export const NostrSignaling = (() => {
                 session: sessionId,
                 data: answerData,
             });
+
+            const entry = _sessions.get(sessionId);
+            if (entry) {
+                entry.initialSignalingSent = true;
+            }
 
             _log(`[Signaling] Answer sent (${localCandidates.length} ICE candidates)`, 'info');
         } catch (err) {
@@ -426,6 +464,7 @@ export const NostrSignaling = (() => {
             remotePubKey,
             state: 'pending',
             role,
+            initialSignalingSent: false,
             createdAt: Date.now(),
         });
 
@@ -446,6 +485,13 @@ export const NostrSignaling = (() => {
      * @private
      */
     function _sendIceCandidate(sessionId, remotePubKey, candidate) {
+        const entry = _sessions.get(sessionId);
+        // Do not send trickle ICE before initial offer/answer has been transmitted.
+        // All candidates gathered prior to initialSignalingSent are already bundled in the offer/answer SDP.
+        if (!entry || !entry.initialSignalingSent) {
+            return;
+        }
+
         if (!_iceBatchQueues.has(sessionId)) {
             _iceBatchQueues.set(sessionId, []);
         }

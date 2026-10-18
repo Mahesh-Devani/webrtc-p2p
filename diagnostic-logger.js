@@ -78,13 +78,38 @@ export const DiagnosticLogger = (() => {
   }
 
   /**
+   * Format any argument into a readable string, preserving Error message and stack.
+   * @param {any} a
+   * @returns {string}
+   */
+  function formatArg(a) {
+    if (a instanceof Error) {
+      const name = a.name || 'Error';
+      const msg = a.message || '';
+      const stack = a.stack ? `\n${a.stack}` : '';
+      return `${name}: ${msg}${stack}`;
+    }
+    if (typeof a === 'object' && a !== null) {
+      if (a.message && (a.stack || a.name)) {
+        return `${a.name || 'Error'}: ${a.message}${a.stack ? `\n${a.stack}` : ''}`;
+      }
+      try {
+        return JSON.stringify(a);
+      } catch {
+        return String(a);
+      }
+    }
+    return String(a);
+  }
+
+  /**
    * Record a structured log event in the ring buffer.
    * @param {'info'|'warn'|'error'|'debug'} level
    * @param {Array<any>} args
    */
   function record(level, args) {
     try {
-      const parts = args.map(a => (typeof a === 'object' ? redact(JSON.stringify(a)) : redact(String(a))));
+      const parts = args.map(a => redact(formatArg(a)));
       const message = parts.join(' ');
       const tag = extractTag(message);
 

@@ -152,7 +152,7 @@ export class NostrRelay {
                 const idx = this._pendingPublishes.findIndex(p => p.eventId === event.id);
                 if (idx !== -1) this._pendingPublishes.splice(idx, 1);
                 reject(new Error(`Publish timeout on ${this.url}`));
-            }, 5000);
+            }, 8000);
 
             this._pendingPublishes.push({
                 eventId: event.id,

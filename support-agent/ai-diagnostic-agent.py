@@ -143,6 +143,17 @@ class DiagnosticEngine:
                 'message': 'Offer collision (glare) occurred between peers; automated tie-breaker engaged.'
             })
 
+        session_fail = next((l.get('message', '') for l in logs if 'failed to start session' in l.get('message', '').lower() or 'rejected the signaling event' in l.get('message', '').lower()), None)
+        if session_fail:
+            root_causes.append(f'Signaling handshake failure during P2P session start: {session_fail}')
+            findings.append({
+                'category': 'Signaling',
+                'level': 'ERROR',
+                'message': f'Failed to start P2P session: {session_fail}'
+            })
+            recommendations.append('Ensure target peer is currently online with P2P Connect open in active foreground tab.')
+            recommendations.append('Verify configured Nostr relays accept ephemeral signaling events (kind 24133).')
+
         # 5. Mobile Environment Checks
         ua = env.get('userAgent', '')
         if any(m in ua for m in ['iPhone', 'iPad', 'Android', 'Mobile']):

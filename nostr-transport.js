@@ -33,6 +33,7 @@ const DEFAULT_RELAYS = [
     'wss://relay.primal.net',
     'wss://nos.lol',
     'wss://offchain.pub',
+    'wss://relay.damus.io',
 ];
 
 export const NostrTransport = (() => {
@@ -346,16 +347,20 @@ export const NostrTransport = (() => {
     async function _publishWithRetry(event, signalType, toPubKey) {
         const MAX_ATTEMPTS = 2;
         const RETRY_DELAY_MS = 2000;
+        const lastErrors = [];
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             const publishPromises = [];
             const relayUrls = [];
+            lastErrors.length = 0;
 
             for (const [url, relay] of _relays) {
                 if (relay.state === RelayState.CONNECTED) {
                     relayUrls.push(url);
                     publishPromises.push(
                         relay.publish(event).catch(err => {
+                            const detail = `${url}: ${err.message}`;
+                            lastErrors.push(detail);
                             _logHandler(`[Nostr] Publish failed on ${url}: ${err.message}`, 'warn');
                             throw err; // re-throw so Promise.any knows this relay failed
                         })
@@ -364,7 +369,8 @@ export const NostrTransport = (() => {
             }
 
             if (publishPromises.length === 0) {
-                throw new Error('No relays connected — cannot send signal');
+                const states = Array.from(_relays.entries()).map(([u, r]) => `${u} (${r.state})`).join(', ');
+                throw new Error(`No relays connected — cannot send signal (relays: ${states || 'none configured'})`);
             }
 
             try {
@@ -373,12 +379,13 @@ export const NostrTransport = (() => {
                 return; // success — at least one relay accepted
             } catch (aggregateErr) {
                 // All relays failed
+                const errSummary = lastErrors.join('; ') || 'Timeout or rejection';
                 if (attempt < MAX_ATTEMPTS) {
-                    _logHandler(`[Nostr] All ${relayUrls.length} relays rejected (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${RETRY_DELAY_MS}ms…`, 'warn');
+                    _logHandler(`[Nostr] All ${relayUrls.length} relays rejected (attempt ${attempt}/${MAX_ATTEMPTS}: ${errSummary}), retrying in ${RETRY_DELAY_MS}ms…`, 'warn');
                     await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
                 } else {
-                    _logHandler(`[Nostr] All relays rejected after ${MAX_ATTEMPTS} attempts`, 'error');
-                    throw new Error('All relays rejected the signaling event');
+                    _logHandler(`[Nostr] All relays rejected after ${MAX_ATTEMPTS} attempts (${errSummary})`, 'error');
+                    throw new Error(`All relays rejected the signaling event (${errSummary})`);
                 }
             }
         }
