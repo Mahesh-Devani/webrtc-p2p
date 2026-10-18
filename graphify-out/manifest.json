@@ -24,9 +24,9 @@
     "semantic_hash": "2306e5c7610148e94fda5f75af15457b"
   },
   "nostr-relay.js": {
-    "mtime": 1792311402.1516461,
-    "seen": 1792311645.7662542,
-    "ast_hash": "642649e4aaba6855193575a6572bdff2",
+    "mtime": 1792344295.398476,
+    "seen": 1792345184.981452,
+    "ast_hash": "54690efbad83a0279d768b3ab96327fe",
     "semantic_hash": ""
   },
   "nostr-signaling.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792340576.31812,
-    "seen": 1792340588.541295,
-    "ast_hash": "f7e0a24adc622b410b613e62489c3334",
+    "mtime": 1792344317.192279,
+    "seen": 1792345184.981473,
+    "ast_hash": "e49b8a346bb1371f33a779b72ec74794",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "tests/test_mobile_lifecycle.py": {
-    "mtime": 1792181889.2323594,
-    "seen": 1792182245.594223,
-    "ast_hash": "9c6ae91c58d0521708384c5e2829eef1",
+    "mtime": 1792344309.0685496,
+    "seen": 1792345184.9814641,
+    "ast_hash": "e8675d5d9cdd4cc37fead9d1b7cf9cdc",
     "semantic_hash": ""
   },
   "tests/test_token_codec.py": {

@@ -7,7 +7,6 @@
   "7": "decode",
   "9": "package.json",
   "11": "remote-desktop-host/package.json",
-  "19": "classifyKind",
   "31": "install-linux-service.sh",
   "32": "install-macos-agent.sh",
   "33": "install-service.sh",

@@ -41,6 +41,7 @@ export class NostrRelay {
         this._log = opts.onLog || (() => { });
         this._onStatusChange = opts.onStatusChange || (() => { });
         this._subIdCounter = 0;
+        this._connectPromise = null;
     }
 
     /**
@@ -51,8 +52,14 @@ export class NostrRelay {
         if (this.state === RelayState.CONNECTED && this._ws?.readyState === WebSocket.OPEN) {
             return Promise.resolve();
         }
+        if (this.state === RelayState.CONNECTING && this._connectPromise) {
+            return this._connectPromise;
+        }
         this._manualDisconnect = false;
-        return this._doConnect();
+        this._connectPromise = this._doConnect().finally(() => {
+            this._connectPromise = null;
+        });
+        return this._connectPromise;
     }
 
     /** @private */
@@ -61,8 +68,10 @@ export class NostrRelay {
             this._setState(RelayState.CONNECTING);
             this._log(`Connecting to ${this.url}…`, 'info');
 
+            let ws;
             try {
-                this._ws = new WebSocket(this.url);
+                ws = new WebSocket(this.url);
+                this._ws = ws;
             } catch (err) {
                 this._log(`WebSocket creation failed for ${this.url}: ${err.message}`, 'error');
                 this._setState(RelayState.DISCONNECTED);
@@ -71,8 +80,18 @@ export class NostrRelay {
                 return;
             }
 
+            const cleanup = () => {
+                ws.removeEventListener('open', onOpen);
+                ws.removeEventListener('error', onError);
+                ws.addEventListener('error', () => { }); // swallow future errors until full handler
+                if (this._ws === ws) {
+                    this._wireSocket();
+                }
+            };
+
             const onOpen = () => {
                 cleanup();
+                if (this._ws !== ws) return; // Stale socket guard
                 this._reconnectDelay = 1000; // reset backoff on success
                 this._setState(RelayState.CONNECTED);
                 this._log(`Connected to ${this.url}`, 'success');
@@ -82,21 +101,15 @@ export class NostrRelay {
 
             const onError = (e) => {
                 cleanup();
+                if (this._ws !== ws) return; // Stale socket guard
                 this._log(`Connection error for ${this.url}`, 'error');
                 this._setState(RelayState.DISCONNECTED);
                 this._scheduleReconnect();
                 reject(new Error(`Failed to connect to ${this.url}`));
             };
 
-            const cleanup = () => {
-                this._ws.removeEventListener('open', onOpen);
-                this._ws.removeEventListener('error', onError);
-                this._ws.addEventListener('error', () => { }); // swallow future errors until full handler
-                this._wireSocket();
-            };
-
-            this._ws.addEventListener('open', onOpen);
-            this._ws.addEventListener('error', onError);
+            ws.addEventListener('open', onOpen);
+            ws.addEventListener('error', onError);
         });
     }
 
@@ -120,6 +133,7 @@ export class NostrRelay {
      */
     disconnect() {
         this._manualDisconnect = true;
+        this._connectPromise = null;
         if (this._reconnectTimer) {
             clearTimeout(this._reconnectTimer);
             this._reconnectTimer = null;
@@ -197,6 +211,9 @@ export class NostrRelay {
 
     /** @private */
     _sendSubscription(subId, filters) {
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
         try {
             this._ws.send(JSON.stringify(['REQ', subId, ...filters]));
         } catch (err) {

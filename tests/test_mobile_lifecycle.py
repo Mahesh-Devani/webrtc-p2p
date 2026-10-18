@@ -42,6 +42,17 @@ class TestMobileLifecycle(unittest.TestCase):
         self.assertIn("!activeContactPubkey", self.ui_content,
                       "ui-controller.js must explicitly check for null activeContactPubkey")
 
+    def test_relay_connection_deduplication_and_socket_guard(self):
+        """nostr-relay.js must deduplicate in-flight connects, guard against stale sockets, and check readyState."""
+        relay_content = (PROJECT_ROOT / 'nostr-relay.js').read_text(encoding='utf-8')
+        self.assertIn("_connectPromise", relay_content,
+                      "nostr-relay.js must deduplicate in-flight connection promises")
+        self.assertIn("this._ws !== ws", relay_content,
+                      "nostr-relay.js must guard against stale socket events")
+        self.assertIn("readyState !== WebSocket.OPEN", relay_content,
+                      "nostr-relay.js must verify socket is OPEN before sending subscriptions")
+
 
 if __name__ == '__main__':
     unittest.main()
+
