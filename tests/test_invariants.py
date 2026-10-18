@@ -25,8 +25,9 @@ JS_FILES = [
     'chat-store.js',
     'host-controller.js',
     'diagnostic-logger.js',
+    'support-controller.js',
 ]
-HTML_FILES = ['index.html', 'host.html']
+HTML_FILES = ['index.html', 'host.html', 'support.html']
 
 
 def read_project_file(filename):
@@ -129,7 +130,7 @@ class TestArchitecturalInvariants(unittest.TestCase):
                 basename = src.split('?')[0]
                 self.assertIn(
                     basename,
-                    ['ui-controller.js', 'host-controller.js'],
+                    ['ui-controller.js', 'host-controller.js', 'support-controller.js'],
                     f"{html_file} has unexpected cache buster on {src}"
                 )
 

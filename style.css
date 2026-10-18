@@ -2500,3 +2500,136 @@ video#remote-video.rd-fit-native {
   align-items: center;
   gap: 4px;
 }
+
+/* ═══ AI SUPPORT AGENT & DIAGNOSTIC CARD STYLES ═══ */
+
+/* Bot contact badge in sidebar list */
+.contact-bot-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  background: rgba(0, 168, 132, 0.18);
+  color: var(--c-primary);
+  border: 1px solid rgba(0, 168, 132, 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+/* Diagnostic Card Bubbles */
+.chat-msg--diag-card {
+  max-width: 82% !important;
+  background: #18222d !important;
+  border: 1px solid rgba(0, 168, 132, 0.35) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  margin: 6px 0 !important;
+}
+
+.diag-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.diag-card__title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #fff;
+}
+
+.diag-card__status-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.diag-card__status-badge--CRITICAL {
+  background: rgba(241, 92, 107, 0.2);
+  color: var(--c-danger, #f15c6b);
+  border: 1px solid rgba(241, 92, 107, 0.4);
+}
+.diag-card__status-badge--WARNING {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+.diag-card__status-badge--HEALTHY {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.diag-card__status-badge--INFO {
+  background: rgba(83, 189, 235, 0.2);
+  color: #53bdeb;
+  border: 1px solid rgba(83, 189, 235, 0.4);
+}
+
+.diag-card__section {
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.diag-card__label {
+  font-weight: 600;
+  color: var(--c-text-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.diag-card__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--c-text);
+}
+
+.diag-card__list li {
+  margin-bottom: 4px;
+}
+
+.diag-card__clarification {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 10px 0 6px 0;
+  font-size: 0.82rem;
+  color: #fef08a;
+}
+
+.diag-card__clarification-title {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  color: #fbbf24;
+  font-size: 0.75rem;
+}
+
+.diag-card__footer {
+  font-size: 0.68rem;
+  color: var(--c-text-dim);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 6px;
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

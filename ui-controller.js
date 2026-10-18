@@ -87,6 +87,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     chatInput: $('#chat-input'),
     btnSend: $('#btn-send'),
     fileInput: $('#file-input'),
+    btnAttachScreenshot: $('#btn-attach-screenshot'),
+    screenshotInput: $('#screenshot-input'),
+    btnChatSendDiag: $('#btn-chat-send-diag'),
     fileProgress: $('#file-progress'),
     fileProgressLabel: $('#file-progress-label'),
     fileProgressBar: $('#file-progress-bar'),
@@ -890,18 +893,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     for (const c of sorted) {
       const div = document.createElement('div');
       div.className = 'contact-item' + (c.pubkey === activeContactPubkey ? ' active' : '');
-      const letter = (c.nickname || c.pubkey)[0].toUpperCase();
-      const color = getAvatarColor(c.pubkey);
+      const isBot = c.isSupportBot || c.pubkey === SUPPORT_AGENT_PUBKEY;
+      const letter = isBot ? '🤖' : (c.nickname || c.pubkey)[0].toUpperCase();
+      const color = isBot ? 'linear-gradient(135deg, #00a884 0%, #0d6efd 100%)' : getAvatarColor(c.pubkey);
       const time = c.lastTs ? formatTime(c.lastTs) : '';
       const preview = c.lastText
         ? (c.lastSender === 'self' ? 'You: ' : '') + c.lastText.slice(0, 40)
-        : 'No messages yet';
+        : (isBot ? 'Ask diagnostic questions or send logs' : 'No messages yet');
       const pubShort = c.pubkey.slice(0, 6) + '…' + c.pubkey.slice(-4);
+      const botBadge = isBot ? '<span class="contact-bot-badge">AI SUPPORT</span>' : '';
       div.innerHTML = `
         <div class="avatar avatar--small" style="background:${color}"><span>${escapeHtml(letter)}</span></div>
         <div class="contact-item__info">
           <div class="contact-item__top">
-            <span class="contact-item__name">${escapeHtml(c.nickname || c.pubkey.slice(0, 12) + '…')}</span>
+            <span class="contact-item__name">${escapeHtml(c.nickname || c.pubkey.slice(0, 12) + '…')}${botBadge}</span>
             <span class="contact-item__time">${time}</span>
           </div>
           <div class="contact-item__preview">${escapeHtml(preview)}</div>
@@ -943,43 +948,64 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.fileInput.disabled = false;
     dom.chatInput.focus();
 
+    const isSupportBot = pubkey === SUPPORT_AGENT_PUBKEY;
     const isConnected = session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.isChannelOpen?.();
     const isConnecting = (connectingPromisePubKey === pubkey) || (session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.getState?.() !== 'closed' && session.getState?.() !== 'failed');
     
-    if (isConnected) {
-        dom.chatContactStatus.textContent = 'Connected';
+    if (isSupportBot) {
+        dom.chatContactStatus.textContent = isConnected ? 'Connected (Direct P2P Ready)' : '🤖 AI Diagnostic Agent • Always Ready';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
-        show(dom.btnAudioCall);
-        show(dom.btnVideoCall);
-        show(dom.btnRemoteDesktop);
-        hide(dom.btnConnectPeer);
-    } else if (isConnecting) {
-        dom.chatContactStatus.textContent = 'Connecting via Nostr…';
-        dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
         hide(dom.btnRemoteDesktop);
-        hide(dom.btnConnectPeer);
-    } else {
-        dom.chatContactStatus.textContent = 'Connecting via Nostr…';
-        dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
-        hide(dom.btnAudioCall);
-        hide(dom.btnVideoCall);
-        hide(dom.btnRemoteDesktop);
-        hide(dom.btnConnectPeer);
-        
-        // Auto connect
-        if (nostrIdentity) {
-            // If we already have an active session with someone else, do not auto-connect and orphan them!
-            if (session && session.getState?.() !== 'closed' && session.getState?.() !== 'failed' && sessionRemotePubKey !== pubkey) {
-               dom.chatContactStatus.textContent = 'Offline (Busy)';
-               dom.chatContactStatus.className = 'chat-header__status';
-               show(dom.btnConnectPeer);
-            } else {
-               ensurePeerConnected(pubkey).catch(() => {});
-            }
+        if (dom.btnChatSendDiag) show(dom.btnChatSendDiag);
+        if (dom.btnAttachScreenshot) show(dom.btnAttachScreenshot);
+        if (isConnected) {
+            hide(dom.btnConnectPeer);
         } else {
-            pendingAutoConnectPubKey = pubkey;
+            show(dom.btnConnectPeer);
+            dom.btnConnectPeer.title = 'Connect Direct P2P Channel (for Screenshots)';
+        }
+    } else {
+        if (dom.btnChatSendDiag) hide(dom.btnChatSendDiag);
+        if (dom.btnAttachScreenshot) hide(dom.btnAttachScreenshot);
+        dom.btnConnectPeer.title = 'Reconnect';
+
+        if (isConnected) {
+            dom.chatContactStatus.textContent = 'Connected';
+            dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+            show(dom.btnAudioCall);
+            show(dom.btnVideoCall);
+            show(dom.btnRemoteDesktop);
+            hide(dom.btnConnectPeer);
+        } else if (isConnecting) {
+            dom.chatContactStatus.textContent = 'Connecting via Nostr…';
+            dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
+            hide(dom.btnAudioCall);
+            hide(dom.btnVideoCall);
+            hide(dom.btnRemoteDesktop);
+            hide(dom.btnConnectPeer);
+        } else {
+            dom.chatContactStatus.textContent = 'Connecting via Nostr…';
+            dom.chatContactStatus.className = 'chat-header__status chat-header__status--connecting';
+            hide(dom.btnAudioCall);
+            hide(dom.btnVideoCall);
+            hide(dom.btnRemoteDesktop);
+            hide(dom.btnConnectPeer);
+            
+            // Auto connect
+            if (nostrIdentity) {
+                // If we already have an active session with someone else, do not auto-connect and orphan them!
+                if (session && session.getState?.() !== 'closed' && session.getState?.() !== 'failed' && sessionRemotePubKey !== pubkey) {
+                   dom.chatContactStatus.textContent = 'Offline (Busy)';
+                   dom.chatContactStatus.className = 'chat-header__status';
+                   show(dom.btnConnectPeer);
+                } else {
+                   ensurePeerConnected(pubkey).catch(() => {});
+                }
+            } else {
+                pendingAutoConnectPubKey = pubkey;
+            }
         }
     }
   }
@@ -1004,6 +1030,85 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
   }
 
+  function formatDiagnosticBubbleHtml(rawText, ts, ticks) {
+    let status = 'INFO';
+    const statusMatch = rawText.match(/Status:\s*([A-Z]+)/i);
+    if (statusMatch) {
+      status = statusMatch[1].toUpperCase();
+    }
+    const badgeClass = `diag-card__status-badge diag-card__status-badge--${status}`;
+
+    // Extract Clarification Question if present
+    let clarification = '';
+    const clarMatch = rawText.match(/(?:❓\s*Clarification Question:|❓\s*Clarification Needed:)\s*([\s\S]*?)(?:\(Advisory Mode|$)/i);
+    if (clarMatch) {
+      clarification = clarMatch[1].trim();
+    }
+
+    // Extract Findings
+    let findings = [];
+    const findMatch = rawText.match(/Findings:\s*([\s\S]*?)(?=Recommendations:|❓\s*Clarification|\(Advisory Mode|$)/i);
+    if (findMatch) {
+      findings = findMatch[1].trim().split('\n')
+        .map(l => l.replace(/^[•\-\*]\s*/, '').trim())
+        .filter(Boolean);
+    }
+
+    // Extract Recommendations
+    let recs = [];
+    const recMatch = rawText.match(/Recommendations:\s*([\s\S]*?)(?=❓\s*Clarification|\(Advisory Mode|$)/i);
+    if (recMatch) {
+      recs = recMatch[1].trim().split('\n')
+        .map(l => l.replace(/^[•\-\*]\s*/, '').trim())
+        .filter(Boolean);
+    }
+
+    // If no explicit Findings/Recommendations sections, extract main advice paragraphs
+    let adviceHtml = '';
+    if (findings.length === 0 && recs.length === 0) {
+      const lines = rawText.split('\n')
+        .filter(l => !l.startsWith('🤖') && !l.startsWith('Status:') && !l.startsWith('❓') && !l.includes('Advisory Mode'))
+        .join('\n').trim();
+      if (lines) {
+        adviceHtml = `<div class="diag-card__section" style="white-space: pre-wrap;">${escapeHtml(lines)}</div>`;
+      }
+    }
+
+    const findingsHtml = findings.length > 0 ? `
+      <div class="diag-card__section">
+        <div class="diag-card__label" style="color:var(--c-danger);">Findings / Root Causes:</div>
+        <ul class="diag-card__list">${findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+      </div>` : '';
+
+    const recsHtml = recs.length > 0 ? `
+      <div class="diag-card__section">
+        <div class="diag-card__label" style="color:var(--c-primary);">Recommendations:</div>
+        <ul class="diag-card__list">${recs.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+      </div>` : '';
+
+    const clarHtml = clarification ? `
+      <div class="diag-card__clarification">
+        <div class="diag-card__clarification-title">
+          <span>❓</span><span>Clarification Needed:</span>
+        </div>
+        <div>${escapeHtml(clarification)}</div>
+      </div>` : '';
+
+    return `
+      <div class="diag-card__header">
+        <div class="diag-card__title-box"><span>🤖</span><span>AI Support Agent</span></div>
+        <span class="${badgeClass}">${status}</span>
+      </div>
+      ${adviceHtml}
+      ${findingsHtml}
+      ${recsHtml}
+      ${clarHtml}
+      <div class="diag-card__footer">
+        <span>🔒 Advisory Mode: Recommendations for Developer Review</span>
+        <div class="chat-msg__meta"><span>${formatTime(ts)}</span>${ticks}</div>
+      </div>`;
+  }
+
   function appendChatBubble(msg) {
     if (msg.type === 'system') {
       const div = document.createElement('div');
@@ -1017,15 +1122,49 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     div.className = `chat-msg chat-msg--${msg.sender}`;
     div.dataset.id = msg.id;
 
-    let content = escapeHtml(msg.text);
-    if (msg.type === 'file' && msg.fileName) {
-      const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
-      content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
-    }
-
     const ticks = msg.sender === 'self'
       ? `<span class="chat-msg__ticks ${msg.status === 'delivered' ? '' : 'chat-msg__ticks--pending'}">${msg.status === 'delivered' ? '✓✓' : '✓'}</span>`
       : '';
+
+    // Check if message is a sent diagnostic package
+    if (msg.text && msg.text.startsWith('📋 Diagnostic Log Package transmitted')) {
+      div.className = `chat-msg chat-msg--${msg.sender} chat-msg--diag-card`;
+      div.innerHTML = `
+        <div class="diag-card__header">
+          <div class="diag-card__title-box"><span>📋</span><span>Diagnostic Log Package</span></div>
+          <span class="diag-card__status-badge diag-card__status-badge--INFO">TELEMETRY SENT</span>
+        </div>
+        <div class="diag-card__section">
+          ${escapeHtml(msg.text)}
+        </div>
+        <div class="diag-card__footer">
+          <span>🔒 Pruned &amp; Encrypted via NIP-44 (&lt; 2 KB)</span>
+          <div class="chat-msg__meta"><span>${formatTime(msg.ts)}</span>${ticks}</div>
+        </div>`;
+      dom.chatMessages.appendChild(div);
+      dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+      return div;
+    }
+
+    // Check if message is an AI Support Agent report or clarification
+    if (msg.text && (msg.text.startsWith('🤖 [AI Diagnostic Analysis]') || msg.text.startsWith('🤖 [AI Support Agent'))) {
+      div.className = `chat-msg chat-msg--${msg.sender} chat-msg--diag-card`;
+      div.innerHTML = formatDiagnosticBubbleHtml(msg.text, msg.ts, ticks);
+      dom.chatMessages.appendChild(div);
+      dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+      return div;
+    }
+
+    let content = escapeHtml(msg.text);
+    if (msg.type === 'file' && msg.fileName) {
+      const isScreenshot = msg.fileName.toLowerCase().includes('screenshot') || (msg.text && msg.text.includes('📷 Screenshot'));
+      const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
+      if (isScreenshot) {
+        content = `📷 <strong>Screenshot</strong>${sizeStr}<div style="font-size:0.72rem; color:var(--c-primary); margin-top:3px;">⚡ Direct P2P Transfer (Zero Nostr Quota)</div>`;
+      } else {
+        content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
+      }
+    }
 
     div.innerHTML = `<div class="chat-msg__text">${content}</div>
       <div class="chat-msg__meta"><span>${formatTime(msg.ts)}</span>${ticks}</div>`;
@@ -1497,6 +1636,125 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       }
     } finally {
       dom.fileInput.disabled = false;
+    }
+  }
+
+  // ── Screenshot Attachment & Quota Protection ──
+  async function processScreenshotFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      toast('Please select an image file for screenshot.');
+      return;
+    }
+
+    toast('Processing screenshot image…');
+
+    // 1. Optimize & scale image on offscreen canvas to keep size under 200 KB
+    let optimizedBlob = null;
+    try {
+      optimizedBlob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const maxDim = 1024;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.82);
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    } catch (err) {
+      console.warn('[Screenshot] Optimization error, using original:', err);
+      optimizedBlob = file;
+    }
+
+    if (!optimizedBlob) optimizedBlob = file;
+    const fileName = `screenshot-${Date.now()}.jpg`;
+
+    // 2. Strict Quota Enforcement
+    // Senders MUST NOT send screenshot binaries over Nostr relays!
+    const isP2pOpen = session && session.isChannelOpen?.();
+    if (isP2pOpen) {
+      toast('Streaming screenshot over direct WebRTC DataChannel… ⚡');
+      try {
+        await session.sendFile(optimizedBlob, fileName);
+        const msg = {
+          id: 'ss-' + Date.now(),
+          text: `📷 Screenshot sent via P2P direct channel (${(optimizedBlob.size / 1024).toFixed(1)} KB)`,
+          sender: 'self',
+          ts: Date.now(),
+          status: 'sent',
+          type: 'file',
+          fileName,
+          fileSize: optimizedBlob.size,
+        };
+        if (activeContactPubkey) {
+          ChatStore.addMessage(activeContactPubkey, msg);
+        }
+        appendChatBubble(msg);
+        toast('Screenshot sent via direct P2P! ⚡');
+      } catch (err) {
+        toast(`Failed to send screenshot: ${err.message}`);
+      }
+      return;
+    }
+
+    // 3. P2P not yet connected: attempt auto-connection or prompt user
+    toast('🔒 Direct P2P channel required for screenshots. Connecting now…');
+    if (activeContactPubkey) {
+      ensurePeerConnected(activeContactPubkey)
+        .then(async () => {
+          if (session && session.isChannelOpen?.()) {
+            toast('P2P connected! Sending screenshot… ⚡');
+            await session.sendFile(optimizedBlob, fileName);
+            const msg = {
+              id: 'ss-' + Date.now(),
+              text: `📷 Screenshot sent via P2P direct channel (${(optimizedBlob.size / 1024).toFixed(1)} KB)`,
+              sender: 'self',
+              ts: Date.now(),
+              status: 'sent',
+              type: 'file',
+              fileName,
+              fileSize: optimizedBlob.size,
+            };
+            ChatStore.addMessage(activeContactPubkey, msg);
+            appendChatBubble(msg);
+            toast('Screenshot sent via direct P2P! ⚡');
+          }
+        })
+        .catch(() => {
+          toast('Direct P2P channel unavailable. Please click Download Log Package (.json) and email your screenshot to support.');
+        });
+    }
+  }
+
+  function handleChatPaste(e) {
+    if (!e.clipboardData || !e.clipboardData.items) return;
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          processScreenshotFile(file);
+          break;
+        }
+      }
     }
   }
 
@@ -3275,6 +3533,26 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (files.length) {
       await sendSelectedFiles(files);
     }
+  });
+
+  // Screenshot attachment & clipboard paste
+  dom.chatInput?.addEventListener('paste', handleChatPaste);
+  dom.chatMessages?.addEventListener('paste', handleChatPaste);
+
+  dom.btnAttachScreenshot?.addEventListener('click', () => {
+    if (dom.screenshotInput) dom.screenshotInput.click();
+  });
+
+  dom.screenshotInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) {
+      await processScreenshotFile(file);
+    }
+  });
+
+  dom.btnChatSendDiag?.addEventListener('click', () => {
+    if (dom.btnSendAiAgent) dom.btnSendAiAgent.click();
   });
 
   // Drag and drop multiple files

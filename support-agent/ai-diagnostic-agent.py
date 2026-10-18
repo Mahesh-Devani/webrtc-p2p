@@ -184,6 +184,146 @@ class DiagnosticEngine:
             'targetPubKey': identity.get('targetPubKey'),
         }
 
+    @staticmethod
+    def analyze_comment(user_text: str, client_pk: str, pkg: dict = None) -> dict:
+        """
+        Multi-turn interactive diagnostic dialogue & clarification engine.
+        Cross-analyzes user's plain-text comment with ingested connection telemetry,
+        generates context-aware clarification questions, and provides developer suggestions.
+        """
+        # If pkg is not provided, look for the newest saved logpkg in INBOX_DIR for this client
+        if pkg is None and INBOX_DIR.exists():
+            matched = list(INBOX_DIR.glob(f"logpkg_*_{client_pk}.json"))
+            if not matched:
+                # Also try matching any logpkg with matching clientPubKey inside JSON
+                for p in sorted(INBOX_DIR.glob("logpkg_*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+                    try:
+                        with open(p, 'r', encoding='utf-8') as f:
+                            saved = json.load(f)
+                            if saved.get('identity', {}).get('clientPubKey', '').startswith(client_pk):
+                                pkg = saved
+                                break
+                    except Exception:
+                        pass
+            else:
+                matched.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                try:
+                    with open(matched[0], 'r', encoding='utf-8') as f:
+                        pkg = json.load(f)
+                except Exception:
+                    pass
+
+        analysis = DiagnosticEngine.analyze(pkg) if pkg else None
+        text_lower = user_text.lower()
+        dev_suggestions = []
+
+        overall_status = analysis.get('overallStatus', 'HEALTHY') if analysis else 'UNKNOWN'
+        webrtc = pkg.get('webrtc', {}) if pkg else {}
+        relays = pkg.get('relays', []) if pkg else []
+        logs = pkg.get('recentLogs', []) if pkg else []
+
+        # Analyze candidate distribution from telemetry
+        cand_types = [c.get('type') for c in webrtc.get('localCandidates', []) if isinstance(c, dict)]
+        has_host_only = ('host' in cand_types) and ('srflx' not in cand_types) and ('relay' not in cand_types)
+        all_relays_down = len(relays) > 0 and all(r.get('state') != 'connected' and r.get('status') != 'connected' for r in relays)
+        session_failed = any('failed to start session' in l.get('message', '').lower() for l in logs)
+
+        # Keyword matching & context-aware dialogue
+        # 1. Screenshot / Image
+        if any(k in text_lower for k in ['screenshot', 'image', 'photo', 'picture']):
+            advice = (
+                "To protect Nostr relay quotas, screenshots are transferred exclusively over WebRTC direct P2P DataChannels. "
+                "When direct P2P is live, you can paste (Cmd+V / Ctrl+V) or click the camera button to send screenshots directly browser-to-browser."
+            )
+            clarification = "Would you like to establish a direct P2P session now so you can stream the screenshot?"
+            dev_suggestions.append("Screenshot requested. WebRTC DataChannel flow control active; zero Nostr quota consumed.")
+
+        # 2. Mobile OS Suspension & Tab Backgrounding
+        elif any(k in text_lower for k in ['mobile', 'phone', 'iphone', 'ios', 'android', 'background', 'tab', 'lock', 'sleep']):
+            advice = (
+                "On mobile browsers (iOS Safari / Android Chrome), switching tabs or opening the native file picker suspends web execution. "
+                "WebRTC ICE consent freshness checks (RFC 7675) expire after ~10-15s, moving the connection to 'disconnected'. "
+                "P2P Connect includes auto-reconnect on send, but keeping the tab in view prevents drops."
+            )
+            clarification = "Did the disconnect occur when switching to another app, locking the screen, or selecting a file?"
+            dev_suggestions.append("Mobile OS suspension detected. Verify visibilitychange auto-reconnect debounce is active.")
+
+        # 3. Media / Camera / Microphone
+        elif any(k in text_lower for k in ['video', 'camera', 'audio', 'mic', 'microphone', 'permission', 'black screen', 'mute']):
+            advice = (
+                "Media calls require explicit browser permissions and matching video codecs (VP8/H.264). "
+                "If video is black or fails, try an audio-only call first to isolate media stream negotiation from network transport."
+            )
+            clarification = "Did your browser display a camera/microphone permission prompt? Does an audio call work between you?"
+            dev_suggestions.append("Media track negotiation reported. Check transceiver directions and camera hardware permissions.")
+
+        # 4. Network / Wi-Fi / Hotspot / Firewall / Router / NAT
+        elif any(k in text_lower for k in ['wifi', 'wi-fi', 'hotspot', 'college', 'university', 'office', 'router', 'firewall', 'port', 'drop', 'failed', 'stuck', 'nat']):
+            if has_host_only:
+                advice = (
+                    "Your telemetry shows that your browser gathered ONLY local LAN host candidates (no public STUN or TURN candidates). "
+                    "On enterprise Wi-Fi, university networks, or mobile hotspots, UDP hole-punching is frequently blocked by symmetric NAT "
+                    "or router firewalls. A TURN relay server is required for traversal."
+                )
+                clarification = "Are you and your peer connecting from different networks? Does your Wi-Fi have a captive portal or enterprise firewall?"
+                dev_suggestions.append("Symmetric NAT / Host-only candidates detected. Consider providing a pre-configured TURN server under DEFAULT_ICE_SERVERS.")
+            elif all_relays_down:
+                advice = (
+                    "Your telemetry indicates that all Nostr signaling relays are offline or unreachable. "
+                    "Without an active signaling relay, peers cannot discover each other or exchange SDP handshakes."
+                )
+                clarification = "Is outbound secure WebSocket (WSS on port 443) permitted on your current network or proxy?"
+                dev_suggestions.append("Relay partition detected. Verify if client network blocks WSS port 443 or if fallback relays should be added.")
+            elif session_failed:
+                advice = (
+                    "Your log shows a signaling session handshake timeout ('Failed to start session'). "
+                    "This usually happens when the target peer is not online, has closed their tab, or has backgrounded the browser on mobile."
+                )
+                clarification = "Was your peer actively looking at the P2P Connect window when you clicked connect?"
+                dev_suggestions.append("Handshake timeout detected. Ensure peers keep tab active during initial signaling exchange.")
+            else:
+                advice = (
+                    "Your diagnostic telemetry shows normal signaling connectivity, but peer-to-peer data flow may be experiencing intermittent packet loss or router filtering."
+                )
+                clarification = "Did the connection drop mid-call or fail immediately upon initiation? Are you using mobile data or home broadband?"
+                dev_suggestions.append("Investigate router SIP ALG and symmetric port translation for intermittent drops.")
+
+        elif not pkg:
+            advice = (
+                "Hello! I am the automated AI Diagnostic Support Agent for P2P Connect. "
+                "I haven't received your connection telemetry yet. Please click '📋 Send Diag' or 'Diagnostics & Network Health' in the chat "
+                "to transmit your encrypted log package (< 2 KB). Then I can pinpoint the root cause!"
+            )
+            clarification = "What error message or behavior are you experiencing when trying to connect?"
+            dev_suggestions.append("No log package on file for this user. Telemetry requested.")
+
+        else:
+            advice = (
+                f"I reviewed your latest diagnostic snapshot (Status: {overall_status}). "
+                f"Identified root causes: {'; '.join(analysis.get('rootCauses', ['None']))}. "
+                f"Recommendations: {'; '.join(analysis.get('recommendations', ['Parameters configured correctly']))}."
+            )
+            clarification = "Could you describe what you were trying to do when the issue happened (chat, call, screen share, or file transfer)?"
+            dev_suggestions.append(f"Review latest logpkg analysis for {client_pk}: Status {overall_status}.")
+
+        reply_text = (
+            f"🤖 [AI Support Agent Response]\n"
+            f"Status: {overall_status}\n\n"
+            f"{advice}\n\n"
+            f"❓ Clarification Question:\n"
+            f"{clarification}\n\n"
+            f"(Advisory Mode: Our developer has received these diagnostic recommendations)."
+        )
+
+        return {
+            'success': True,
+            'overallStatus': overall_status,
+            'reply': reply_text,
+            'clarification': clarification,
+            'advice': advice,
+            'developerSuggestions': dev_suggestions,
+        }
+
 
 # ── HTTP Ingestion Server ───────────────────────────────────────────────────
 
@@ -287,6 +427,94 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 'success': True,
                 'message': 'Log package received and analyzed by AI Support Agent (Advisory Mode)',
                 'analysis': analysis
+            }, indent=2).encode('utf-8'))
+        elif self.path == '/api/chat':
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length <= 0 or content_length > 100 * 1024:
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Invalid JSON: {str(e)}'}).encode('utf-8'))
+                return
+
+            raw_client_pk = data.get('senderPubKey', 'unknown')
+            client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
+            text = str(data.get('text', '')).strip()
+
+            reply_data = DiagnosticEngine.analyze_comment(text, client_pk)
+
+            print(f"\n[AI Support Agent] 💬 User comment from {client_pk}: \"{text}\"")
+            print(f"[AI Support Agent] 🤖 Generated Reply (Advisory Mode):\n{reply_data['reply']}")
+            print(f"[AI Support Agent] 💡 Suggestions for Developer:")
+            for s in reply_data.get('developerSuggestions', []):
+                print(f"  👉 {s}")
+            print(f"[AI Support Agent] 🔒 (Advisory Mode: Review only, zero autonomous commits)")
+
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(reply_data, indent=2).encode('utf-8'))
+
+        elif self.path == '/api/screenshot':
+            content_length = int(self.headers.get('Content-Length', 0))
+            MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
+            if content_length <= 0 or content_length > MAX_SCREENSHOT_BYTES:
+                self.send_response(413 if content_length > MAX_SCREENSHOT_BYTES else 400)
+                self.end_headers()
+                return
+
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Invalid JSON: {str(e)}'}).encode('utf-8'))
+                return
+
+            raw_client_pk = data.get('senderPubKey', 'unknown')
+            client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
+            img_b64 = data.get('data', '')
+            if ',' in img_b64:
+                img_b64 = img_b64.split(',', 1)[1]
+
+            import base64
+            try:
+                img_bytes = base64.b64decode(img_b64)
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Invalid base64: {str(e)}'}).encode('utf-8'))
+                return
+
+            INBOX_DIR.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+            filename = f"screenshot_{ts}_{client_pk}.jpg"
+            filepath = INBOX_DIR / filename
+            with open(filepath, 'wb') as f:
+                f.write(img_bytes)
+
+            print(f"\n[AI Support Agent] 📷 Ingested screenshot from {client_pk} ({len(img_bytes)} bytes) -> Saved to {filename}")
+            print(f"[AI Support Agent] 💡 Suggestions for Developer: Inspect screenshot at {filepath} for visual errors or WebRTC states.")
+            print(f"[AI Support Agent] 🔒 (Advisory Mode: No files or git state modified)")
+
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'success': True,
+                'message': 'Screenshot received and saved to diagnostics-inbox',
+                'filename': filename,
+                'savedFile': str(filepath)
             }, indent=2).encode('utf-8'))
         else:
             self.send_response(404)

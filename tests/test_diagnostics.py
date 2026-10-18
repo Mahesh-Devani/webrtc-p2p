@@ -145,6 +145,64 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertTrue((PROJECT_ROOT / 'support.html').exists(), "support.html missing")
         self.assertTrue((PROJECT_ROOT / 'support-controller.js').exists(), "support-controller.js missing")
 
+    def test_ai_agent_multi_turn_comment_analysis(self):
+        """DiagnosticEngine.analyze_comment must generate context-aware clarification questions and developer suggestions."""
+        mock_pkg = {
+            'generatedAt': '2026-10-18T12:00:00Z',
+            'version': 'v7',
+            'webrtc': {
+                'connectionState': 'failed',
+                'iceConnectionState': 'failed',
+                'localCandidates': [
+                    {'type': 'host', 'protocol': 'udp', 'candidate': 'candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host'}
+                ],
+            },
+            'relays': [
+                {'url': 'wss://relay.primal.net', 'state': 'connected'},
+            ],
+            'recentLogs': [],
+            'identity': {'clientPubKey': 'aabbcc112233'}
+        }
+
+        # Case 1: User mentions college Wi-Fi
+        res1 = DiagnosticEngine.analyze_comment("Calls keep failing on my college wifi", "aabbcc112233", mock_pkg)
+        self.assertTrue(res1['success'])
+        self.assertIn('Clarification Question', res1['reply'])
+        self.assertTrue('turn' in res1['reply'].lower() or 'host' in res1['reply'].lower() or 'nat' in res1['reply'].lower())
+        self.assertGreater(len(res1['developerSuggestions']), 0)
+
+        # Case 2: User mentions mobile background
+        res2 = DiagnosticEngine.analyze_comment("Connection drops when I switch tabs on my iPhone", "aabbcc112233", mock_pkg)
+        self.assertTrue(res2['success'])
+        self.assertIn('consent', res2['reply'].lower())
+
+        # Case 3: User mentions screenshots
+        res3 = DiagnosticEngine.analyze_comment("Can I send a screenshot of the error?", "aabbcc112233", mock_pkg)
+        self.assertTrue(res3['success'])
+        self.assertIn('quota', res3['reply'].lower())
+
+    def test_chat_and_screenshot_endpoints_registered(self):
+        """ai-diagnostic-agent.py must define /api/chat and /api/screenshot in do_POST."""
+        content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
+        self.assertIn("self.path == '/api/chat'", content, "/api/chat endpoint missing in ai-diagnostic-agent.py")
+        self.assertIn("self.path == '/api/screenshot'", content, "/api/screenshot endpoint missing in ai-diagnostic-agent.py")
+
+    def test_screenshot_and_chat_ui_elements(self):
+        """index.html must include screenshot attachment and send-diag buttons."""
+        index_html = (PROJECT_ROOT / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('id="btn-attach-screenshot"', index_html, "btn-attach-screenshot missing in index.html")
+        self.assertIn('id="screenshot-input"', index_html, "screenshot-input missing in index.html")
+        self.assertIn('id="btn-chat-send-diag"', index_html, "btn-chat-send-diag missing in index.html")
+
+    def test_ui_controller_screenshot_quota_protection(self):
+        """ui-controller.js must enforce P2P-only file channel for screenshots to protect Nostr quotas."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('processScreenshotFile', ui_content, "processScreenshotFile missing in ui-controller.js")
+        self.assertIn('handleChatPaste', ui_content, "handleChatPaste missing in ui-controller.js")
+        self.assertIn('formatDiagnosticBubbleHtml', ui_content, "formatDiagnosticBubbleHtml missing in ui-controller.js")
+        self.assertIn('chat-msg--diag-card', ui_content, "chat-msg--diag-card missing in ui-controller.js")
+        self.assertIn('session.sendFile', ui_content, "session.sendFile missing for screenshot transfer")
+
 
 if __name__ == '__main__':
     unittest.main()
