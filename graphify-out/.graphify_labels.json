@@ -6,7 +6,6 @@
   "4": "host-controller.js",
   "5": "nostr.bundle.js",
   "7": "decode",
-  "8": "NostrRelay",
   "9": "package.json",
   "10": "encode",
   "11": "remote-desktop-host/package.json",

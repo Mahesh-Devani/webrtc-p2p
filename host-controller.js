@@ -422,33 +422,65 @@ function escapeHtml(s) {
 }
 
 // ── 2. Local OS Bridge Connection (ws://127.0.0.1:9999 / wss://:9998) ─
-function connectBridge() {
-  if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) return;
+let bridgeConnectGeneration = 0;
+
+function getCandidateBridgeUrls() {
+  const isHttps = window.location.protocol === 'https:';
+  const h = window.location.hostname || '';
+  const isPrivateIp = /^(127\.0\.0\.1|localhost|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/.test(h);
+
+  const urls = [];
+  // 1. Direct local plain WS (primary default across all platforms)
+  urls.push('ws://127.0.0.1:9999');
+  urls.push('ws://localhost:9999');
+
+  // 2. Secure WSS if running in HTTPS context and certs exist
+  if (isHttps) {
+    urls.push('wss://127.0.0.1:9998');
+    urls.push('wss://localhost:9998');
+  }
+
+  // 3. LAN IP if running on local network dev server
+  if (isPrivateIp && h !== '127.0.0.1' && h !== 'localhost') {
+    urls.push(`ws://${h}:9999`);
+    if (isHttps) urls.push(`wss://${h}:9998`);
+  }
+
+  return [...new Set(urls)];
+}
+
+function connectBridge(force = false) {
+  if (!force && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) return;
+
+  const currentGen = ++bridgeConnectGeneration;
+
+  // Cleanly close any pending or existing socket from older runs
+  if (bridgeWs) {
+    try {
+      bridgeWs.onopen = null;
+      bridgeWs.onmessage = null;
+      bridgeWs.onclose = null;
+      bridgeWs.onerror = null;
+      bridgeWs.close();
+    } catch {}
+    bridgeWs = null;
+  }
+  bridgeConnected = false;
 
   if (dom.hostBridgePill) {
     dom.hostBridgePill.className = 'badge badge--idle';
     dom.hostBridgePill.textContent = 'Connecting...';
   }
 
-  const isHttps = window.location.protocol === 'https:';
-  const host = window.location.hostname || '127.0.0.1';
-
-  const urlsToTry = [];
-  if (isHttps) {
-    urlsToTry.push(`wss://${host}:9998`);
-    urlsToTry.push(`wss://localhost:9998`);
-    urlsToTry.push(`ws://127.0.0.1:9999`);
-    urlsToTry.push(`ws://${host}:9999`);
-  } else {
-    urlsToTry.push(`ws://127.0.0.1:9999`);
-    urlsToTry.push(`ws://${host}:9999`);
-  }
-
+  const urlsToTry = getCandidateBridgeUrls();
   let attemptIdx = 0;
 
   function tryNext() {
+    if (currentGen !== bridgeConnectGeneration) return;
+
     if (attemptIdx >= urlsToTry.length) {
       bridgeConnected = false;
+      bridgeWs = null;
       if (dom.hostBridgePill) {
         dom.hostBridgePill.className = 'badge badge--failed';
         dom.hostBridgePill.textContent = 'Not Running (run bridge.py)';
@@ -458,10 +490,20 @@ function connectBridge() {
     }
 
     const currentUrl = urlsToTry[attemptIdx++];
-    let advanced = false;
+    let settled = false;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
     const advance = () => {
-      if (!advanced) {
-        advanced = true;
+      if (!settled) {
+        settled = true;
+        cleanup();
         tryNext();
       }
     };
@@ -469,9 +511,26 @@ function connectBridge() {
     try {
       console.log(`[Host Bridge] Attempting connection to: ${currentUrl}`);
       const ws = new WebSocket(currentUrl);
-      bridgeWs = ws;
+
+      // Fast connection timeout: loopback connections succeed in < 5ms.
+      // If still connecting after 1200ms, abort and try next candidate.
+      timer = setTimeout(() => {
+        if (currentGen !== bridgeConnectGeneration) return;
+        if (!settled && ws.readyState === WebSocket.CONNECTING) {
+          console.warn(`[Host Bridge] Connection timeout (1.2s) for ${currentUrl}, trying next candidate...`);
+          try { ws.close(); } catch {}
+          advance();
+        }
+      }, 1200);
 
       ws.onopen = () => {
+        if (currentGen !== bridgeConnectGeneration) {
+          try { ws.close(); } catch {}
+          return;
+        }
+        settled = true;
+        cleanup();
+        bridgeWs = ws;
         bridgeConnected = true;
         console.log(`[Host Bridge] Successfully connected to: ${currentUrl}`);
         if (dom.hostBridgePill) {
@@ -482,6 +541,7 @@ function connectBridge() {
       };
 
       ws.onmessage = (evt) => {
+        if (currentGen !== bridgeConnectGeneration) return;
         try {
           const msg = JSON.parse(evt.data);
           if (msg.t === 'connected' || msg.t === 'auth_ok') {
@@ -499,19 +559,24 @@ function connectBridge() {
       };
 
       ws.onclose = () => {
-        if (!bridgeConnected) {
-          advance();
-        } else {
+        if (currentGen !== bridgeConnectGeneration) return;
+        cleanup();
+        if (bridgeWs === ws && bridgeConnected) {
+          // The winning active socket was disconnected
           bridgeConnected = false;
+          bridgeWs = null;
           if (dom.hostBridgePill) {
             dom.hostBridgePill.className = 'badge badge--idle';
             dom.hostBridgePill.textContent = 'Disconnected (click Retry)';
           }
+        } else if (!bridgeConnected) {
+          // Probe failed, advance to next candidate
+          advance();
         }
       };
 
       ws.onerror = () => {
-        // ws.onclose will fire immediately after onerror in all browsers
+        // ws.onclose will fire after onerror; timeout covers hanging states
       };
     } catch {
       advance();
@@ -1109,7 +1174,7 @@ document.getElementById('btn-copy-connect-link')?.addEventListener('click', () =
 });
 
 dom.btnRecheckBridge?.addEventListener('click', () => {
-  connectBridge();
+  connectBridge(true);
 });
 
 document.getElementById('btn-copy-curl-bridge')?.addEventListener('click', () => {

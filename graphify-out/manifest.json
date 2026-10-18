@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792207125.2377481,
-    "seen": 1792207574.251457,
-    "ast_hash": "4dee958f6303e6f3e8bfa804b37f78a6",
+    "mtime": 1792306665.6445527,
+    "seen": 1792306737.563199,
+    "ast_hash": "122fcf5c284ce7e272a6167ffe08a9f1",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -174,9 +174,9 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792206852.4161358,
-    "seen": 1792207574.251477,
-    "ast_hash": "05fc04ea0775edc58c2680654a274bcf",
+    "mtime": 1792306681.6196558,
+    "seen": 1792306737.563221,
+    "ast_hash": "f65e3d2c6066f1b404545367931a5f9a",
     "semantic_hash": ""
   },
   "index.html": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "tests/test_host_security.py": {
-    "mtime": 1792182006.0741084,
-    "seen": 1792182245.594221,
-    "ast_hash": "b91b116e5453c672022f1038b3d3505a",
+    "mtime": 1792306720.2707758,
+    "seen": 1792306737.56321,
+    "ast_hash": "25c58c526e85a19e93248ced3e8d1dd3",
     "semantic_hash": ""
   },
   "tests/test_invariants.py": {

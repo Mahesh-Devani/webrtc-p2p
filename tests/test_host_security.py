@@ -111,6 +111,33 @@ class TestHostSecurity(unittest.TestCase):
         self.assertIn('if (val === null) return true', content,
                       "host-controller.js must default isWhitelistEnforced() to true when unset")
 
+    def test_bridge_candidate_urls_never_include_remote_domain(self):
+        """Bridge URL resolution must never include public/remote domains (like github.io)."""
+        content = (PROJECT_ROOT / 'host-controller.js').read_text(encoding='utf-8')
+
+        self.assertIn('getCandidateBridgeUrls', content)
+        # Ensure ws://127.0.0.1:9999 is prioritized as the first candidate
+        self.assertIn("urls.push('ws://127.0.0.1:9999')", content)
+        # Ensure private IP regex is used to filter out public domains
+        self.assertIn('isPrivateIp', content)
+        self.assertTrue('127.0.0.1' in content and '192' in content and 'localhost' in content)
+
+    def test_bridge_connection_timeout_enforced(self):
+        """Bridge connection attempts must enforce a fast timeout (<= 2s) to prevent hanging."""
+        content = (PROJECT_ROOT / 'host-controller.js').read_text(encoding='utf-8')
+
+        self.assertIn('setTimeout', content)
+        self.assertIn('1200', content, "Bridge candidate socket should timeout after ~1.2s")
+        self.assertIn('ws.readyState === WebSocket.CONNECTING', content)
+
+    def test_bridge_race_condition_protection(self):
+        """Bridge connection must use generational guard to ignore stale socket callbacks."""
+        content = (PROJECT_ROOT / 'host-controller.js').read_text(encoding='utf-8')
+
+        self.assertIn('bridgeConnectGeneration', content)
+        self.assertIn('currentGen !== bridgeConnectGeneration', content)
+
 
 if __name__ == '__main__':
     unittest.main()
+
