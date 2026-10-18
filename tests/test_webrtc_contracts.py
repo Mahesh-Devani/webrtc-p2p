@@ -69,6 +69,18 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("dom.remoteVideo.play()", self.ui_content,
                       "ui-controller.js must call play() on remote video")
 
+    def test_peer_session_return_members_defined(self):
+        """All members returned by PeerSession.create must be declared in create() scope."""
+        match = re.search(r'function create\(cfg = \{\}\)\s*\{(.*?)return\s*\{([^}]+)\};\s*\}', self.core_content, re.DOTALL)
+        self.assertIsNotNone(match, "PeerSession.create return block must exist")
+        body = match.group(1)
+        returned_props = [p.strip().rstrip(',') for p in match.group(2).splitlines() if p.strip() and not p.strip().startswith('//')]
+        self.assertGreater(len(returned_props), 20, "PeerSession.create must return public interface methods")
+        for prop in returned_props:
+            prop_name = prop.split(':')[0].strip()
+            pattern = re.compile(rf'\b(function|const|let|var)\s+{prop_name}\b')
+            self.assertTrue(pattern.search(body), f"Member '{prop_name}' returned by PeerSession.create is not declared in create() scope!")
+
 
 if __name__ == '__main__':
     unittest.main()

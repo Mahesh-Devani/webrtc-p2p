@@ -607,25 +607,6 @@ export const PeerSession = (() => {
         }
       }
 
-      async function setVideoQuality(maxBitrateBps, maxFramerate = 60) {
-        if (activeVideoSender && activeVideoSender.getParameters) {
-          try {
-            const params = activeVideoSender.getParameters();
-            if (!params.encodings || params.encodings.length === 0) {
-              params.encodings = [{}];
-            }
-            params.encodings[0].maxBitrate = maxBitrateBps;
-            params.encodings[0].maxFramerate = maxFramerate;
-            await activeVideoSender.setParameters(params);
-            log(`Configured video sender quality: ${Math.round(maxBitrateBps / 1_000_000)} Mbps / ${maxFramerate} FPS`, 'info');
-            return true;
-          } catch (e) {
-            log(`setVideoQuality warning: ${e.message}`, 'warn');
-          }
-        }
-        return false;
-      }
-
       // Set codec preferences on transceiver to VP9 or H.264 High Profile (better text compression than VP8)
       if (pc.getTransceivers && window.RTCRtpReceiver?.getCapabilities) {
         for (const transceiver of pc.getTransceivers()) {
@@ -726,6 +707,32 @@ export const PeerSession = (() => {
 
     /** @returns {boolean} */
     function isScreenSharing() { return !!screenStream; }
+
+    /**
+     * Configure active video sender quality (bitrate and framerate).
+     * @param {number} maxBitrateBps
+     * @param {number} [maxFramerate=60]
+     * @returns {Promise<boolean>}
+     */
+    async function setVideoQuality(maxBitrateBps, maxFramerate = 60) {
+      const activeVideoSender = senders.get('video');
+      if (activeVideoSender && activeVideoSender.getParameters) {
+        try {
+          const params = activeVideoSender.getParameters();
+          if (!params.encodings || params.encodings.length === 0) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = maxBitrateBps;
+          params.encodings[0].maxFramerate = maxFramerate;
+          await activeVideoSender.setParameters(params);
+          log(`Configured video sender quality: ${Math.round(maxBitrateBps / 1_000_000)} Mbps / ${maxFramerate} FPS`, 'info');
+          return true;
+        } catch (e) {
+          log(`setVideoQuality warning: ${e.message}`, 'warn');
+        }
+      }
+      return false;
+    }
 
     /**
      * Create an offer (caller / session creator).
