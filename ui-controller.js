@@ -359,9 +359,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     return colors[Math.abs(hash) % colors.length];
   }
 
+  // ── Official AI Support Agent ──
+  const SUPPORT_AGENT_PUBKEY = '968a5ce393c3b9b5cb28e41a015e70d27ba6bce0f44128b02638ebe817815b21';
+  const SUPPORT_AGENT_NAME = '🤖 AI Support Agent';
+
   // ── Contact CRUD ──
   function loadContacts() { try { return JSON.parse(localStorage.getItem(CONTACTS_KEY)) || []; } catch { return []; } }
   function saveContacts(c) { localStorage.setItem(CONTACTS_KEY, JSON.stringify(c)); }
+  function ensureSupportAgentContact() {
+    const contacts = loadContacts();
+    if (!contacts.find(c => c.pubkey === SUPPORT_AGENT_PUBKEY)) {
+      contacts.unshift({ pubkey: SUPPORT_AGENT_PUBKEY, nickname: SUPPORT_AGENT_NAME, isSupportBot: true });
+      saveContacts(contacts);
+    }
+  }
   function addContact(pubkey, nickname) {
     const contacts = loadContacts();
     const existing = contacts.find(c => c.pubkey === pubkey);
@@ -3985,37 +3996,115 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
   dom.btnSendAiAgent?.addEventListener('click', async () => {
     try {
-      toast('Attempting to transmit diagnostics to AI Support Agent…');
+      toast('Transmitting diagnostics to AI Support Agent…');
       const pkg = await DiagnosticLogger.generateLogPackage({
         session,
         remotePubKey: activeContactPubkey,
         relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : []
       });
 
-      // 1. Try local AI diagnostic agent server on http://127.0.0.1:9998/api/logpkg
+      // 1. Try local HTTP endpoint on http://127.0.0.1:9998/api/logpkg (fast 600ms probe)
+      let sentLocal = false;
       try {
+        const controller = new AbortController();
+        const probeTimer = setTimeout(() => controller.abort(), 600);
         const resp = await fetch('http://127.0.0.1:9998/api/logpkg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(pkg),
+          signal: controller.signal,
         });
+        clearTimeout(probeTimer);
         if (resp.ok) {
           const result = await resp.json();
           const status = result.analysis?.overallStatus || 'Analyzed';
-          toast(`AI Agent: ${status}! Check terminal report.`);
-          DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested successfully:', JSON.stringify(result.analysis?.rootCauses || [])]);
+          toast(`AI Agent: ${status}! Check terminal suggestions.`);
+          DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested locally:', JSON.stringify(result.analysis?.rootCauses || [])]);
           updateDiagnosticsDashboard();
-          return;
+          sentLocal = true;
         }
       } catch {
-        // Local server not reachable
+        // Local server not reachable — proceed to Nostr remote transmission
       }
 
-      // 2. Fallback: prompt user to download file
-      toast('AI Agent daemon not running on port 9998. Downloading logpkg instead…');
+      if (sentLocal) {
+        ensureSupportAgentContact();
+        openChat(SUPPORT_AGENT_PUBKEY);
+        hide(dom.diagnosticsModal);
+        return;
+      }
+
+      // 2. Remote User: Transmit over Nostr relays directly to SUPPORT_AGENT_PUBKEY!
+      if (nostrIdentity && NostrTransport.isConnected()) {
+        toast('Transmitting encrypted diagnostics to AI Support Agent over Nostr…');
+
+        // Quota protection: prune to essential diagnostic telemetry only (< 2 KB)
+        const prunedPkg = {
+          app: pkg.app,
+          version: pkg.version,
+          generatedAt: pkg.generatedAt,
+          identity: pkg.identity,
+          environment: {
+            platform: pkg.environment?.platform,
+            online: pkg.environment?.online,
+            effectiveType: pkg.environment?.connection?.effectiveType,
+          },
+          relays: pkg.relays,
+          webrtc: {
+            status: pkg.webrtc?.status,
+            connectionState: pkg.webrtc?.connectionState,
+            iceConnectionState: pkg.webrtc?.iceConnectionState,
+            selectedCandidatePair: pkg.webrtc?.selectedCandidatePair,
+          },
+          recentLogs: (pkg.recentLogs || [])
+            .filter(l => l.level === 'error' || l.level === 'warn')
+            .slice(-15),
+        };
+
+        // Compress pruned payload with pako deflate
+        const jsonStr = JSON.stringify(prunedPkg);
+        const compressedBytes = pako.deflate(new TextEncoder().encode(jsonStr), { level: 9 });
+        const binary = String.fromCharCode.apply(null, compressedBytes);
+        const b64Compressed = btoa(binary);
+
+        await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+          type: 'diagnostic_logpkg',
+          session: 'diag-' + Date.now(),
+          data: b64Compressed,
+        });
+
+        toast('Encrypted diagnostics transmitted to AI Support Agent! ⚡');
+        DiagnosticLogger.record('info', ['[AI Support Agent] Pruned diagnostics sent over Nostr to', SUPPORT_AGENT_PUBKEY]);
+
+        // Auto-open chat conversation with AI Support Agent
+        ensureSupportAgentContact();
+        openChat(SUPPORT_AGENT_PUBKEY);
+        hide(dom.diagnosticsModal);
+
+        // Record a diagnostic card bubble in the chat store
+        const diagMsg = {
+          id: 'diag-sub-' + Date.now(),
+          text: `📋 Diagnostic Log Package transmitted (Status: ${pkg.webrtc?.connectionState || 'evaluating'}). Awaiting AI review…`,
+          sender: 'self',
+          ts: Date.now(),
+          status: 'sent',
+          type: 'text'
+        };
+        ChatStore.addMessage(SUPPORT_AGENT_PUBKEY, diagMsg);
+        appendChatBubble(diagMsg);
+        return;
+      }
+
+      // 3. Fallback: prompt user to download file
+      toast('Nostr not connected. Downloading logpkg instead…');
       DiagnosticLogger.downloadLogPackage(pkg);
     } catch (err) {
+      console.error('Diagnostic transmission failed:', err);
       toast('Transmission failed: ' + err.message);
+      try {
+        const fallbackPkg = await DiagnosticLogger.generateLogPackage();
+        DiagnosticLogger.downloadLogPackage(fallbackPkg);
+      } catch {}
     }
   });
 
@@ -4247,6 +4336,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
   // ═══ INIT ═══
   setBadge('connecting', 'Connecting…');
+  ensureSupportAgentContact();
   renderContacts();
   renderRemoteDevices();
   initNostr();

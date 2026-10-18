@@ -21,6 +21,7 @@ Capabilities:
 
 import os
 import sys
+import re
 import json
 import time
 import argparse
@@ -187,8 +188,20 @@ class DiagnosticEngine:
 # ── HTTP Ingestion Server ───────────────────────────────────────────────────
 
 class DiagnosticServer(BaseHTTPRequestHandler):
+    ALLOWED_ORIGINS = [
+        'https://mahesh-devani.github.io',
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+    ]
+
+    def _get_allowed_origin(self):
+        origin = self.headers.get('Origin', '')
+        if origin in self.ALLOWED_ORIGINS or origin.startswith('http://localhost:') or origin.startswith('http://127.0.0.1:'):
+            return origin
+        return self.ALLOWED_ORIGINS[0]
+
     def _send_cors_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', self._get_allowed_origin())
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
@@ -207,6 +220,7 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 'service': 'P2P Connect AI Support Agent',
                 'status': 'online',
                 'version': '1.0',
+                'mode': 'advisory',
                 'inboxCount': len(list(INBOX_DIR.glob('*.json'))) if INBOX_DIR.exists() else 0,
             }
             self.wfile.write(json.dumps(resp, indent=2).encode('utf-8'))
@@ -222,6 +236,16 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
 
+            # Security: Cap payload size to 10MB
+            MAX_PAYLOAD_BYTES = 10 * 1024 * 1024
+            if content_length > MAX_PAYLOAD_BYTES:
+                self.send_response(413) # Payload Too Large
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"error": "Payload exceeds 10MB limit"}')
+                return
+
             body = self.rfile.read(content_length).decode('utf-8')
             try:
                 pkg = json.loads(body)
@@ -231,23 +255,29 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': f'Invalid JSON: {str(e)}'}).encode('utf-8'))
                 return
 
-            # Save to inbox
+            # Save to inbox with strictly sanitized filename (hex only, zero path traversal)
             INBOX_DIR.mkdir(parents=True, exist_ok=True)
             ts = int(time.time())
-            client_pk = pkg.get('identity', {}).get('clientPubKey', 'unknown')[:12]
+            raw_client_pk = pkg.get('identity', {}).get('clientPubKey', 'unknown')
+            client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
             filename = f"logpkg_{ts}_{client_pk}.json"
             filepath = INBOX_DIR / filename
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(pkg, f, indent=2)
 
-            # Analyze package
+            # Analyze package in developer advisory mode
             analysis = DiagnosticEngine.analyze(pkg)
             analysis['savedFile'] = str(filepath)
+            analysis['developerNotice'] = 'ADVISORY ONLY: Recommendations presented for developer review. No automated code changes or commits performed.'
 
-            print(f"\n[AI Support Agent] 📥 Received logpkg from {client_pk}… -> Saved to {filename}")
+            print(f"\n[AI Support Agent] 📥 Ingested logpkg from {client_pk}… -> Saved to {filename}")
             print(f"[AI Support Agent] 🔎 Overall Status: {analysis['overallStatus']}")
             for rc in analysis['rootCauses']:
                 print(f"  • Root Cause: {rc}")
+            print(f"[AI Support Agent] 💡 Suggestions for Developer:")
+            for rec in analysis['recommendations']:
+                print(f"  👉 {rec}")
+            print(f"[AI Support Agent] 🔒 (Advisory Mode: No files or git state modified)")
 
             self.send_response(200)
             self._send_cors_headers()
@@ -255,7 +285,7 @@ class DiagnosticServer(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({
                 'success': True,
-                'message': 'Log package received and analyzed by AI Support Agent',
+                'message': 'Log package received and analyzed by AI Support Agent (Advisory Mode)',
                 'analysis': analysis
             }, indent=2).encode('utf-8'))
         else:

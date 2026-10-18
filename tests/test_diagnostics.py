@@ -123,6 +123,28 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('instanceof Error', content, "Error instance check missing in diagnostic-logger.js")
         self.assertIn('a.stack', content, "Error stack preservation missing in diagnostic-logger.js")
 
+    def test_support_identity_private_key_gitignored(self):
+        """.gitignore must strictly exclude support-identity.json so private key is never pushed."""
+        gitignore = (PROJECT_ROOT / '.gitignore').read_text(encoding='utf-8')
+        self.assertIn('support-agent/support-identity.json', gitignore, "support-identity.json not in .gitignore")
+        self.assertIn('support-agent/diagnostics-inbox/', gitignore, "diagnostics-inbox/ not in .gitignore")
+
+    def test_support_agent_security_hardening(self):
+        """ai-diagnostic-agent.py must enforce CORS origin filtering and 10MB limit."""
+        content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
+        self.assertIn('ALLOWED_ORIGINS', content, "ALLOWED_ORIGINS missing in ai-diagnostic-agent.py")
+        self.assertIn('mahesh-devani.github.io', content, "github.io missing from ALLOWED_ORIGINS")
+        self.assertIn('MAX_PAYLOAD_BYTES', content, "MAX_PAYLOAD_BYTES missing in ai-diagnostic-agent.py")
+        self.assertIn('advisory', content.lower(), "Advisory mode notice missing in ai-diagnostic-agent.py")
+
+    def test_ui_controller_has_support_agent_pubkey(self):
+        """ui-controller.js must define SUPPORT_AGENT_PUBKEY and ensureSupportAgentContact."""
+        content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('SUPPORT_AGENT_PUBKEY', content, "SUPPORT_AGENT_PUBKEY missing in ui-controller.js")
+        self.assertIn('ensureSupportAgentContact', content, "ensureSupportAgentContact helper missing in ui-controller.js")
+        self.assertTrue((PROJECT_ROOT / 'support.html').exists(), "support.html missing")
+        self.assertTrue((PROJECT_ROOT / 'support-controller.js').exists(), "support-controller.js missing")
+
 
 if __name__ == '__main__':
     unittest.main()
