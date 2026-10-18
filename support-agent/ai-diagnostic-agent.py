@@ -25,10 +25,12 @@ import re
 import json
 import time
 import argparse
+import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 AGENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = AGENT_DIR.parent
 INBOX_DIR = AGENT_DIR / 'diagnostics-inbox'
 DEFAULT_PORT = 9998
 
@@ -350,8 +352,11 @@ class DiagnosticServer(BaseHTTPRequestHandler):
         self._send_cors_headers()
         self.end_headers()
 
+    def do_HEAD(self):
+        self.do_GET()
+
     def do_GET(self):
-        if self.path in ('/', '/api/health'):
+        if self.path == '/api/health':
             self.send_response(200)
             self._send_cors_headers()
             self.send_header('Content-Type', 'application/json')
@@ -364,9 +369,41 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 'inboxCount': len(list(INBOX_DIR.glob('*.json'))) if INBOX_DIR.exists() else 0,
             }
             self.wfile.write(json.dumps(resp, indent=2).encode('utf-8'))
-        else:
-            self.send_response(404)
-            self.end_headers()
+            return
+
+        # Serve static assets for the Support Desk
+        target_path = 'support.html' if self.path in ('/', '/support', '/support.html') else self.path.lstrip('/')
+        if '?' in target_path:
+            target_path = target_path.split('?')[0]
+
+        try:
+            safe_file = (PROJECT_ROOT / target_path).resolve()
+            if safe_file.is_relative_to(PROJECT_ROOT) and safe_file.is_file():
+                mime_type, _ = mimetypes.guess_type(str(safe_file))
+                if target_path.endswith('.js'):
+                    mime_type = 'text/javascript; charset=utf-8'
+                elif target_path.endswith('.css'):
+                    mime_type = 'text/css; charset=utf-8'
+                elif target_path.endswith('.html'):
+                    mime_type = 'text/html; charset=utf-8'
+                elif target_path.endswith('.json'):
+                    mime_type = 'application/json; charset=utf-8'
+                elif not mime_type:
+                    mime_type = 'application/octet-stream'
+
+                content = safe_file.read_bytes()
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', mime_type)
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+        except Exception:
+            pass
+
+        self.send_response(404)
+        self.end_headers()
 
     def do_POST(self):
         if self.path == '/api/logpkg':
