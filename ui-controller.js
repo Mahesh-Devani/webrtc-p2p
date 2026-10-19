@@ -150,6 +150,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdBtnTouchMode: $('#rd-btn-touch-mode'),
     rdTouchModeIcon: $('#rd-touch-mode-icon'),
     rdTouchModeLabel: $('#rd-touch-mode-label'),
+    rdVirtualCursor: $('#rd-virtual-cursor'),
     rdBtnSoftKeysToggle: $('#rd-btn-soft-keys-toggle'),
     rdSoftKeysBar: $('#rd-soft-keys-bar'),
     rdSoftBtnKeyboard: $('#rd-soft-btn-keyboard'),
@@ -1907,6 +1908,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
         const isRdMatch = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || (isWaitingForRemoteDesktop && sessionRemotePubKey === remotePubKey);
         if (isRdMatch) {
+          mediaActive = true;
           hide(dom.connectBanner);
           show(dom.callOverlay);
           dom.callOverlay?.classList.add('call-overlay--rd');
@@ -1915,6 +1917,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           attachRemoteVideoInputListeners();
           setRdMode('control');
           rdControlGranted = true;
+          startPerfHudStats();
+          if (rdTouchMode === 'trackpad') {
+            renderVirtualCursor();
+          }
         }
         
         // Flush pending messages
@@ -1995,6 +2001,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           attachRemoteVideoInputListeners();
           setRdMode('control');
           rdControlGranted = true;
+          startPerfHudStats();
+          if (rdTouchMode === 'trackpad') {
+            renderVirtualCursor();
+          }
           hide(dom.connectBanner);
           const peerName = activeRemoteDesktopDevice ? activeRemoteDesktopDevice.name : getContactDisplayName(remotePubKey);
           toast(`Connected to ${peerName}! Remote Desktop streaming.`);
@@ -2127,6 +2137,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     } else {
       dom.remoteVideo.style.transform = '';
       if (dom.rdZoomIndicator) hide(dom.rdZoomIndicator);
+    }
+    if (rdTouchMode === 'trackpad') {
+      renderVirtualCursor();
     }
   }
 
@@ -2496,6 +2509,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   let perfHudInterval = null;
   let lastPerfBytes = 0;
   let lastPerfTimestamp = 0;
+  let lastPerfFrames = 0;
 
   function startPerfHudStats() {
     stopPerfHudStats();
@@ -2510,13 +2524,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     }
     lastPerfBytes = 0;
     lastPerfTimestamp = 0;
+    lastPerfFrames = 0;
     if (dom.rdPerfHudPillText) dom.rdPerfHudPillText.textContent = 'Stats ▾';
   }
 
   async function updatePerfHud() {
-    if (!session || !session.pc || !mediaActive) return;
+    const pc = session?.getRawPC?.() || session?.pc;
+    if (!session || !pc) return;
     try {
-      const stats = await session.pc.getStats();
+      const stats = await pc.getStats();
       let rttMs = null;
       let fps = null;
       let bitrateMbps = null;
@@ -2526,13 +2542,18 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       let jitterMs = 0;
 
       stats.forEach(report => {
-        if (report.type === 'candidate-pair' && (report.state === 'succeeded' || report.nominated || (report.currentRoundTripTime !== undefined && report.bytesReceived > 0))) {
+        if (report.type === 'candidate-pair' && (report.state === 'succeeded' || report.nominated || report.selected || report.currentRoundTripTime !== undefined)) {
           if (report.currentRoundTripTime !== undefined) {
             rttMs = Math.round(report.currentRoundTripTime * 1000);
           } else if (report.roundTripTime !== undefined) {
             rttMs = Math.round(report.roundTripTime * 1000);
           }
-        } else if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video')) {
+        }
+        if (report.type === 'remote-inbound-rtp' && report.roundTripTime !== undefined && rttMs === null) {
+          rttMs = Math.round(report.roundTripTime * 1000);
+        }
+
+        if ((report.type === 'inbound-rtp' || report.type === 'outbound-rtp') && (report.kind === 'video' || report.mediaType === 'video')) {
           if (report.framesPerSecond !== undefined) {
             fps = Math.round(report.framesPerSecond);
           }
@@ -2545,24 +2566,43 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           if (report.frameWidth && report.frameHeight) {
             res = `${report.frameWidth}x${report.frameHeight}`;
           }
-          if (report.bytesReceived !== undefined) {
+          const bytes = report.bytesReceived !== undefined ? report.bytesReceived : report.bytesSent;
+          if (bytes !== undefined) {
             const now = performance.now();
-            if (lastPerfTimestamp > 0 && report.bytesReceived >= lastPerfBytes) {
-              const deltaBytes = report.bytesReceived - lastPerfBytes;
+            if (lastPerfTimestamp > 0 && bytes >= lastPerfBytes) {
+              const deltaBytes = bytes - lastPerfBytes;
               const deltaMs = now - lastPerfTimestamp;
               if (deltaMs > 0) {
                 bitrateMbps = ((deltaBytes * 8) / (deltaMs * 1000)).toFixed(2);
               }
             }
-            lastPerfBytes = report.bytesReceived;
+            lastPerfBytes = bytes;
             lastPerfTimestamp = now;
           }
+
+          const currentFrames = report.framesDecoded !== undefined ? report.framesDecoded : (report.framesReceived !== undefined ? report.framesReceived : report.framesSent);
+          if (fps === null && currentFrames !== undefined) {
+            const now = performance.now();
+            if (lastPerfTimestamp > 0 && currentFrames >= lastPerfFrames) {
+              const deltaFrames = currentFrames - lastPerfFrames;
+              const deltaSec = (now - lastPerfTimestamp) / 1000;
+              if (deltaSec > 0.5) {
+                fps = Math.round(deltaFrames / deltaSec);
+              }
+            }
+            lastPerfFrames = currentFrames;
+          }
+
           if (report.codecId) {
             const cReport = stats.get(report.codecId);
             if (cReport && cReport.mimeType) {
               codecName = cReport.mimeType.replace(/^video\//i, '').toUpperCase();
             }
           }
+        }
+
+        if (report.type === 'codec' && !codecName && report.mimeType && report.mimeType.toLowerCase().startsWith('video/')) {
+          codecName = report.mimeType.replace(/^video\//i, '').toUpperCase();
         }
       });
 
@@ -2573,7 +2613,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       if (fps !== null) {
         if (dom.rdStatFps) dom.rdStatFps.textContent = `${fps} FPS`;
       } else if (dom.remoteVideo && dom.remoteVideo.videoWidth) {
-        if (dom.rdStatFps) dom.rdStatFps.textContent = 'Active';
+        if (dom.rdStatFps) dom.rdStatFps.textContent = 'Active (30-60 FPS)';
       }
       if (bitrateMbps !== null) {
         if (dom.rdStatBitrate) dom.rdStatBitrate.textContent = `${bitrateMbps} Mbps`;
@@ -2609,6 +2649,55 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (dom.rdTouchModeLabel) {
       dom.rdTouchModeLabel.textContent = rdTouchMode === 'trackpad' ? 'Trackpad' : 'Direct';
     }
+    if (rdTouchMode === 'trackpad') {
+      renderVirtualCursor();
+    } else {
+      hide(dom.rdVirtualCursor);
+    }
+  }
+
+  function renderVirtualCursor() {
+    if (!dom.rdVirtualCursor) return;
+    if (rdTouchMode !== 'trackpad' || rdMode === 'view' || dom.callOverlay?.classList.contains('hidden')) {
+      hide(dom.rdVirtualCursor);
+      return;
+    }
+    const targetVideo = dom.remoteVideo;
+    if (!targetVideo) {
+      hide(dom.rdVirtualCursor);
+      return;
+    }
+
+    const rect = targetVideo.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      hide(dom.rdVirtualCursor);
+      return;
+    }
+
+    const videoRatio = (targetVideo.videoWidth && targetVideo.videoHeight)
+      ? (targetVideo.videoWidth / targetVideo.videoHeight)
+      : (rect.width / rect.height);
+    const elRatio = rect.width / rect.height;
+
+    let actualWidth, actualHeight, offsetX, offsetY;
+    if (elRatio > videoRatio) {
+      actualHeight = rect.height;
+      actualWidth = rect.height * videoRatio;
+      offsetX = (rect.width - actualWidth) / 2;
+      offsetY = 0;
+    } else {
+      actualWidth = rect.width;
+      actualHeight = rect.width / videoRatio;
+      offsetX = 0;
+      offsetY = (rect.height - actualHeight) / 2;
+    }
+
+    const pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
+    const pixelY = rect.top + offsetY + (virtualCursor.y * actualHeight);
+
+    show(dom.rdVirtualCursor);
+    dom.rdVirtualCursor.style.left = `${pixelX}px`;
+    dom.rdVirtualCursor.style.top = `${pixelY}px`;
   }
 
   const latchedModifiers = {
@@ -2753,6 +2842,21 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       if (now - lastMoveTime < 16) return; // ~60fps
       lastMoveTime = now;
 
+      if (document.pointerLockElement === v) {
+        const rect = v.getBoundingClientRect();
+        const targetWidth = rect.width || window.innerWidth;
+        const targetHeight = rect.height || window.innerHeight;
+        virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + e.movementX / targetWidth));
+        virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + e.movementY / targetHeight));
+        renderVirtualCursor();
+        if (rdMode === 'pointer') {
+          sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
+        } else if (rdMode === 'control') {
+          sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+        }
+        return;
+      }
+
       const coords = getNormalizedVideoCoordinates(e, v);
       if (!coords) return;
 
@@ -2765,7 +2869,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('mousedown', (e) => {
       if (rdMode === 'view') return;
-      const coords = getNormalizedVideoCoordinates(e, v);
+      const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
       if (!coords) return;
 
       if (rdMode === 'pointer') {
@@ -2777,7 +2881,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('mouseup', (e) => {
       if (rdMode === 'control') {
-        const coords = getNormalizedVideoCoordinates(e, v);
+        const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
         sendRdInput({ t: 'mouse_up', btn: e.button, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
       }
     });
@@ -2797,7 +2901,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('dblclick', (e) => {
       if (rdMode === 'control') {
-        const coords = getNormalizedVideoCoordinates(e, v);
+        const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
         if (coords) {
           sendRdInput({ t: 'mouse_click', btn: e.button, dbl: true, x: coords.x, y: coords.y });
         }
@@ -2809,6 +2913,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     let touchStartX = 0;
     let touchStartY = 0;
     let touchMoved = false;
+    let isDirectDragging = false;
     let longPressTimer = null;
     let isLongPress = false;
     let lastTapTime = 0;
@@ -2820,6 +2925,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     let twoFingerStartY = 0;
     let lastTwoFingerY = 0;
     let trackpadTwoFinger = false;
+    let lastTrackpadTapTime = 0;
+    let trackpadDragging = false;
+    let trackpadDragPending = false;
 
     // Two-finger pinch-to-zoom and pan variables
     let isPinching = false;
@@ -2846,6 +2954,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           touchStartY = t0.clientY;
           lastTrackpadX = t0.clientX;
           lastTrackpadY = t0.clientY;
+          if (touchStartTime - lastTrackpadTapTime < 320) {
+            trackpadDragPending = true;
+          } else {
+            trackpadDragPending = false;
+          }
         } else if (e.touches.length === 2) {
           trackpadTwoFinger = true;
           twoFingerStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -2854,6 +2967,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         return;
       }
 
+      // DIRECT TOUCH MODE
       if (e.touches.length === 1) {
         isPinching = false;
         touchStartTime = Date.now();
@@ -2862,6 +2976,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         touchStartY = t0.clientY;
         touchMoved = false;
         isLongPress = false;
+        isDirectDragging = false;
 
         const coords = getNormalizedVideoCoordinates(t0, v);
         if (coords) {
@@ -2874,7 +2989,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           // Long press timer (500ms) for Right Click
           clearTimeout(longPressTimer);
           longPressTimer = setTimeout(() => {
-            if (!touchMoved && e.touches.length === 1) {
+            if (!touchMoved && !isDirectDragging && e.touches.length === 1) {
               isLongPress = true;
               navigator.vibrate?.(60);
               if (rdMode === 'control') {
@@ -2886,6 +3001,12 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
       } else if (e.touches.length === 2) {
         clearTimeout(longPressTimer);
+        if (isDirectDragging) {
+          const t0 = e.touches[0];
+          const coords = getNormalizedVideoCoordinates(t0, v);
+          sendRdInput({ t: 'mouse_up', btn: 0, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
+          isDirectDragging = false;
+        }
         isPinching = true;
         pinchMovedSignificantly = false;
         const dx = e.touches[1].clientX - e.touches[0].clientX;
@@ -2922,6 +3043,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
           virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / targetWidth));
           virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / targetHeight));
+          renderVirtualCursor();
+
+          // Handle double-tap drag on trackpad
+          if (trackpadDragPending && !trackpadDragging && dist > 8 && rdMode === 'control') {
+            trackpadDragging = true;
+            sendRdInput({ t: 'mouse_down', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+          }
 
           const now = performance.now();
           if (now - lastMoveTime >= 16) {
@@ -2944,6 +3072,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         return;
       }
 
+      // DIRECT TOUCH MODE
       if (e.touches.length === 1 && !isPinching) {
         const t0 = e.touches[0];
         const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
@@ -2952,12 +3081,18 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           clearTimeout(longPressTimer);
         }
 
+        const coords = getNormalizedVideoCoordinates(t0, v);
+        if (!coords) return;
+
+        // In Direct Touch mode, dragging across the screen performs a true drag (selecting text, dragging windows/icons)
+        if (touchMoved && !isDirectDragging && !isLongPress && rdMode === 'control') {
+          isDirectDragging = true;
+          sendRdInput({ t: 'mouse_down', btn: 0, x: coords.x, y: coords.y });
+        }
+
         const now = performance.now();
         if (now - lastMoveTime < 16) return;
         lastMoveTime = now;
-
-        const coords = getNormalizedVideoCoordinates(t0, v);
-        if (!coords) return;
 
         if (rdMode === 'pointer') {
           sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, active: true });
@@ -2966,6 +3101,12 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         }
       } else if (e.touches.length === 2 && isPinching) {
         clearTimeout(longPressTimer);
+        if (isDirectDragging) {
+          const t0 = e.touches[0];
+          const coords = getNormalizedVideoCoordinates(t0, v);
+          sendRdInput({ t: 'mouse_up', btn: 0, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
+          isDirectDragging = false;
+        }
         const dx = e.touches[1].clientX - e.touches[0].clientX;
         const dy = e.touches[1].clientY - e.touches[0].clientY;
         const currentDistance = Math.hypot(dx, dy);
@@ -3017,22 +3158,34 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       if (rdTouchMode === 'trackpad') {
         e.preventDefault();
         if (e.touches.length === 0) {
-          const elapsed = Date.now() - touchStartTime;
-          if (!touchMoved && elapsed < 350) {
-            if (trackpadTwoFinger) {
-              if (rdMode === 'control') {
-                sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
-                sendRdInput({ t: 'mouse_click', btn: 2, x: virtualCursor.x, y: virtualCursor.y });
-                toast('Right Click sent', 'info');
-              }
-            } else {
-              if (rdMode === 'pointer') {
-                sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, click: true });
-              } else if (rdMode === 'control') {
-                sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
-                sendRdInput({ t: 'mouse_click', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+          if (trackpadDragging) {
+            // Finish double-tap drag on trackpad
+            if (rdMode === 'control') {
+              sendRdInput({ t: 'mouse_up', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+            }
+            trackpadDragging = false;
+            trackpadDragPending = false;
+            lastTrackpadTapTime = 0;
+          } else {
+            const elapsed = Date.now() - touchStartTime;
+            if (!touchMoved && elapsed < 350) {
+              if (trackpadTwoFinger) {
+                if (rdMode === 'control') {
+                  sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+                  sendRdInput({ t: 'mouse_click', btn: 2, x: virtualCursor.x, y: virtualCursor.y });
+                  toast('Right Click sent', 'info');
+                }
+              } else {
+                lastTrackpadTapTime = Date.now();
+                if (rdMode === 'pointer') {
+                  sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, click: true });
+                } else if (rdMode === 'control') {
+                  sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+                  sendRdInput({ t: 'mouse_click', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+                }
               }
             }
+            trackpadDragPending = false;
           }
           trackpadTwoFinger = false;
           touchMoved = false;
@@ -3042,6 +3195,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         return;
       }
 
+      // DIRECT TOUCH MODE
       if (e.touches.length === 0) {
         isPinching = false;
         lastPinchMidY = null;
@@ -3053,6 +3207,18 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
         if (isLongPress) {
           isLongPress = false;
+          isDirectDragging = false;
+          return;
+        }
+
+        if (isDirectDragging) {
+          // Direct drag completed: send mouse_up
+          isDirectDragging = false;
+          const lastTouch = e.changedTouches[0];
+          const coords = getNormalizedVideoCoordinates(lastTouch, v);
+          if (rdMode === 'control') {
+            sendRdInput({ t: 'mouse_up', btn: 0, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
+          }
           return;
         }
 
@@ -3094,6 +3260,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('touchcancel', () => {
       clearTimeout(longPressTimer);
+      if (isDirectDragging) {
+        sendRdInput({ t: 'mouse_up', btn: 0, x: 0, y: 0 });
+        isDirectDragging = false;
+      }
+      if (trackpadDragging) {
+        sendRdInput({ t: 'mouse_up', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+        trackpadDragging = false;
+        trackpadDragPending = false;
+      }
       isLongPress = false;
       touchMoved = false;
       isPinching = false;
@@ -3214,6 +3389,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     hide(dom.rdHostPrompt);
     hide(dom.rdHostActiveBar);
     hide(dom.rdLaserPointer);
+    hide(dom.rdVirtualCursor);
     resetRdZoom(false);
     dom.callOverlay?.classList.remove('call-overlay--rd');
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -4422,16 +4598,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.rdPerfHudOverlay?.classList.toggle('hidden');
     const isOpen = !dom.rdPerfHudOverlay?.classList.contains('hidden');
     if (isOpen) {
+      updatePerfHud();
       startPerfHudStats();
-    } else {
-      stopPerfHudStats();
     }
   });
 
   dom.rdPerfHudClose?.addEventListener('click', (e) => {
     e.stopPropagation();
     hide(dom.rdPerfHudOverlay);
-    stopPerfHudStats();
+  });
+
+  window.addEventListener('resize', () => {
+    if (rdTouchMode === 'trackpad') {
+      renderVirtualCursor();
+    }
   });
 
   // Live sidebar host status refresh button
@@ -5173,6 +5353,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
           // If this is an unattended remote desktop session, immediately ensure callOverlay & toolbar are displayed!
           if (activeRemoteDesktopDevice) {
+            mediaActive = true;
             show(dom.callOverlay);
             dom.callOverlay?.classList.add('call-overlay--rd');
             show(dom.rdToolbar);
@@ -5180,6 +5361,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
             attachRemoteVideoInputListeners();
             setRdMode('control');
             rdControlGranted = true;
+            startPerfHudStats();
+            if (rdTouchMode === 'trackpad') {
+              renderVirtualCursor();
+            }
           }
         },
         onDisconnected: (sessionId) => {

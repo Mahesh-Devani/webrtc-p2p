@@ -444,6 +444,12 @@
           <video id="remote-video" autoplay playsinline></video>
           <div id="remote-no-video" class="call-overlay__placeholder">Waiting for peer video…</div>
           <span class="call-overlay__label">Peer</span>
+          <!-- Virtual Cursor Indicator for Trackpad Mode -->
+          <div id="rd-virtual-cursor" class="rd-virtual-cursor hidden">
+            <svg class="rd-virtual-cursor__icon" viewBox="0 0 24 24">
+              <path d="M3 3l7 17 3-6.5 6.5-3L3 3z" fill="#00e5ff" stroke="#000000" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
           <div id="rd-zoom-indicator" class="rd-zoom-indicator hidden">
             <span id="rd-zoom-level">1.0x</span>
             <button id="rd-btn-reset-zoom" class="rd-zoom-reset-btn" title="Reset Zoom">Reset</button>
@@ -1137,7 +1143,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=41"></script>
+  <script type="module" src="ui-controller.js?v=42"></script>
 </body>
 
 </html>

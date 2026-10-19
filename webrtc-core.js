@@ -1164,6 +1164,7 @@ export const PeerSession = (() => {
       getState,
       close,
       getRawPC,
+      pc,
       // Media
       addLocalStream,
       removeMedia,

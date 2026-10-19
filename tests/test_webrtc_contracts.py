@@ -92,6 +92,8 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("function startPerfHudStats", self.ui_content)
         self.assertIn("function stopPerfHudStats", self.ui_content)
         self.assertIn("function updatePerfHud", self.ui_content)
+        self.assertIn("session?.getRawPC?.() || session?.pc", self.ui_content)
+        self.assertIn("await pc.getStats()", self.ui_content)
 
         # Elements in index.html
         self.assertIn('id="rd-btn-audio"', self.html_content)
@@ -107,14 +109,17 @@ class TestWebRtcContracts(unittest.TestCase):
         """Package 2: Mobile touch engine (direct vs trackpad) and soft modifier keys."""
         # Functions in ui-controller.js
         self.assertIn("function setRdTouchMode", self.ui_content)
+        self.assertIn("function renderVirtualCursor", self.ui_content)
         self.assertIn("let rdTouchMode =", self.ui_content)
         self.assertIn("let virtualCursor =", self.ui_content)
+        self.assertIn("let isDirectDragging =", self.ui_content)
         self.assertIn("const latchedModifiers =", self.ui_content)
         self.assertIn("function unlatchAllModifiers", self.ui_content)
         self.assertIn("function initMobileTouchAndSoftKeys", self.ui_content)
 
         # Elements in index.html
         self.assertIn('id="rd-btn-touch-mode"', self.html_content)
+        self.assertIn('id="rd-virtual-cursor"', self.html_content)
         self.assertIn('id="rd-btn-soft-keys-toggle"', self.html_content)
         self.assertIn('id="rd-soft-keys-bar"', self.html_content)
         self.assertIn('id="rd-hidden-input"', self.html_content)

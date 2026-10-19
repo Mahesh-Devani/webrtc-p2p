@@ -114,15 +114,15 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792390375.1449597,
-    "seen": 1792390588.916287,
-    "ast_hash": "22d3986bde28986d58697ed5aed74ce6",
+    "mtime": 1792392097.8399882,
+    "seen": 1792392149.3780532,
+    "ast_hash": "de2da8f4bc25aeb7cccbe60fdec6e846",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1792377023.4195747,
-    "seen": 1792377148.189791,
-    "ast_hash": "a4402b54ca29652cdffee4c64186ac23",
+    "mtime": 1792391785.87691,
+    "seen": 1792392149.378054,
+    "ast_hash": "dea157437e60e16e562536ed6714d168",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792376313.4579775,
-    "seen": 1792377148.1897972,
-    "ast_hash": "a036c135de562e6a56d5e54203dd45ef",
+    "mtime": 1792391767.8173892,
+    "seen": 1792392149.378059,
+    "ast_hash": "08499e263a2847cfe9fa0230798215d7",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -228,9 +228,9 @@
     "semantic_hash": ""
   },
   "tests/test_webrtc_contracts.py": {
-    "mtime": 1792375437.2969127,
-    "seen": 1792375460.339585,
-    "ast_hash": "135fee2dbac92926fcd640454aefbf9e",
+    "mtime": 1792392135.267729,
+    "seen": 1792392149.378052,
+    "ast_hash": "d55d874c5438841568a55de1096391b9",
     "semantic_hash": ""
   },
   ".agents/skills/regression-testing/SKILL.md": {
