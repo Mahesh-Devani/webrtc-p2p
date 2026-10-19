@@ -126,6 +126,34 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdBtnQuality: $('#rd-btn-quality'),
     rdQualityLabel: $('#rd-quality-label'),
     rdQualityMenu: $('#rd-quality-menu'),
+    // Remote Audio controls
+    rdBtnAudio: $('#rd-btn-audio'),
+    rdAudioIconUnmuted: $('#rd-audio-icon-unmuted'),
+    rdAudioIconMuted: $('#rd-audio-icon-muted'),
+    rdAudioLabel: $('#rd-audio-label'),
+    rdAudioMenu: $('#rd-audio-menu'),
+    rdBtnAudioMuteToggle: $('#rd-btn-audio-mute-toggle'),
+    rdAudioSlider: $('#rd-audio-slider'),
+    rdAudioVolumeText: $('#rd-audio-volume-text'),
+    // Performance HUD
+    rdBtnPerfHud: $('#rd-btn-perf-hud'),
+    rdPerfHudPillText: $('#rd-perf-hud-pill-text'),
+    rdPerfHudOverlay: $('#rd-perf-hud-overlay'),
+    rdPerfHudClose: $('#rd-perf-hud-close'),
+    rdStatRtt: $('#rd-stat-rtt'),
+    rdStatFps: $('#rd-stat-fps'),
+    rdStatBitrate: $('#rd-stat-bitrate'),
+    rdStatRes: $('#rd-stat-res'),
+    rdStatCodec: $('#rd-stat-codec'),
+    rdStatLoss: $('#rd-stat-loss'),
+    // Mobile Touch & Soft Keys
+    rdBtnTouchMode: $('#rd-btn-touch-mode'),
+    rdTouchModeIcon: $('#rd-touch-mode-icon'),
+    rdTouchModeLabel: $('#rd-touch-mode-label'),
+    rdBtnSoftKeysToggle: $('#rd-btn-soft-keys-toggle'),
+    rdSoftKeysBar: $('#rd-soft-keys-bar'),
+    rdSoftBtnKeyboard: $('#rd-soft-btn-keyboard'),
+    rdHiddenInput: $('#rd-hidden-input'),
     rdBtnDisplays: $('#rd-btn-displays'),
     rdDisplaysLabel: $('#rd-displays-label'),
     rdDisplaysMenu: $('#rd-displays-menu'),
@@ -137,6 +165,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdReconnectStatus: $('#rd-reconnect-status'),
     btnRdReconnectNow: $('#btn-rd-reconnect-now'),
     btnRdReconnectCancel: $('#btn-rd-reconnect-cancel'),
+    btnRefreshRemoteStatus: $('#btn-refresh-remote-status'),
     btnExportFleet: $('#btn-export-fleet'),
     btnImportFleet: $('#btn-import-fleet'),
     fleetImportFile: $('#fleet-import-file'),
@@ -453,6 +482,97 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     return dur ? `Connected ${rel} (Duration: ${dur})` : `Connected ${rel}`;
   }
 
+  const hostStatusMap = new Map();
+  const hostPingTimestamps = new Map();
+  let isPingingHosts = false;
+
+  function getHostStatusDisplay(pubkey) {
+    const pkLower = (pubkey || '').toLowerCase();
+    const statusInfo = hostStatusMap.get(pkLower);
+    let statusClass = 'remote-device-status--offline';
+    let dotClass = 'remote-device-dot--offline';
+    let statusText = '🔴 Offline';
+
+    if (statusInfo) {
+      if (statusInfo.status === 'checking') {
+        statusClass = 'remote-device-status--checking';
+        dotClass = 'remote-device-dot--checking';
+        statusText = '🔄 Checking status…';
+      } else if (statusInfo.status === 'online') {
+        statusClass = 'remote-device-status--online';
+        dotClass = 'remote-device-dot--online';
+        statusText = `🟢 Online (Capture Active)${statusInfo.rttMs ? ' • ' + statusInfo.rttMs + 'ms' : ''}`;
+      } else if (statusInfo.status === 'standby') {
+        statusClass = 'remote-device-status--standby';
+        dotClass = 'remote-device-dot--standby';
+        statusText = `🟡 Standby (No Screen)${statusInfo.rttMs ? ' • ' + statusInfo.rttMs + 'ms' : ''}`;
+      } else if (statusInfo.status === 'blocked') {
+        statusClass = 'remote-device-status--blocked';
+        dotClass = 'remote-device-dot--blocked';
+        statusText = '⚠️ Blocked (Whitelist)';
+      }
+    }
+    return { statusClass, dotClass, statusText };
+  }
+
+  function updateHostStatusBadge(pubkey) {
+    if (!dom.remoteDevicesList || !pubkey) return;
+    const el = dom.remoteDevicesList.querySelector(`.remote-device-status[data-pubkey="${pubkey}"]`);
+    if (!el) return;
+    const { statusClass, dotClass, statusText } = getHostStatusDisplay(pubkey);
+    el.className = `remote-device-status ${statusClass}`;
+    el.innerHTML = `<span class="remote-device-dot ${dotClass}"></span><span class="remote-device-status-text">${escapeHtml(statusText)}</span>`;
+  }
+
+  async function pingAllRemoteDevices() {
+    const devices = loadRemoteDevices();
+    if (devices.length === 0) return;
+    if (isPingingHosts) return;
+    isPingingHosts = true;
+
+    if (dom.btnRefreshRemoteStatus) {
+      dom.btnRefreshRemoteStatus.disabled = true;
+      dom.btnRefreshRemoteStatus.textContent = '🔄 Pinging…';
+    }
+
+    if (!NostrTransport.isConnected()) {
+      try { await NostrTransport.connect(); } catch {}
+    }
+
+    const now = Date.now();
+    for (const dev of devices) {
+      const pkLower = dev.pubkey.toLowerCase();
+      hostStatusMap.set(pkLower, { status: 'checking', ts: now });
+      hostPingTimestamps.set(pkLower, now);
+      updateHostStatusBadge(dev.pubkey);
+      try {
+        await NostrTransport.sendSignal(dev.pubkey, {
+          type: 'host_ping',
+          session: 'fleet-ping-' + now,
+          data: { t: now }
+        });
+      } catch (err) {
+        console.warn(`[pingAllRemoteDevices] Failed to send ping to ${dev.name}:`, err);
+      }
+    }
+
+    setTimeout(() => {
+      for (const dev of devices) {
+        const pkLower = dev.pubkey.toLowerCase();
+        const current = hostStatusMap.get(pkLower);
+        if (current && current.status === 'checking') {
+          hostStatusMap.set(pkLower, { status: 'offline', ts: Date.now() });
+          updateHostStatusBadge(dev.pubkey);
+        }
+      }
+      isPingingHosts = false;
+      if (dom.btnRefreshRemoteStatus) {
+        dom.btnRefreshRemoteStatus.disabled = false;
+        dom.btnRefreshRemoteStatus.textContent = '🔄 Ping Status';
+      }
+    }, 5000);
+  }
+
   function renderRemoteDevices() {
     if (!dom.remoteDevicesList) return;
     const devices = loadRemoteDevices();
@@ -461,7 +581,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       return;
     }
 
-    dom.remoteDevicesList.innerHTML = devices.map(d => `
+    dom.remoteDevicesList.innerHTML = devices.map(d => {
+      const { statusClass, dotClass, statusText } = getHostStatusDisplay(d.pubkey);
+      return `
       <div class="remote-device-item" data-pubkey="${escapeHtml(d.pubkey)}">
         <div class="remote-device-info">
           <div class="remote-device-name">
@@ -473,6 +595,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           </div>
           <div class="remote-device-time">
             🕒 ${escapeHtml(formatConnectionTime(d.lastConnected, d.lastDuration))}
+          </div>
+          <div class="remote-device-status ${statusClass}" data-pubkey="${escapeHtml(d.pubkey)}">
+            <span class="remote-device-dot ${dotClass}"></span>
+            <span class="remote-device-status-text">${escapeHtml(statusText)}</span>
           </div>
         </div>
         <div class="remote-device-actions">
@@ -487,7 +613,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           </button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     dom.remoteDevicesList.querySelectorAll('.remote-device-btn-connect').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1844,6 +1971,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
           dom.remoteVideo.srcObject = stream;
+          applySavedRemoteAudioSettings();
           const playPromise = dom.remoteVideo.play();
           if (playPromise !== undefined) {
             playPromise.catch(err => {
@@ -2278,6 +2406,315 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     }
   }
 
+  // ═══ REMOTE AUDIO CONTROLS (Package 1) ═══
+  function applyRemoteAudioVolume(volPercent, isMuted) {
+    const clampedVol = Math.max(0, Math.min(100, isNaN(volPercent) ? 100 : volPercent));
+    if (dom.remoteVideo) {
+      dom.remoteVideo.volume = clampedVol / 100;
+      dom.remoteVideo.muted = isMuted;
+    }
+    if (dom.rdAudioSlider) dom.rdAudioSlider.value = clampedVol;
+    if (dom.rdAudioVolumeText) dom.rdAudioVolumeText.textContent = `${clampedVol}%`;
+    if (dom.rdAudioLabel) dom.rdAudioLabel.textContent = isMuted ? 'Muted' : `${clampedVol}%`;
+    if (dom.rdBtnAudioMuteToggle) {
+      dom.rdBtnAudioMuteToggle.textContent = isMuted ? 'Unmute' : 'Mute';
+    }
+    if (dom.rdAudioIconUnmuted && dom.rdAudioIconMuted) {
+      if (isMuted || clampedVol === 0) {
+        dom.rdAudioIconUnmuted.classList.add('hidden');
+        dom.rdAudioIconMuted.classList.remove('hidden');
+      } else {
+        dom.rdAudioIconUnmuted.classList.remove('hidden');
+        dom.rdAudioIconMuted.classList.add('hidden');
+      }
+    }
+  }
+
+  function applySavedRemoteAudioSettings() {
+    const savedVol = localStorage.getItem('p2p-rd-audio-volume');
+    const initialVol = savedVol !== null ? parseInt(savedVol, 10) : 100;
+    const isMuted = localStorage.getItem('p2p-rd-audio-muted') === 'true';
+    applyRemoteAudioVolume(initialVol, isMuted);
+  }
+
+  function initRemoteAudioControls() {
+    applySavedRemoteAudioSettings();
+
+    dom.rdBtnAudio?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hide(dom.rdClipboardMenu);
+      hide(dom.rdQualityMenu);
+      hide(dom.rdDisplaysMenu);
+      hide(dom.rdKeysMenu);
+      dom.rdAudioMenu?.classList.toggle('hidden');
+    });
+
+    dom.rdAudioSlider?.addEventListener('input', (e) => {
+      const vol = parseInt(e.target.value, 10);
+      applyRemoteAudioVolume(vol, false);
+      localStorage.setItem('p2p-rd-audio-volume', String(vol));
+      localStorage.setItem('p2p-rd-audio-muted', 'false');
+    });
+
+    dom.rdBtnAudioMuteToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currentMuted = dom.remoteVideo ? dom.remoteVideo.muted : false;
+      const newMuted = !currentMuted;
+      const vol = dom.rdAudioSlider ? parseInt(dom.rdAudioSlider.value, 10) : 100;
+      applyRemoteAudioVolume(vol, newMuted);
+      localStorage.setItem('p2p-rd-audio-muted', String(newMuted));
+    });
+  }
+
+  // ═══ LIVE PERFORMANCE HUD (Package 1) ═══
+  let perfHudInterval = null;
+  let lastPerfBytes = 0;
+  let lastPerfTimestamp = 0;
+
+  function startPerfHudStats() {
+    stopPerfHudStats();
+    updatePerfHud();
+    perfHudInterval = setInterval(updatePerfHud, 1000);
+  }
+
+  function stopPerfHudStats() {
+    if (perfHudInterval) {
+      clearInterval(perfHudInterval);
+      perfHudInterval = null;
+    }
+    lastPerfBytes = 0;
+    lastPerfTimestamp = 0;
+    if (dom.rdPerfHudPillText) dom.rdPerfHudPillText.textContent = 'Stats ▾';
+  }
+
+  async function updatePerfHud() {
+    if (!session || !session.pc || !mediaActive) return;
+    try {
+      const stats = await session.pc.getStats();
+      let rttMs = null;
+      let fps = null;
+      let bitrateMbps = null;
+      let res = null;
+      let codecName = '';
+      let lost = 0;
+      let jitterMs = 0;
+
+      stats.forEach(report => {
+        if (report.type === 'candidate-pair' && (report.state === 'succeeded' || report.nominated || (report.currentRoundTripTime !== undefined && report.bytesReceived > 0))) {
+          if (report.currentRoundTripTime !== undefined) {
+            rttMs = Math.round(report.currentRoundTripTime * 1000);
+          } else if (report.roundTripTime !== undefined) {
+            rttMs = Math.round(report.roundTripTime * 1000);
+          }
+        } else if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.mediaType === 'video')) {
+          if (report.framesPerSecond !== undefined) {
+            fps = Math.round(report.framesPerSecond);
+          }
+          if (report.packetsLost !== undefined) {
+            lost = report.packetsLost;
+          }
+          if (report.jitter !== undefined) {
+            jitterMs = Math.round(report.jitter * 1000);
+          }
+          if (report.frameWidth && report.frameHeight) {
+            res = `${report.frameWidth}x${report.frameHeight}`;
+          }
+          if (report.bytesReceived !== undefined) {
+            const now = performance.now();
+            if (lastPerfTimestamp > 0 && report.bytesReceived >= lastPerfBytes) {
+              const deltaBytes = report.bytesReceived - lastPerfBytes;
+              const deltaMs = now - lastPerfTimestamp;
+              if (deltaMs > 0) {
+                bitrateMbps = ((deltaBytes * 8) / (deltaMs * 1000)).toFixed(2);
+              }
+            }
+            lastPerfBytes = report.bytesReceived;
+            lastPerfTimestamp = now;
+          }
+          if (report.codecId) {
+            const cReport = stats.get(report.codecId);
+            if (cReport && cReport.mimeType) {
+              codecName = cReport.mimeType.replace(/^video\//i, '').toUpperCase();
+            }
+          }
+        }
+      });
+
+      if (rttMs !== null) {
+        if (dom.rdStatRtt) dom.rdStatRtt.textContent = `${rttMs} ms`;
+        if (dom.rdPerfHudPillText) dom.rdPerfHudPillText.textContent = `${rttMs}ms ▾`;
+      }
+      if (fps !== null) {
+        if (dom.rdStatFps) dom.rdStatFps.textContent = `${fps} FPS`;
+      } else if (dom.remoteVideo && dom.remoteVideo.videoWidth) {
+        if (dom.rdStatFps) dom.rdStatFps.textContent = 'Active';
+      }
+      if (bitrateMbps !== null) {
+        if (dom.rdStatBitrate) dom.rdStatBitrate.textContent = `${bitrateMbps} Mbps`;
+      }
+      const vWidth = dom.remoteVideo?.videoWidth;
+      const vHeight = dom.remoteVideo?.videoHeight;
+      if (res) {
+        if (dom.rdStatRes) dom.rdStatRes.textContent = res;
+      } else if (vWidth && vHeight) {
+        if (dom.rdStatRes) dom.rdStatRes.textContent = `${vWidth}x${vHeight}`;
+      }
+      if (dom.rdStatCodec) {
+        dom.rdStatCodec.textContent = codecName || 'VP8 / H.264';
+      }
+      if (dom.rdStatLoss) {
+        dom.rdStatLoss.textContent = `${lost} lost (${jitterMs}ms)`;
+      }
+    } catch (e) {
+      console.warn('[updatePerfHud] Error reading stats:', e);
+    }
+  }
+
+  // ═══ MOBILE TOUCH & SOFT KEYS (Package 2) ═══
+  let rdTouchMode = localStorage.getItem('p2p-rd-touch-mode') || 'direct';
+  let virtualCursor = { x: 0.5, y: 0.5 };
+
+  function setRdTouchMode(mode) {
+    rdTouchMode = mode === 'trackpad' ? 'trackpad' : 'direct';
+    localStorage.setItem('p2p-rd-touch-mode', rdTouchMode);
+    if (dom.rdTouchModeIcon) {
+      dom.rdTouchModeIcon.textContent = rdTouchMode === 'trackpad' ? '🖱️' : '👆';
+    }
+    if (dom.rdTouchModeLabel) {
+      dom.rdTouchModeLabel.textContent = rdTouchMode === 'trackpad' ? 'Trackpad' : 'Direct';
+    }
+  }
+
+  const latchedModifiers = {
+    Control: false,
+    Alt: false,
+    Meta: false,
+    Shift: false,
+  };
+
+  function unlatchAllModifiers() {
+    Object.keys(latchedModifiers).forEach(k => {
+      if (latchedModifiers[k]) {
+        latchedModifiers[k] = false;
+        sendRdInput({ t: 'key_up', key: k, code: k + 'Left', ctrl: false, alt: false, meta: false, shift: false });
+      }
+    });
+    dom.rdSoftKeysBar?.querySelectorAll('.rd-soft-key--modifier').forEach(btn => {
+      btn.classList.remove('active');
+    });
+  }
+
+  function initMobileTouchAndSoftKeys() {
+    setRdTouchMode(rdTouchMode);
+
+    dom.rdBtnTouchMode?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const newMode = rdTouchMode === 'direct' ? 'trackpad' : 'direct';
+      setRdTouchMode(newMode);
+      toast(newMode === 'trackpad' ? 'Virtual Trackpad mode enabled' : 'Direct Touch mode enabled', 'info');
+    });
+
+    dom.rdBtnSoftKeysToggle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dom.rdSoftKeysBar?.classList.toggle('hidden');
+    });
+
+    dom.rdSoftKeysBar?.querySelectorAll('.rd-soft-key--modifier').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mod = btn.dataset.modifier;
+        if (!mod || !latchedModifiers.hasOwnProperty(mod)) return;
+        latchedModifiers[mod] = !latchedModifiers[mod];
+        btn.classList.toggle('active', latchedModifiers[mod]);
+        sendRdInput({
+          t: latchedModifiers[mod] ? 'key_down' : 'key_up',
+          key: mod,
+          code: mod + 'Left',
+          ctrl: latchedModifiers.Control,
+          alt: latchedModifiers.Alt,
+          meta: latchedModifiers.Meta,
+          shift: latchedModifiers.Shift
+        });
+      });
+    });
+
+    dom.rdSoftKeysBar?.querySelectorAll('.rd-soft-key[data-key]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = btn.dataset.key;
+        if (!key) return;
+        const payload = {
+          t: 'key_down',
+          key,
+          code: key,
+          ctrl: latchedModifiers.Control,
+          alt: latchedModifiers.Alt,
+          meta: latchedModifiers.Meta,
+          shift: latchedModifiers.Shift
+        };
+        sendRdInput(payload);
+        setTimeout(() => {
+          sendRdInput({ ...payload, t: 'key_up' });
+          unlatchAllModifiers();
+        }, 50);
+      });
+    });
+
+    dom.rdSoftBtnKeyboard?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (dom.rdHiddenInput) {
+        dom.rdHiddenInput.focus();
+        toast('Virtual keyboard summoned — type to send keystrokes', 'info');
+      }
+    });
+
+    if (dom.rdHiddenInput) {
+      dom.rdHiddenInput.addEventListener('keydown', (e) => {
+        if (rdMode !== 'control') return;
+        if (['Backspace', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+          const payload = {
+            t: 'key_down',
+            key: e.key,
+            code: e.code,
+            ctrl: latchedModifiers.Control || e.ctrlKey,
+            alt: latchedModifiers.Alt || e.altKey,
+            meta: latchedModifiers.Meta || e.metaKey,
+            shift: latchedModifiers.Shift || e.shiftKey
+          };
+          sendRdInput(payload);
+          setTimeout(() => {
+            sendRdInput({ ...payload, t: 'key_up' });
+            unlatchAllModifiers();
+          }, 50);
+        }
+      });
+
+      dom.rdHiddenInput.addEventListener('input', () => {
+        if (rdMode !== 'control') return;
+        const val = dom.rdHiddenInput.value;
+        if (val) {
+          for (const char of val) {
+            const payload = {
+              t: 'key_down',
+              key: char,
+              code: 'Key' + char.toUpperCase(),
+              ctrl: latchedModifiers.Control,
+              alt: latchedModifiers.Alt,
+              meta: latchedModifiers.Meta,
+              shift: latchedModifiers.Shift
+            };
+            sendRdInput(payload);
+            setTimeout(() => {
+              sendRdInput({ ...payload, t: 'key_up' });
+              unlatchAllModifiers();
+            }, 40);
+          }
+          dom.rdHiddenInput.value = '';
+        }
+      });
+    }
+  }
+
   function attachRemoteVideoInputListeners() {
     const v = dom.remoteVideo;
     if (!v || v._rdListenersAttached) return;
@@ -2351,6 +2788,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     let lastTapTime = 0;
     let lastTapCoords = null;
 
+    // Trackpad mode relative dragging state
+    let lastTrackpadX = 0;
+    let lastTrackpadY = 0;
+    let twoFingerStartY = 0;
+    let lastTwoFingerY = 0;
+    let trackpadTwoFinger = false;
+
     // Two-finger pinch-to-zoom and pan variables
     let isPinching = false;
     let initialPinchDistance = 0;
@@ -2364,6 +2808,26 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('touchstart', (e) => {
       if (rdMode === 'view') return;
+
+      if (rdTouchMode === 'trackpad') {
+        e.preventDefault();
+        touchStartTime = Date.now();
+        touchMoved = false;
+        if (e.touches.length === 1) {
+          trackpadTwoFinger = false;
+          const t0 = e.touches[0];
+          touchStartX = t0.clientX;
+          touchStartY = t0.clientY;
+          lastTrackpadX = t0.clientX;
+          lastTrackpadY = t0.clientY;
+        } else if (e.touches.length === 2) {
+          trackpadTwoFinger = true;
+          twoFingerStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          lastTwoFingerY = twoFingerStartY;
+        }
+        return;
+      }
+
       if (e.touches.length === 1) {
         isPinching = false;
         touchStartTime = Date.now();
@@ -2413,6 +2877,46 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     v.addEventListener('touchmove', (e) => {
       if (rdMode === 'view') return;
       e.preventDefault(); // Prevent page bounce/zoom while interacting
+
+      if (rdTouchMode === 'trackpad') {
+        if (e.touches.length === 1 && !trackpadTwoFinger) {
+          const t0 = e.touches[0];
+          const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
+          if (dist > 5) touchMoved = true;
+
+          const dx = t0.clientX - lastTrackpadX;
+          const dy = t0.clientY - lastTrackpadY;
+          lastTrackpadX = t0.clientX;
+          lastTrackpadY = t0.clientY;
+
+          const rect = v.getBoundingClientRect();
+          const targetWidth = rect.width || window.innerWidth;
+          const targetHeight = rect.height || window.innerHeight;
+          const sens = 1.3;
+
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / targetWidth));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / targetHeight));
+
+          const now = performance.now();
+          if (now - lastMoveTime >= 16) {
+            lastMoveTime = now;
+            if (rdMode === 'pointer') {
+              sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
+            } else if (rdMode === 'control') {
+              sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+            }
+          }
+        } else if (e.touches.length === 2) {
+          const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          if (Math.abs(currentMidY - twoFingerStartY) > 5) touchMoved = true;
+          const scrollDy = (lastTwoFingerY - currentMidY) * 2.5;
+          if (Math.abs(scrollDy) > 2 && rdMode === 'control') {
+            sendRdInput({ t: 'wheel', dy: scrollDy });
+          }
+          lastTwoFingerY = currentMidY;
+        }
+        return;
+      }
 
       if (e.touches.length === 1 && !isPinching) {
         const t0 = e.touches[0];
@@ -2484,6 +2988,34 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       clearTimeout(longPressTimer);
       if (rdMode === 'view') return;
 
+      if (rdTouchMode === 'trackpad') {
+        e.preventDefault();
+        if (e.touches.length === 0) {
+          const elapsed = Date.now() - touchStartTime;
+          if (!touchMoved && elapsed < 350) {
+            if (trackpadTwoFinger) {
+              if (rdMode === 'control') {
+                sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+                sendRdInput({ t: 'mouse_click', btn: 2, x: virtualCursor.x, y: virtualCursor.y });
+                toast('Right Click sent', 'info');
+              }
+            } else {
+              if (rdMode === 'pointer') {
+                sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, click: true });
+              } else if (rdMode === 'control') {
+                sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+                sendRdInput({ t: 'mouse_click', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
+              }
+            }
+          }
+          trackpadTwoFinger = false;
+          touchMoved = false;
+        } else if (e.touches.length === 1) {
+          trackpadTwoFinger = false;
+        }
+        return;
+      }
+
       if (e.touches.length === 0) {
         isPinching = false;
         lastPinchMidY = null;
@@ -2540,6 +3072,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       touchMoved = false;
       isPinching = false;
       lastPinchMidY = null;
+      trackpadTwoFinger = false;
     });
   }
 
@@ -2644,6 +3177,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   function exitRemoteDesktopMode() {
     recordRdSessionEnd();
     hideRdReconnectBanner();
+    stopPerfHudStats();
+    hide(dom.rdPerfHudOverlay);
+    hide(dom.rdSoftKeysBar);
+    hide(dom.rdAudioMenu);
+    unlatchAllModifiers();
     setRdMode('view');
     hide(dom.rdToolbar);
     dom.rdToolbar?.classList.remove('rd-toolbar--collapsed');
@@ -3813,14 +4351,43 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
     hide(dom.rdDisplaysMenu);
+    hide(dom.rdAudioMenu);
     dom.rdKeysMenu?.classList.toggle('hidden');
   });
+
+  // Performance HUD trigger
+  dom.rdBtnPerfHud?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dom.rdPerfHudOverlay?.classList.toggle('hidden');
+    const isOpen = !dom.rdPerfHudOverlay?.classList.contains('hidden');
+    if (isOpen) {
+      startPerfHudStats();
+    } else {
+      stopPerfHudStats();
+    }
+  });
+
+  dom.rdPerfHudClose?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdPerfHudOverlay);
+    stopPerfHudStats();
+  });
+
+  // Live sidebar host status refresh button
+  dom.btnRefreshRemoteStatus?.addEventListener('click', () => {
+    pingAllRemoteDevices();
+  });
+
+  // Initialize Package 1 Audio Controls & Package 2 Touch/Soft-keys
+  initRemoteAudioControls();
+  initMobileTouchAndSoftKeys();
 
   document.addEventListener('click', () => {
     hide(dom.rdKeysMenu);
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
     hide(dom.rdDisplaysMenu);
+    hide(dom.rdAudioMenu);
   });
 
   dom.rdKeysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
@@ -4430,6 +4997,34 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       await NostrTransport.connect();
       renderRelayList();
 
+      // Subscribe to host_pong signals for live status of saved remote computers
+      NostrTransport.subscribeSignals((signal) => {
+        if (signal && signal.type === 'host_pong') {
+          const senderLower = (signal.senderPubKey || '').toLowerCase();
+          const pingTime = hostPingTimestamps.get(senderLower);
+          const rttMs = pingTime ? Math.max(1, Date.now() - pingTime) : null;
+          const info = signal.data || {};
+          let status = 'offline';
+          if (info.status === 'ready') {
+            status = info.streamActive ? 'online' : 'standby';
+          } else if (info.status === 'blocked') {
+            status = 'blocked';
+          }
+          hostStatusMap.set(senderLower, {
+            status,
+            rttMs,
+            info,
+            ts: Date.now()
+          });
+          updateHostStatusBadge(signal.senderPubKey);
+        }
+      });
+
+      // Auto-ping saved remote computers once relays are established
+      if (loadRemoteDevices().length > 0) {
+        setTimeout(() => pingAllRemoteDevices(), 1500);
+      }
+
       // Subscribe to incoming Nostr chat messages (offline delivery)
       NostrTransport.subscribeMessages((incoming) => {
         const { id, text, ts, senderPubKey } = incoming;
@@ -4597,6 +5192,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           });
         }
       }
+    }
+
+    // 3. Refresh live status of saved remote computers
+    if (loadRemoteDevices().length > 0) {
+      pingAllRemoteDevices();
     }
   }
 

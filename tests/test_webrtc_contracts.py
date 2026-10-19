@@ -18,6 +18,7 @@ class TestWebRtcContracts(unittest.TestCase):
     def setUpClass(cls):
         cls.core_content = (PROJECT_ROOT / 'webrtc-core.js').read_text(encoding='utf-8')
         cls.ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        cls.html_content = (PROJECT_ROOT / 'index.html').read_text(encoding='utf-8')
 
     def test_datachannel_labels_and_wiring(self):
         """All 4 DataChannels (p2p-sig, p2p-chat, p2p-files, p2p-input) must be wired."""
@@ -82,5 +83,54 @@ class TestWebRtcContracts(unittest.TestCase):
             self.assertTrue(pattern.search(body), f"Member '{prop_name}' returned by PeerSession.create is not declared in create() scope!")
 
 
+    def test_remote_audio_controls_and_perf_hud(self):
+        """Package 1: Audio controls (slider/mute) and live stream performance HUD."""
+        # Functions in ui-controller.js
+        self.assertIn("function applyRemoteAudioVolume", self.ui_content)
+        self.assertIn("function applySavedRemoteAudioSettings", self.ui_content)
+        self.assertIn("function initRemoteAudioControls", self.ui_content)
+        self.assertIn("function startPerfHudStats", self.ui_content)
+        self.assertIn("function stopPerfHudStats", self.ui_content)
+        self.assertIn("function updatePerfHud", self.ui_content)
+
+        # Elements in index.html
+        self.assertIn('id="rd-btn-audio"', self.html_content)
+        self.assertIn('id="rd-audio-slider"', self.html_content)
+        self.assertIn('id="rd-btn-audio-mute-toggle"', self.html_content)
+        self.assertIn('id="rd-btn-perf-hud"', self.html_content)
+        self.assertIn('id="rd-perf-hud-overlay"', self.html_content)
+        self.assertIn('id="rd-stat-rtt"', self.html_content)
+        self.assertIn('id="rd-stat-fps"', self.html_content)
+        self.assertIn('id="rd-stat-bitrate"', self.html_content)
+
+    def test_mobile_touch_mode_and_soft_keys(self):
+        """Package 2: Mobile touch engine (direct vs trackpad) and soft modifier keys."""
+        # Functions in ui-controller.js
+        self.assertIn("function setRdTouchMode", self.ui_content)
+        self.assertIn("let rdTouchMode =", self.ui_content)
+        self.assertIn("let virtualCursor =", self.ui_content)
+        self.assertIn("const latchedModifiers =", self.ui_content)
+        self.assertIn("function unlatchAllModifiers", self.ui_content)
+        self.assertIn("function initMobileTouchAndSoftKeys", self.ui_content)
+
+        # Elements in index.html
+        self.assertIn('id="rd-btn-touch-mode"', self.html_content)
+        self.assertIn('id="rd-btn-soft-keys-toggle"', self.html_content)
+        self.assertIn('id="rd-soft-keys-bar"', self.html_content)
+        self.assertIn('id="rd-hidden-input"', self.html_content)
+
+    def test_sidebar_live_host_status_ping(self):
+        """Package 3: Live host status badges in sidebar and fleet ping mechanism."""
+        # Functions in ui-controller.js
+        self.assertIn("const hostStatusMap = new Map()", self.ui_content)
+        self.assertIn("function updateHostStatusBadge", self.ui_content)
+        self.assertIn("async function pingAllRemoteDevices", self.ui_content)
+        self.assertIn("signal.type === 'host_pong'", self.ui_content)
+
+        # Elements in index.html
+        self.assertIn('id="btn-refresh-remote-status"', self.html_content)
+
+
 if __name__ == '__main__':
     unittest.main()
+
