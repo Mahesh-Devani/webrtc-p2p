@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792381395.7551153,
-    "seen": 1792381416.3467991,
-    "ast_hash": "36d6cdd25f68c39eb16491b5108e8ca4",
+    "mtime": 1792390387.1885643,
+    "seen": 1792390588.9162612,
+    "ast_hash": "99590395eb1596ebf18f19811dfaa483",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792381385.8440359,
-    "seen": 1792381416.346816,
-    "ast_hash": "fe823cf0a6d1a8cf906b67c73ffcfde1",
+    "mtime": 1792390375.1449597,
+    "seen": 1792390588.916287,
+    "ast_hash": "22d3986bde28986d58697ed5aed74ce6",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "run-regressions.py": {
-    "mtime": 1792381363.0718422,
-    "seen": 1792381416.346807,
-    "ast_hash": "a4c70a2b5f2b3d62ad461716f7c7fed1",
+    "mtime": 1792390543.184758,
+    "seen": 1792390588.9162738,
+    "ast_hash": "028f1f9a4d23a9f3fc75dbb6c55b87bd",
     "semantic_hash": ""
   },
   "tests/test_host_security.py": {
@@ -288,8 +288,8 @@
     "semantic_hash": ""
   },
   "tests/mock_relay.py": {
-    "mtime": 1792381268.6893072,
-    "seen": 1792381416.3468108,
+    "mtime": 1792389644.3469346,
+    "seen": 1792390588.91628,
     "ast_hash": "c1a0c4dde90d3f52318ca452516f891d",
     "semantic_hash": ""
   },
@@ -297,6 +297,18 @@
     "mtime": 1792381296.6639302,
     "seen": 1792381416.346814,
     "ast_hash": "97eb8871b8ebba2ba25407299e46f878",
+    "semantic_hash": ""
+  },
+  "tests/e2e/cdp_client.py": {
+    "mtime": 1792390467.3039331,
+    "seen": 1792390588.9162781,
+    "ast_hash": "02803266014023ac9bcc0199078495f5",
+    "semantic_hash": ""
+  },
+  "tests/e2e/test_two_peer_handshake.py": {
+    "mtime": 1792390245.4023552,
+    "seen": 1792390588.916279,
+    "ast_hash": "6354f442188466ccada350074fc06d79",
     "semantic_hash": ""
   }
 }

@@ -5059,9 +5059,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       try {
         const params = new URLSearchParams(window.location.search);
         const relayParam = params.get('relay');
+        const relayOnly = params.get('relay-only') === '1' || params.get('relay-only') === 'true';
         if (relayParam && (relayParam.startsWith('ws://') || relayParam.startsWith('wss://'))) {
-          NostrTransport.addRelay(relayParam.trim());
-          console.log('[Mock Relay] Configured relay from URL:', relayParam.trim());
+          const cleanRelay = relayParam.trim();
+          if (relayOnly) {
+            localStorage.setItem('nostr-relays', JSON.stringify([cleanRelay]));
+          } else {
+            NostrTransport.addRelay(cleanRelay);
+          }
+          console.log('[Mock Relay] Configured relay from URL:', cleanRelay, relayOnly ? '(exclusive)' : '');
         }
       } catch { }
 

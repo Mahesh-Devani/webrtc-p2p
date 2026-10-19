@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-19)
 
 ## Corpus Check
-- 46 files · ~108,907 words
+- 48 files · ~110,905 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1056 nodes · 2053 edges · 52 communities (38 shown, 14 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 78 edges (avg confidence: 0.86)
+- 1109 nodes · 2143 edges · 58 communities (41 shown, 17 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 83 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ac73aa6d`
+- Built from commit: `adcc867e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -22,7 +22,7 @@
 - bridge.py
 - host-controller.js
 - nostr.bundle.js
-- check-invariants.py
+- format_remediation_box
 - decode
 - NostrRelay
 - package.json
@@ -42,21 +42,27 @@
 - mock_relay.py
 - AGENTS.md — Developer & AI Agent Guide for P2P Connect
 - ._process_nostr_message
-- handleNext
+- test_two_peer_handshake.py
+- check-invariants.py
 - createCipher
+- MockNostrRelay
+- decode
 - install-linux-service.sh
 - install-macos-agent.sh
 - install-service.sh
 - start-host.sh
 - uninstall-service.sh
+- CdpTab
+- classifyKind
+- QuietHTTPHandler
 - 4. Failure Diagnosis & Resolution Runbook
 - P2P Connect — Architecture & Production Notes
 - P2P Connect — High-Level Design
 - TestWebRtcContracts
 - serve-https.py
-- run-regressions.py
+- pathlib
 - P2P Connect — Architecture
-- ColoredTextTestResult
+- run-regressions.py
 - 🔐 P2P Connect
 - TestMobileLifecycle
 - P2P Connect — Roadmap
@@ -75,14 +81,12 @@
 4. `show()` - 25 edges
 5. `weierstrass()` - 21 edges
 6. `buildNostrSessionConfig()` - 21 edges
-7. `update()` - 18 edges
-8. `encode()` - 18 edges
-9. `showCreateSession()` - 18 edges
-10. `showJoinSession()` - 18 edges
+7. `MockNostrRelay` - 20 edges
+8. `update()` - 18 edges
+9. `encode()` - 18 edges
+10. `showCreateSession()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Public API` --references--> `close()`  [INFERRED]
-  docs/system-design.md → nostr.bundle.js
 - `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
   docs/concepts-guide.md → nostr-relay.js
 - `Connection State Badge` --references--> `connected()`  [INFERRED]
@@ -91,11 +95,13 @@
   docs/system-design.md → nostr.bundle.js
 - `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
   AGENTS.md → ui-controller.js
+- `Verifying Changes` --references--> `connected()`  [INFERRED]
+  AGENTS.md → nostr.bundle.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (52 total, 14 thin omitted)
+## Communities (58 total, 17 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
@@ -103,14 +109,14 @@ Nodes (120): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpd
 
 ### Community 1 - "weierstrass"
 Cohesion: 0.07
-Nodes (51): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+43 more)
+Nodes (52): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+44 more)
 
 ### Community 2 - "update"
 Cohesion: 0.12
 Nodes (29): computeTag(), computeTag2(), constructor(), digest(), digestInto(), exists(), exists3(), extract() (+21 more)
 
 ### Community 3 - "bridge.py"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (18): CGPoint, execute_mouse_move(), handle_client(), is_origin_allowed(), load_or_create_token(), main(), make_ws_frame(), mouse_worker() (+10 more)
 
 ### Community 4 - "host-controller.js"
@@ -119,15 +125,15 @@ Nodes (32): DiagnosticLogger, addAuthorizedClient(), btnToggleServiceCard, compr
 
 ### Community 5 - "nostr.bundle.js"
 Cohesion: 0.04
-Nodes (42): binarySearch(), bytes2(), chachaCore(), classifyKind(), concatBytes(), createCurve(), FpSqrt(), getFilterLimit() (+34 more)
+Nodes (39): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve(), FpSqrt(), getHash(), getHex64() (+31 more)
 
-### Community 6 - "check-invariants.py"
-Cohesion: 0.07
-Nodes (16): 1. `test_no_query_params_on_internal_imports` Failed, check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist() (+8 more)
+### Community 6 - "format_remediation_box"
+Cohesion: 0.12
+Nodes (4): 1. `test_no_query_params_on_internal_imports` Failed, format_remediation_box(), read_project_file(), TestArchitecturalInvariants
 
 ### Community 7 - "decode"
-Cohesion: 0.12
-Nodes (22): bytesToHex2(), createRumor(), createSeal(), createWrap(), fastEventHash(), finalizeEvent(), finishReactionEvent(), finishRepostEvent() (+14 more)
+Cohesion: 0.09
+Nodes (29): bytesToHex2(), createRumor(), createSeal(), createWrap(), decrypt2(), encrypt2(), fastEventHash(), finalizeEvent() (+21 more)
 
 ### Community 8 - "NostrRelay"
 Cohesion: 0.07
@@ -138,8 +144,8 @@ Cohesion: 0.09
 Nodes (21): author, bugs, url, description, devDependencies, serve, homepage, keywords (+13 more)
 
 ### Community 10 - "encode"
-Cohesion: 0.21
-Nodes (16): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+8 more)
+Cohesion: 0.24
+Nodes (14): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), hexToBytes2(), integerToUint8Array(), naddrEncode() (+6 more)
 
 ### Community 11 - "remote-desktop-host/package.json"
 Cohesion: 0.14
@@ -150,16 +156,16 @@ Cohesion: 0.16
 Nodes (15): auth(), close(), closeAllSubscriptions(), connect(), count(), destroy(), ensureRelay(), fire() (+7 more)
 
 ### Community 13 - "decode"
-Cohesion: 0.11
-Nodes (23): calcPaddedLen(), concatBytes3(), decode(), decodePayload(), decrypt3(), encrypt3(), equalBytes2(), expand() (+15 more)
+Cohesion: 0.19
+Nodes (14): calcPaddedLen(), concatBytes3(), decodePayload(), decrypt3(), encrypt3(), equalBytes2(), expand(), getMessageKeys() (+6 more)
 
 ### Community 14 - "P2P Connect — System Design"
 Cohesion: 0.05
 Nodes (44): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 1. `webrtc-core.js` — PeerSession, 2. `nostr-crypto.js` — NostrCrypto, 3. `nostr-relay.js` — NostrRelay, 4. `nostr-transport.js` — NostrTransport, 5. `nostr-signaling.js` — NostrSignaling (+36 more)
 
 ### Community 15 - "bytes3"
-Cohesion: 0.13
-Nodes (22): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+14 more)
+Cohesion: 0.18
+Nodes (17): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), deriveKeys(), encrypt() (+9 more)
 
 ### Community 16 - "TestHostSecurity"
 Cohesion: 0.11
@@ -174,7 +180,7 @@ Cohesion: 0.21
 Nodes (13): alphabet(), assertNumber(), bech32Polymod(), bechChecksum(), convertRadix(), convertRadix2(), genBech32(), decode2() (+5 more)
 
 ### Community 19 - "test_token_codec.py"
-Cohesion: 0.16
+Cohesion: 0.18
 Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
 ### Community 20 - "get"
@@ -182,20 +188,32 @@ Cohesion: 0.29
 Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
 
 ### Community 23 - "mock_relay.py"
-Cohesion: 0.18
+Cohesion: 0.16
 Nodes (4): make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame()
 
 ### Community 24 - "AGENTS.md — Developer & AI Agent Guide for P2P Connect"
 Cohesion: 0.08
 Nodes (25): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview & Philosophy, 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 2. Technology Stack & External Dependencies, 2. Zero-Build Philosophy, 3. Custom Antigravity Skill & Subagent, 3. Media Track Replacement vs Renegotiation (+17 more)
 
-### Community 26 - "handleNext"
-Cohesion: 0.18
-Nodes (11): getHex64(), getSubscriptionId(), handleNext(), matchEventId(), matchEventPubkey(), matchFilter(), matchFilters(), _onmessage() (+3 more)
+### Community 26 - "test_two_peer_handshake.py"
+Cohesion: 0.10
+Nodes (4): find_chrome_binary(), HeadlessChromeSession, ReusableTCPServer, TestTwoPeerHandshakeE2E
+
+### Community 27 - "check-invariants.py"
+Cohesion: 0.19
+Nodes (12): check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist(), check_storage_key_isolation() (+4 more)
 
 ### Community 28 - "createCipher"
 Cohesion: 0.40
 Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
+
+### Community 30 - "decode"
+Cohesion: 0.13
+Nodes (16): decode(), getZapEndpoint(), matchAll(), matchAll2(), parse2(), parseReferences(), parseTLV(), replaceAll() (+8 more)
+
+### Community 37 - "classifyKind"
+Cohesion: 0.40
+Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
 
 ### Community 39 - "4. Failure Diagnosis & Resolution Runbook"
 Cohesion: 0.14
@@ -213,13 +231,13 @@ Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4.
 Cohesion: 0.16
 Nodes (4): ensure_certificate(), get_local_ip_addresses(), main(), analyze_file()
 
-### Community 46 - "run-regressions.py"
-Cohesion: 0.15
-Nodes (4): get_modified_files(), main(), run_tests(), select_test_modules()
-
 ### Community 47 - "P2P Connect — Architecture"
 Cohesion: 0.17
 Nodes (12): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs, 8. Module Dependency Graph (+4 more)
+
+### Community 48 - "run-regressions.py"
+Cohesion: 0.18
+Nodes (4): ColoredTextTestResult, get_modified_files(), main(), select_test_modules()
 
 ### Community 49 - "🔐 P2P Connect"
 Cohesion: 0.18
@@ -251,14 +269,14 @@ Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encryp
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 368 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 393 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `README.md`, `P2P Connect — System Design`?**
-  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
@@ -266,8 +284,8 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.05374328208973878 - nodes in this community are weakly interconnected._
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
-  _High betweenness centrality (0.059) - this node is a cross-community bridge._
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
 - **Are the 4 inferred relationships involving `weierstrass()` (e.g. with `getPublicKey2()` and `getSharedSecret()`) actually correct?**
   _`weierstrass()` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **Should `weierstrass` be split into smaller, more focused modules?**
-  _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07077922077922078 - nodes in this community are weakly interconnected._

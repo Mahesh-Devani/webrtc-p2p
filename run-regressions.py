@@ -7,7 +7,8 @@ Intelligently targets tests based on modified files or runs the full test suite.
 
 Usage:
     python3 run-regressions.py             # Intelligently runs tests for changed files
-    python3 run-regressions.py --all       # Runs ALL test suites
+    python3 run-regressions.py --all       # Runs ALL unit test suites
+    python3 run-regressions.py --e2e       # Runs headless two-peer browser E2E integration test
     python3 run-regressions.py --pre-commit # Pre-commit hook mode (fast check)
     python3 run-regressions.py --sync-graph # Runs tests and updates Graphify AST
 
@@ -98,6 +99,9 @@ FILE_TO_TESTS_MAP = {
     ],
     'support-agent': [
         'tests.test_diagnostics',
+    ],
+    'tests/e2e': [
+        'tests.e2e.test_two_peer_handshake',
     ],
 }
 
@@ -227,6 +231,7 @@ def run_tests(modules):
 
 def main():
     args = sys.argv[1:]
+    run_e2e = '--e2e' in args
     force_all = '--all' in args or '--pre-commit' in args
     pre_commit = '--pre-commit' in args
     sync_graph = '--sync-graph' in args
@@ -234,20 +239,28 @@ def main():
     print(f"\n{BOLD}{CYAN}════════ P2P Connect — Local Regression Runner ════════{RESET}\n")
 
     modified = get_modified_files()
-    if pre_commit:
+    if run_e2e and not force_all:
+        mode_str = "Headless browser E2E test (--e2e requested)"
+    elif pre_commit:
         mode_str = "Pre-commit verification (all test suites)"
     elif force_all:
-        mode_str = "Full suite (--all requested)"
+        mode_str = "Full suite (--all requested)" + (" + E2E" if run_e2e else "")
     elif modified:
         mode_str = f"Targeted suite ({len(modified)} changed file(s) detected)"
     else:
         mode_str = "Full suite (no active working tree changes)"
 
     print(f"  {BOLD}Mode:{RESET} {mode_str}")
-    if modified and not force_all:
+    if modified and not force_all and not run_e2e:
         print(f"  {BOLD}Changed files:{RESET} {', '.join(modified[:4])}" + ("..." if len(modified) > 4 else ""))
 
-    modules_to_run = select_test_modules(modified, force_all=force_all)
+    if run_e2e and not force_all:
+        modules_to_run = ['tests.e2e.test_two_peer_handshake']
+    else:
+        modules_to_run = select_test_modules(modified, force_all=force_all)
+        if run_e2e and 'tests.e2e.test_two_peer_handshake' not in modules_to_run:
+            modules_to_run.append('tests.e2e.test_two_peer_handshake')
+
     print(f"  {BOLD}Running modules:{RESET} {len(modules_to_run)} test suites\n")
 
     start_time = time.time()
