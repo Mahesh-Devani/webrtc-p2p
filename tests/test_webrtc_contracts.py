@@ -130,7 +130,21 @@ class TestWebRtcContracts(unittest.TestCase):
         # Elements in index.html
         self.assertIn('id="btn-refresh-remote-status"', self.html_content)
 
+    def test_standard_video_call_does_not_open_rd_window(self):
+        """Standard video/audio call must display normal call controls and NOT Remote Desktop mode."""
+        # startCall must remove call-overlay--rd and hide rdToolbar
+        self.assertIn("dom.callOverlay?.classList.remove('call-overlay--rd')", self.ui_content)
+        self.assertIn("hide(dom.rdToolbar)", self.ui_content)
+
+        # acceptIncomingCall must NOT force rdToolbar
+        self.assertNotIn("show(dom.rdToolbar);\n    attachRemoteVideoInputListeners();\n    dom.btnEndCall", self.ui_content)
+
+        # onRemoteStream must check isRdStream separately from normal mediaActive calls
+        self.assertIn("if (isRdStream) {", self.ui_content)
+        self.assertIn("// Standard Call (Audio / Video Call between peers):", self.ui_content)
+
 
 if __name__ == '__main__':
     unittest.main()
+
 

@@ -1965,9 +1965,10 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       onFileAbort: handleFileAbort,
       onInputEvent: handleIncomingInputEvent,
       onRemoteStream: (stream) => {
-        // If we already have the call overlay open or active unattended remote desktop or waiting for remote desktop
+        // Check if this stream is specifically for unattended/attended Remote Desktop
         const isRdStream = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || isWaitingForRemoteDesktop;
-        if (mediaActive || isRdStream) {
+
+        if (isRdStream) {
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
           dom.remoteVideo.srcObject = stream;
@@ -1997,6 +1998,31 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           hide(dom.connectBanner);
           const peerName = activeRemoteDesktopDevice ? activeRemoteDesktopDevice.name : getContactDisplayName(remotePubKey);
           toast(`Connected to ${peerName}! Remote Desktop streaming.`);
+          return;
+        }
+
+        // Standard Call (Audio / Video Call between peers):
+        if (mediaActive) {
+          dom.remoteVideo.srcObject = stream;
+          const playPromise = dom.remoteVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(err => {
+              console.warn('[Call Video] Autoplay with audio was prevented, retrying muted:', err);
+              dom.remoteVideo.muted = true;
+              dom.remoteVideo.play().catch(e => console.warn('[Call Video] Muted play also failed:', e));
+            });
+          }
+          hide(dom.remoteNoVideo);
+          show(dom.callOverlay);
+          // Standard call overlay: ensure normal controls & PiP are visible and RD toolbar is hidden
+          dom.callOverlay?.classList.remove('call-overlay--rd');
+          hide(dom.rdToolbar);
+          hide(dom.rdPerfHudOverlay);
+          hide(dom.rdSoftKeysBar);
+          hide(dom.rdAudioMenu);
+          setRdMode('view');
+          rdControlGranted = false;
+          hide(dom.connectBanner);
           return;
         }
         // Otherwise, show incoming call prompt — don't auto-play
@@ -3357,6 +3383,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       dom.localVideo.srcObject = stream;
       mediaActive = true;
       show(dom.callOverlay);
+      dom.callOverlay?.classList.remove('call-overlay--rd');
+      hide(dom.rdToolbar);
+      hide(dom.rdPerfHudOverlay);
+      hide(dom.rdSoftKeysBar);
+      hide(dom.rdAudioMenu);
+      setRdMode('view');
+      rdControlGranted = false;
       populateDeviceSelectors();
       dom.btnToggleAudio.disabled = false;
       dom.btnToggleVideo.disabled = false;
@@ -3373,6 +3406,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         dom.localVideo.srcObject = stream;
         mediaActive = true;
         show(dom.callOverlay);
+        dom.callOverlay?.classList.remove('call-overlay--rd');
+        hide(dom.rdToolbar);
+        hide(dom.rdPerfHudOverlay);
+        hide(dom.rdSoftKeysBar);
+        hide(dom.rdAudioMenu);
+        setRdMode('view');
+        rdControlGranted = false;
         populateDeviceSelectors();
         dom.btnToggleAudio.disabled = false;
         if (navigator.mediaDevices?.getDisplayMedia) {
@@ -3440,8 +3480,15 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     dom.remoteVideo.play().catch(() => {});
     hide(dom.remoteNoVideo);
 
-    // Show call overlay and enable controls
+    // Show call overlay and enable controls for normal call
     show(dom.callOverlay);
+    dom.callOverlay?.classList.remove('call-overlay--rd');
+    hide(dom.rdToolbar);
+    hide(dom.rdPerfHudOverlay);
+    hide(dom.rdSoftKeysBar);
+    hide(dom.rdAudioMenu);
+    setRdMode('view');
+    rdControlGranted = false;
     populateDeviceSelectors();
     mediaActive = true;
     dom.btnToggleAudio.disabled = false;
@@ -3450,8 +3497,6 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       dom.btnScreenShare.disabled = false;
       dom.btnRdToggle.disabled = false;
     }
-    show(dom.rdToolbar);
-    attachRemoteVideoInputListeners();
     dom.btnEndCall.disabled = false;
 
     const hasRemoteVideo = pendingRemoteStream.getVideoTracks().length > 0;
@@ -3684,9 +3729,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           dom.remoteVideo.srcObject = stream;
           dom.remoteVideo.play().catch(() => {});
           hide(dom.remoteNoVideo);
-          show(dom.rdToolbar);
+          show(dom.callOverlay);
+          dom.callOverlay?.classList.remove('call-overlay--rd');
+          hide(dom.rdToolbar);
+          hide(dom.rdPerfHudOverlay);
+          hide(dom.rdSoftKeysBar);
+          hide(dom.rdAudioMenu);
           dom.btnRdToggle.disabled = false;
-          attachRemoteVideoInputListeners();
           return;
         }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
@@ -3753,9 +3802,13 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           dom.remoteVideo.srcObject = stream;
           dom.remoteVideo.play().catch(() => {});
           hide(dom.remoteNoVideo);
-          show(dom.rdToolbar);
+          show(dom.callOverlay);
+          dom.callOverlay?.classList.remove('call-overlay--rd');
+          hide(dom.rdToolbar);
+          hide(dom.rdPerfHudOverlay);
+          hide(dom.rdSoftKeysBar);
+          hide(dom.rdAudioMenu);
           dom.btnRdToggle.disabled = false;
-          attachRemoteVideoInputListeners();
           return;
         }
         pendingRemoteStream = stream; pendingRemoteStreamPubkey = null;
@@ -4226,6 +4279,14 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
   dom.btnRdToggle?.addEventListener('click', () => {
     if (dom.rdToolbar) {
       dom.rdToolbar.classList.toggle('hidden');
+      const isVisible = !dom.rdToolbar.classList.contains('hidden');
+      if (isVisible) {
+        dom.callOverlay?.classList.add('call-overlay--rd');
+        attachRemoteVideoInputListeners();
+      } else {
+        dom.callOverlay?.classList.remove('call-overlay--rd');
+        exitRemoteDesktopMode();
+      }
     }
   });
 
