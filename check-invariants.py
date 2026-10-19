@@ -29,7 +29,12 @@ from pathlib import Path
 from collections import defaultdict
 
 # ── Configuration ──────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).parent.resolve()
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from tests.invariant_metadata import INVARIANT_RULES, format_remediation_box
+
 JS_FILES = [
     'webrtc-core.js',
     'ui-controller.js',
@@ -40,8 +45,10 @@ JS_FILES = [
     'token-codec.js',
     'chat-store.js',
     'host-controller.js',
+    'diagnostic-logger.js',
+    'support-controller.js',
 ]
-HTML_FILES = ['index.html', 'host.html']
+HTML_FILES = ['index.html', 'host.html', 'support.html']
 
 # Colors
 RED = '\033[91m'
@@ -53,16 +60,22 @@ RESET = '\033[0m'
 
 
 class InvariantResult:
-    def __init__(self, name, passed, details=None):
+    def __init__(self, name, passed, details=None, rule_id=None):
         self.name = name
         self.passed = passed
         self.details = details or []
+        self.rule_id = rule_id
 
     def __str__(self):
         status = f'{GREEN}✓ PASS{RESET}' if self.passed else f'{RED}✗ FAIL{RESET}'
-        lines = [f'  {status}  {self.name}']
+        tag = f'[{self.rule_id}] ' if self.rule_id else ''
+        lines = [f'  {status}  {tag}{self.name}']
         for d in self.details:
             lines.append(f'         {d}')
+        if not self.passed and self.rule_id:
+            box = format_remediation_box(self.rule_id)
+            if box:
+                lines.append(box)
         return '\n'.join(lines)
 
 
@@ -93,7 +106,8 @@ def check_no_import_query_params():
     return InvariantResult(
         'No query parameters on internal ES module imports (singleton integrity)',
         len(violations) == 0,
-        violations if violations else ['All internal imports use clean paths']
+        violations if violations else ['All internal imports use clean paths'],
+        rule_id='INV-1'
     )
 
 
@@ -131,7 +145,8 @@ def check_no_duplicate_singleton_imports():
     return InvariantResult(
         'No duplicate singleton import paths',
         len(violations) == 0,
-        violations if violations else ['All singletons imported from consistent paths']
+        violations if violations else ['All singletons imported from consistent paths'],
+        rule_id='INV-2'
     )
 
 
@@ -164,7 +179,8 @@ def check_storage_key_isolation():
     return InvariantResult(
         'Storage key isolation (host p2p-host-* vs client nostr-*)',
         len(violations) == 0,
-        violations if violations else ['Host and Client use separate identity storage keys']
+        violations if violations else ['Host and Client use separate identity storage keys'],
+        rule_id='INV-3'
     )
 
 
@@ -177,12 +193,12 @@ def check_webrtc_stream_association():
     violations = []
     content = read_file('webrtc-core.js')
     if content is None:
-        return InvariantResult('WebRTC stream association', True, ['webrtc-core.js not found (skipped)'])
+        return InvariantResult('WebRTC stream association', True, ['webrtc-core.js not found (skipped)'], rule_id='INV-4')
 
     match = re.search(r'function addLocalStream\(stream\)\s*\{', content)
     if not match:
         violations.append('webrtc-core.js: addLocalStream function not found')
-        return InvariantResult('WebRTC stream association (addTrack with stream)', False, violations)
+        return InvariantResult('WebRTC stream association (addTrack with stream)', False, violations, rule_id='INV-4')
 
     start_line = content[:match.start()].count('\n') + 1
     lines = content.splitlines()
@@ -194,7 +210,8 @@ def check_webrtc_stream_association():
     return InvariantResult(
         'WebRTC addLocalStream uses pc.addTrack(track, stream) for proper a=msid',
         len(violations) == 0,
-        violations if violations else ['addLocalStream correctly uses pc.addTrack(track, stream)']
+        violations if violations else ['addLocalStream correctly uses pc.addTrack(track, stream)'],
+        rule_id='INV-4'
     )
 
 
@@ -204,7 +221,7 @@ def check_file_transfer_protocol():
     violations = []
     content = read_file('webrtc-core.js')
     if content is None:
-        return InvariantResult('File transfer protocol', True, ['webrtc-core.js not found (skipped)'])
+        return InvariantResult('File transfer protocol', True, ['webrtc-core.js not found (skipped)'], rule_id='INV-5')
 
     for marker in ['_fileStart', '_fileEnd', '_fileAbort']:
         if marker not in content:
@@ -222,7 +239,8 @@ def check_file_transfer_protocol():
     return InvariantResult(
         'DataChannel file transfer protocol (_fileStart → chunks → _fileEnd)',
         len(violations) == 0,
-        violations if violations else ['File transfer protocol markers and backpressure present']
+        violations if violations else ['File transfer protocol markers and backpressure present'],
+        rule_id='INV-5'
     )
 
 
@@ -243,13 +261,14 @@ def check_cache_busters():
 
         for src in script_matches:
             basename = src.split('?')[0]
-            if basename not in ['ui-controller.js', 'host-controller.js']:
+            if basename not in ['ui-controller.js', 'host-controller.js', 'support-controller.js']:
                 violations.append(f'{html_file}: Unexpected cache-busted script: {src}')
 
     return InvariantResult(
         'Cache busters only on root HTML script tags',
         len(violations) == 0,
-        violations + warnings if (violations or warnings) else ['Cache busters correctly placed']
+        violations + warnings if (violations or warnings) else ['Cache busters correctly placed'],
+        rule_id='INV-6'
     )
 
 
@@ -305,7 +324,8 @@ def check_js_syntax_balance():
     return InvariantResult(
         f'JavaScript syntax integrity ({engine_name})',
         len(violations) == 0,
-        violations if violations else [f'All JS files verified error-free via {engine_name}']
+        violations if violations else [f'All JS files verified error-free via {engine_name}'],
+        rule_id='INV-7'
     )
 
 
@@ -315,7 +335,7 @@ def check_host_rejects_inactive_capture():
     violations = []
     content = read_file('host-controller.js')
     if content is None:
-        return InvariantResult('Host rejects inactive capture', True, ['host-controller.js not found (skipped)'])
+        return InvariantResult('Host rejects inactive capture', True, ['host-controller.js not found (skipped)'], rule_id='INV-8')
 
     if 'isHostStreamLive' not in content:
         violations.append('host-controller.js: Missing isHostStreamLive() check')
@@ -329,7 +349,8 @@ def check_host_rejects_inactive_capture():
     return InvariantResult(
         'Host rejects connections when desktop capture is inactive',
         len(violations) == 0,
-        violations if violations else ['Host correctly checks isHostStreamLive() before accepting']
+        violations if violations else ['Host correctly checks isHostStreamLive() before accepting'],
+        rule_id='INV-8'
     )
 
 
@@ -339,10 +360,11 @@ def check_signal_type_whitelist():
     violations = []
     content = read_file('nostr-transport.js')
     if content is None:
-        return InvariantResult('Signal type whitelist', True, ['nostr-transport.js not found (skipped)'])
+        return InvariantResult('Signal type whitelist', True, ['nostr-transport.js not found (skipped)'], rule_id='INV-9')
 
     required = ['offer', 'answer', 'ice', 'close', 'message',
-                'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong']
+                'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong',
+                'diagnostic_logpkg']
     for t in required:
         if f"'{t}'" not in content and f'"{t}"' not in content:
             violations.append(f'nostr-transport.js: Signal type "{t}" not in whitelist')
@@ -353,7 +375,8 @@ def check_signal_type_whitelist():
     return InvariantResult(
         'Nostr signal types are whitelisted',
         len(violations) == 0,
-        violations if violations else ['All required signal types present in whitelist']
+        violations if violations else ['All required signal types present in whitelist'],
+        rule_id='INV-9'
     )
 
 
