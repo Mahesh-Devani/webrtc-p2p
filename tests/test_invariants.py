@@ -200,6 +200,33 @@ class TestArchitecturalInvariants(unittest.TestCase):
 
         self.assertEqual(errors, [], f"Syntax errors detected:\n" + "\n".join(errors))
 
+    def test_in_browser_test_runner_integrity(self):
+        """In-browser test runner (test-runner.html) must exist, have clean imports, and test all 6 core subsystems."""
+        runner_content = read_project_file('test-runner.html')
+        self.assertIsNotNone(runner_content, "test-runner.html must exist")
+
+        # 1. No query params on internal imports
+        bad_imports = re.findall(r"""import\s+.*?from\s+['"]\.{1,2}/[^'"]*\?[^'"]*['"]""", runner_content)
+        self.assertEqual(bad_imports, [], f"test-runner.html has query parameters on internal imports: {bad_imports}")
+
+        # 2. Required ES module imports
+        self.assertIn("from './nostr-crypto.js'", runner_content, "test-runner.html must import nostr-crypto.js")
+        self.assertIn("from './token-codec.js'", runner_content, "test-runner.html must import token-codec.js")
+        self.assertIn("from './webrtc-core.js'", runner_content, "test-runner.html must import webrtc-core.js")
+
+        # 3. All 6 core test suites present
+        required_suites = ['crypto', 'codec', 'loopback', 'messaging', 'network', 'media']
+        for s in required_suites:
+            self.assertIn(f"'{s}'", runner_content, f"test-runner.html missing suite: '{s}'")
+
+        # 4. Autorun support
+        self.assertIn("autorun", runner_content, "test-runner.html must support ?autorun=1 parameter")
+
+        # 5. index.html links to test-runner.html
+        index_content = read_project_file('index.html')
+        self.assertIn('test-runner.html', index_content, "index.html must link to test-runner.html")
+
 
 if __name__ == '__main__':
     unittest.main()
+

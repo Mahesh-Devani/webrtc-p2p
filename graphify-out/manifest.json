@@ -18,10 +18,10 @@
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
-    "mtime": 1792058576.2879395,
-    "seen": 1792181220.5422568,
-    "ast_hash": "2306e5c7610148e94fda5f75af15457b",
-    "semantic_hash": "2306e5c7610148e94fda5f75af15457b"
+    "mtime": 1792376866.4203346,
+    "seen": 1792377148.189776,
+    "ast_hash": "1bcb7d75dd98bddea759f06b4be4633a",
+    "semantic_hash": ""
   },
   "nostr-relay.js": {
     "mtime": 1792344295.398476,
@@ -120,9 +120,9 @@
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1792340528.1061687,
-    "seen": 1792340588.5412889,
-    "ast_hash": "dacfd9f1281b6492754c8f2e9f50d046",
+    "mtime": 1792377023.4195747,
+    "seen": 1792377148.189791,
+    "ast_hash": "a4402b54ca29652cdffee4c64186ac23",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792375449.4592626,
-    "seen": 1792375460.339593,
-    "ast_hash": "e9d0f322c7c3453107d09d76ce3705e0",
+    "mtime": 1792376313.4579775,
+    "seen": 1792377148.1897972,
+    "ast_hash": "a036c135de562e6a56d5e54203dd45ef",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "tests/test_invariants.py": {
-    "mtime": 1792331405.4440968,
-    "seen": 1792331451.096062,
-    "ast_hash": "9b138e4b583d5825c4218b2feee87b2b",
+    "mtime": 1792376341.581448,
+    "seen": 1792377148.1897879,
+    "ast_hash": "32d47945e979a0234c81a3b7454f659d",
     "semantic_hash": ""
   },
   "tests/test_mobile_lifecycle.py": {
@@ -273,6 +273,12 @@
     "mtime": 1792326730.5956833,
     "seen": 1792326870.446124,
     "ast_hash": "5f57a725c21c07b804fb71db17e70a31",
+    "semantic_hash": ""
+  },
+  "test-runner.html": {
+    "mtime": 1792377108.8634927,
+    "seen": 1792377148.1897988,
+    "ast_hash": "513af5076e9a07cc274e3e2537af6119",
     "semantic_hash": ""
   }
 }

@@ -737,11 +737,15 @@
           <div class="settings-group">
             <h3>🐞 Diagnostic Telemetry & System Health</h3>
             <p class="settings-hint">Troubleshoot WebRTC direct P2P connections, test STUN/TURN traversal, view recent log events, and generate 1-click diagnostic packages for developer assistance.</p>
-            <div class="settings-actions" style="margin-top:12px;">
+            <div class="settings-actions" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
               <button id="btn-open-diagnostics-full" class="btn btn--primary" style="display:inline-flex; align-items:center; gap:6px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
                 Open Diagnostics Dashboard
               </button>
+              <a href="test-runner.html" target="_blank" class="btn btn--outline" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31M14 9.3V2M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+                Self-Diagnostic Test Suite
+              </a>
             </div>
           </div>
         </div>

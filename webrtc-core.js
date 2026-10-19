@@ -42,7 +42,7 @@ export const PeerSession = (() => {
    * @param {SessionConfig} cfg
    */
   function create(cfg = {}) {
-    const iceServers = cfg.iceServers && cfg.iceServers.length ? cfg.iceServers : DEFAULT_ICE_SERVERS;
+    const iceServers = (cfg.iceServers !== undefined && Array.isArray(cfg.iceServers)) ? cfg.iceServers : DEFAULT_ICE_SERVERS;
     const log = cfg.onLog || (() => { });
     const stateChange = cfg.onStateChange || (() => { });
     const onError = cfg.onError || (() => { });
@@ -958,9 +958,9 @@ export const PeerSession = (() => {
 
         dcFiles.send(JSON.stringify({
           _fileStart: true,
-          name: file.name,
+          name: file.name || extraMeta.name || 'unnamed-file',
           size: file.size,
-          type: file.type,
+          type: file.type || 'application/octet-stream',
           ...extraMeta
         }));
 

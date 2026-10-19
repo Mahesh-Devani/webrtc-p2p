@@ -188,8 +188,12 @@ export const NostrCrypto = (() => {
      * @returns {Promise<boolean>}
      */
     async function verifyEvent(event) {
-        const { nostrTools } = await loadNostrTools();
-        return nostrTools.verifyEvent(event);
+        try {
+            const { nostrTools } = await loadNostrTools();
+            return !!nostrTools.verifyEvent(event);
+        } catch {
+            return false;
+        }
     }
 
     // ── Hex / byte utilities ─────────────────────────────────────

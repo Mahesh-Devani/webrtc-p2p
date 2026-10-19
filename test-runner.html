@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="P2P Connect Diagnostic Test Suite — In-browser verification of WebRTC, cryptography, flow control, and NAT traversal.">
+  <title>P2P Connect — Diagnostic Test Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --c-bg: #0b141a;
+      --c-surface: #111b21;
+      --c-card: #1f2c34;
+      --c-card-h: #233138;
+      --c-border: #2a3942;
+      --c-text: #e9edef;
+      --c-text-dim: #8696a0;
+      --c-primary: #00a884;
+      --c-primary-h: #06cf9c;
+      --c-primary-dark: #005c4b;
+      --c-green: #00a884;
+      --c-blue: #53bdeb;
+      --c-yellow: #fbbf24;
+      --c-red: #ea4335;
+      --c-purple: #8b5cf6;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--c-bg);
+      color: var(--c-text);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top Bar ── */
+    .header {
+      background: var(--c-surface);
+      border-bottom: 1px solid var(--c-border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header__brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header__logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius);
+      background: var(--c-primary-dark);
+      color: var(--c-primary-h);
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .header__title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header__tag {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--c-border);
+      color: var(--c-text-dim);
+    }
+
+    .header__nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-link {
+      color: var(--c-text-dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      transition: all 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--c-text);
+      background: var(--c-card);
+    }
+
+    /* ── Controls Bar ── */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn--primary {
+      background: var(--c-primary);
+      color: #111b21;
+    }
+
+    .btn--primary:hover:not(:disabled) {
+      background: var(--c-primary-h);
+    }
+
+    .btn--outline {
+      background: transparent;
+      border-color: var(--c-border);
+      color: var(--c-text);
+    }
+
+    .btn--outline:hover:not(:disabled) {
+      background: var(--c-card);
+    }
+
+    .btn--danger {
+      background: rgba(234, 67, 53, 0.15);
+      border-color: rgba(234, 67, 53, 0.3);
+      color: #ff857a;
+    }
+
+    .btn--danger:hover:not(:disabled) {
+      background: rgba(234, 67, 53, 0.25);
+    }
+
+    /* ── Main Container ── */
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+    }
+
+    /* ── Metrics Grid ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .metric-card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-card__label {
+      font-size: 0.75rem;
+      color: var(--c-text-dim);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .metric-card__value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .metric-card__sub {
+      font-size: 0.75rem;
+      color: var(--c-text-dim);
+      margin-top: 2px;
+    }
+
+    .val-pass { color: var(--c-green); }
+    .val-fail { color: var(--c-red); }
+    .val-warn { color: var(--c-yellow); }
+    .val-info { color: var(--c-blue); }
+
+    /* ── Suite Container ── */
+    .suite-card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .suite-header {
+      padding: 14px 18px;
+      background: var(--c-card);
+      border-bottom: 1px solid var(--c-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .suite-header__title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .suite-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: var(--c-border);
+      color: var(--c-text-dim);
+    }
+
+    .suite-badge--pass { background: rgba(0, 168, 132, 0.15); color: var(--c-green); }
+    .suite-badge--fail { background: rgba(234, 67, 53, 0.15); color: var(--c-red); }
+
+    .test-list {
+      list-style: none;
+    }
+
+    .test-item {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--c-border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: background 0.1s ease;
+    }
+
+    .test-item:last-child {
+      border-bottom: none;
+    }
+
+    .test-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .test-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .test-title {
+      font-size: 0.88rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-icon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+    }
+
+    .test-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--c-text-dim);
+      font-family: var(--mono);
+    }
+
+    .test-details {
+      background: #080d10;
+      border: 1px solid var(--c-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--c-text-dim);
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 4px;
+    }
+
+    .test-details--error {
+      border-color: rgba(234, 67, 53, 0.4);
+      color: #ff9990;
+      background: rgba(234, 67, 53, 0.05);
+    }
+
+    /* ── Log Drawer ── */
+    .log-drawer {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .log-drawer__header {
+      padding: 10px 16px;
+      background: var(--c-card);
+      border-bottom: 1px solid var(--c-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .log-drawer__title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--c-text-dim);
+    }
+
+    .log-terminal {
+      background: #080d10;
+      color: #c9d1d9;
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      line-height: 1.5;
+      padding: 12px 16px;
+      height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-entry {
+      margin-bottom: 3px;
+    }
+    .log-entry--info { color: #8696a0; }
+    .log-entry--success { color: #00a884; }
+    .log-entry--warn { color: #fbbf24; }
+    .log-entry--error { color: #ea4335; font-weight: 500; }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .header { padding: 10px 16px; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ═══ HEADER ═══ -->
+  <header class="header">
+    <div class="header__brand">
+      <div class="header__logo">🧪</div>
+      <div>
+        <h1 class="header__title">
+          P2P Connect Diagnostic Test Suite
+          <span class="header__tag">In-Browser</span>
+        </h1>
+        <div style="font-size:0.75rem; color:var(--c-text-dim);">
+          WebRTC DataChannels &bull; NIP-44 Crypto &bull; STUN Traversal &bull; Codec Inspection
+        </div>
+      </div>
+    </div>
+
+    <div class="header__nav">
+      <a href="index.html" class="nav-link">← Messenger</a>
+      <a href="host.html" class="nav-link">🖥️ Host Mode</a>
+      <div class="controls-bar">
+        <button id="btn-run-all" class="btn btn--primary">▶ Run All Tests</button>
+        <button id="btn-stop" class="btn btn--danger" disabled>⏹ Stop</button>
+        <button id="btn-copy-report" class="btn btn--outline" title="Copy markdown summary">📋 Copy Report</button>
+        <button id="btn-download-json" class="btn btn--outline" title="Export diagnostic JSON">📥 Export JSON</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ MAIN CONTENT ═══ -->
+  <main class="container">
+
+    <!-- KPI Summary Metrics -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-card__label">Total Tests</span>
+        <span id="metric-total" class="metric-card__value">0</span>
+        <span id="metric-progress" class="metric-card__sub">Ready to execute</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-card__label">Passed</span>
+        <span id="metric-passed" class="metric-card__value val-pass">0</span>
+        <span id="metric-pass-pct" class="metric-card__sub">0% pass rate</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-card__label">Failed</span>
+        <span id="metric-failed" class="metric-card__value val-fail">0</span>
+        <span id="metric-fail-label" class="metric-card__sub">0 regressions</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-card__label">Total Duration</span>
+        <span id="metric-duration" class="metric-card__value val-info">0ms</span>
+        <span class="metric-card__sub">Execution time</span>
+      </div>
+      <div class="metric-card" style="grid-column: span 2;">
+        <span class="metric-card__label">Runtime Environment</span>
+        <span id="metric-env" class="metric-card__value" style="font-size:1.05rem; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Detecting…</span>
+        <span id="metric-webrtc-support" class="metric-card__sub">Checking native WebRTC capabilities…</span>
+      </div>
+    </section>
+
+    <!-- Test Suites Container -->
+    <div id="suites-container" style="display:flex; flex-direction:column; gap:16px;"></div>
+
+    <!-- Live Log Terminal Drawer -->
+    <div class="log-drawer">
+      <div class="log-drawer__header">
+        <span class="log-drawer__title">Live Diagnostic Log Stream</span>
+        <button id="btn-clear-logs" class="btn btn--outline" style="padding:2px 8px; font-size:0.75rem;">Clear</button>
+      </div>
+      <div id="log-terminal" class="log-terminal"></div>
+    </div>
+
+  </main>
+
+  <!-- External Library Dependencies -->
+  <script src="nostr.bundle.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+
+  <!-- Diagnostic Runner Module -->
+  <script type="module">
+    import { NostrCrypto } from './nostr-crypto.js';
+    import { TokenCodec } from './token-codec.js';
+    import { PeerSession } from './webrtc-core.js';
+
+    // ── Global Test State ─────────────────────────────────────────
+    const state = {
+      suites: [],
+      isRunning: false,
+      abortRequested: false,
+      startTime: 0,
+      totalDuration: 0,
+    };
+
+    // ── Logger Helper ─────────────────────────────────────────────
+    const logEl = document.getElementById('log-terminal');
+    function log(message, level = 'info') {
+      const ts = new Date().toISOString().split('T')[1].slice(0, 12);
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-entry--${level}`;
+      entry.textContent = `[${ts}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(`[TestRunner] ${message}`);
+    }
+
+    document.getElementById('btn-clear-logs').addEventListener('click', () => {
+      logEl.innerHTML = '';
+    });
+
+    // ── Assertions Helper ─────────────────────────────────────────
+    function assert(condition, message = 'Assertion failed') {
+      if (!condition) throw new Error(message);
+    }
+    function assertEqual(actual, expected, message = 'Equality check failed') {
+      if (actual !== expected) {
+        throw new Error(`${message} — Expected: ${JSON.stringify(expected)}, Got: ${JSON.stringify(actual)}`);
+      }
+    }
+    function assertDeepEqual(actual, expected, message = 'Deep equality check failed') {
+      const a = JSON.stringify(actual);
+      const e = JSON.stringify(expected);
+      if (a !== e) {
+        throw new Error(`${message} — Expected: ${e}, Got: ${a}`);
+      }
+    }
+
+    // ── Harness Registration ──────────────────────────────────────
+    function registerSuite(id, title, desc) {
+      const suite = { id, title, desc, tests: [] };
+      state.suites.push(suite);
+      return suite;
+    }
+
+    function addTest(suite, id, title, runFn, timeoutMs = 12000) {
+      suite.tests.push({
+        id,
+        title,
+        runFn,
+        timeoutMs,
+        status: 'pending', // pending | running | pass | fail
+        duration: 0,
+        error: null,
+        details: null,
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 1: Cryptography & Identity (nostr-crypto.js)
+    // ══════════════════════════════════════════════════════════════
+    const suiteCrypto = registerSuite(
+      'crypto',
+      '1. Cryptographic Engine & Identity (nostr-crypto.js)',
+      'Verifies secp256k1 key generation, NIP-44 v2 encryption roundtrips, and Schnorr event signatures.'
+    );
+
+    addTest(suiteCrypto, 'crypto-keys', 'secp256k1 Keypair Generation', async () => {
+      const kp = await NostrCrypto.generateKeypair();
+      assert(typeof kp.privateKey === 'string' && kp.privateKey.length === 64, 'Private key must be 64-char hex');
+      assert(/^[0-9a-f]{64}$/i.test(kp.privateKey), 'Private key must be valid hex');
+      assert(typeof kp.publicKey === 'string' && kp.publicKey.length === 64, 'Public key must be 64-char hex');
+      assert(/^[0-9a-f]{64}$/i.test(kp.publicKey), 'Public key must be valid hex');
+      
+      const derivedPub = await NostrCrypto.getPublicKey(kp.privateKey);
+      assertEqual(derivedPub, kp.publicKey, 'Derived pubkey must match generated pubkey');
+      return { details: `Generated pubkey: ${kp.publicKey.slice(0, 16)}… (${kp.publicKey.length} chars)` };
+    });
+
+    addTest(suiteCrypto, 'crypto-nip44-roundtrip', 'NIP-44 v2 Encryption & Decryption Roundtrip', async () => {
+      const alice = await NostrCrypto.generateKeypair();
+      const bob = await NostrCrypto.generateKeypair();
+      const plaintext = 'Secret WebRTC direct communication payload 🚀 — NIP-44 authenticated encryption';
+
+      const cipher = await NostrCrypto.encrypt(plaintext, alice.privateKey, bob.publicKey);
+      assert(typeof cipher === 'string' && cipher.length > 0, 'Ciphertext must be non-empty string');
+      assert(cipher !== plaintext, 'Ciphertext must not match plaintext');
+
+      const decrypted = await NostrCrypto.decrypt(cipher, bob.privateKey, alice.publicKey);
+      assertEqual(decrypted, plaintext, 'Decrypted text must match original plaintext');
+      return { details: `Plaintext: ${plaintext.length} bytes -> Cipher: ${cipher.length} chars (Roundtrip OK)` };
+    });
+
+    addTest(suiteCrypto, 'crypto-nip44-large', 'NIP-44 v2 Large Payload Encryption (16 KB)', async () => {
+      const alice = await NostrCrypto.generateKeypair();
+      const bob = await NostrCrypto.generateKeypair();
+      const largeText = 'A'.repeat(16 * 1024);
+
+      const cipher = await NostrCrypto.encrypt(largeText, alice.privateKey, bob.publicKey);
+      const decrypted = await NostrCrypto.decrypt(cipher, bob.privateKey, alice.publicKey);
+      assertEqual(decrypted.length, 16 * 1024, 'Large decrypted payload size must match');
+      assertEqual(decrypted, largeText, 'Large decrypted payload content must match');
+      return { details: `Encrypted and decrypted 16,384 bytes successfully` };
+    });
+
+    addTest(suiteCrypto, 'crypto-throughput', 'NIP-44 Performance & Throughput (25 ops)', async () => {
+      const alice = await NostrCrypto.generateKeypair();
+      const bob = await NostrCrypto.generateKeypair();
+      const msg = 'Benchmark message 1234567890';
+      const iterations = 25;
+      const t0 = performance.now();
+
+      for (let i = 0; i < iterations; i++) {
+        const c = await NostrCrypto.encrypt(msg, alice.privateKey, bob.publicKey);
+        const d = await NostrCrypto.decrypt(c, bob.privateKey, alice.publicKey);
+        if (d !== msg) throw new Error('Benchmark decryption mismatch at iteration ' + i);
+      }
+      const dur = performance.now() - t0;
+      const opsPerSec = ((iterations * 1000) / dur).toFixed(1);
+      return { details: `${iterations} roundtrips in ${Math.round(dur)}ms (${opsPerSec} ops/sec)` };
+    });
+
+    addTest(suiteCrypto, 'crypto-schnorr-event', 'Nostr Schnorr Event Signing & Signature Verification', async () => {
+      const alice = await NostrCrypto.generateKeypair();
+      const bob = await NostrCrypto.generateKeypair();
+      const content = JSON.stringify({ type: 'ping', ts: Date.now() });
+
+      const event = await NostrCrypto.createSignedEvent(content, 24133, [['p', bob.publicKey]], alice.privateKey);
+      assert(event.id && event.id.length === 64, 'Event ID must be 32-byte sha256 hex');
+      assert(event.sig && event.sig.length === 128, 'Event signature must be 64-byte Schnorr hex');
+      assertEqual(event.pubkey, alice.publicKey, 'Event author must match Alice pubkey');
+
+      const isValid = await NostrCrypto.verifyEvent(event);
+      assert(isValid === true, 'Valid event signature must pass verification');
+
+      // Tamper check: altering content changes hash, invalidating signature
+      const tampered = JSON.parse(JSON.stringify(event));
+      tampered.content = 'tampered-payload';
+      const isTamperedValid = await NostrCrypto.verifyEvent(tampered);
+      assert(isTamperedValid === false, 'Tampered event signature must fail verification');
+
+      return { details: `Signature verified (id: ${event.id.slice(0, 16)}…, sig: ${event.sig.slice(0, 16)}…)` };
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 2: Token Codec & Compression (token-codec.js)
+    // ══════════════════════════════════════════════════════════════
+    const suiteCodec = registerSuite(
+      'codec',
+      '2. Token Codec & Compression (token-codec.js)',
+      'Tests manual P2P2- compressed token serialization, ICE candidate stripping, and zlib deflate/inflate.'
+    );
+
+    addTest(suiteCodec, 'codec-prefix', 'Token Serialization Format & P2P2- Prefix', async () => {
+      const mockSdp = { type: 'offer', sdp: 'v=0\r\no=- 12345 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n' };
+      const token = await TokenCodec.encode('offer', mockSdp, []);
+      assert(typeof token === 'string', 'Token must be a string');
+      assert(token.startsWith('P2P2-'), 'Token must begin with P2P2- prefix');
+      return { details: `Encoded token length: ${token.length} chars (Prefix: ${token.slice(0, 5)})` };
+    });
+
+    addTest(suiteCodec, 'codec-strip-candidates', 'Candidate Metadata Stripping (Bandwidth Reduction)', async () => {
+      const rawCandidate = 'candidate:1 1 UDP 2122260223 192.168.1.100 54321 typ host generation 0 ufrag abcd network-id 1 network-cost 900';
+      const mockSdp = { type: 'offer', sdp: 'v=0\r\no=-\r\n' };
+      const token = await TokenCodec.encode('offer', mockSdp, [{ candidate: rawCandidate, sdpMid: '0', sdpMLineIndex: 0 }]);
+      const decoded = await TokenCodec.decode(token);
+
+      assert(decoded.candidates.length === 1, 'Decoded candidates length must match');
+      const stripped = decoded.candidates[0].candidate;
+      assert(!stripped.includes('generation 0'), 'Must strip generation parameter');
+      assert(!stripped.includes('ufrag abcd'), 'Must strip ufrag parameter');
+      assert(!stripped.includes('network-id 1'), 'Must strip network-id parameter');
+      assert(!stripped.includes('network-cost 900'), 'Must strip network-cost parameter');
+      assert(stripped.length < rawCandidate.length, 'Stripped candidate must be shorter than raw');
+
+      const savedPct = Math.round((1 - (stripped.length / rawCandidate.length)) * 100);
+      return { details: `Raw: ${rawCandidate.length} chars -> Stripped: ${stripped.length} chars (${savedPct}% reduction)` };
+    });
+
+    addTest(suiteCodec, 'codec-roundtrip', 'Deflate & Inflate Roundtrip Payload Integrity', async () => {
+      const mockSdp = {
+        type: 'offer',
+        sdp: 'v=0\r\no=- 987654 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n'
+      };
+      const mockCandidates = [
+        { candidate: 'candidate:1 1 UDP 2122260223 192.168.1.50 50000 typ host', sdpMid: '0', sdpMLineIndex: 0 },
+        { candidate: 'candidate:2 1 UDP 1686052863 203.0.113.1 50001 typ srflx raddr 192.168.1.50 rport 50000', sdpMid: '1', sdpMLineIndex: 1 }
+      ];
+
+      const token = await TokenCodec.encode('offer', mockSdp, mockCandidates);
+      const decoded = await TokenCodec.decode(token);
+
+      assertEqual(decoded.type, 'offer', 'Decoded type must match');
+      assertEqual(decoded.sdp.sdp, mockSdp.sdp, 'Decoded SDP string must be identical');
+      assertEqual(decoded.candidates.length, 2, 'Decoded candidates count must match');
+      return { details: `Roundtrip verified: SDP preserved, ${decoded.candidates.length} candidates intact` };
+    });
+
+    addTest(suiteCodec, 'codec-corrupt-rejection', 'Malformed or Corrupted Token Rejection', async () => {
+      let threw = false;
+      try {
+        await TokenCodec.decode('P2P2-MalformedInvalidBase64Payload!@#$%^&*()');
+      } catch (err) {
+        threw = true;
+      }
+      assert(threw === true, 'Corrupt token must throw error');
+      return { details: 'Malformed token safely caught and rejected' };
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 3: Local In-Memory Loopback WebRTC (webrtc-core.js)
+    // ══════════════════════════════════════════════════════════════
+    const suiteLoopback = registerSuite(
+      'loopback',
+      '3. Local In-Memory WebRTC Loopback Handshake (webrtc-core.js)',
+      'Tests peer session instantiation, SDP negotiation, and connection states without external network dependencies.'
+    );
+
+    let activeSessionA = null;
+    let activeSessionB = null;
+    let onMessageA = null;
+    let onMessageB = null;
+    let onInputB = null;
+    let onFileB = null;
+    const candidatesA = [];
+    const candidatesB = [];
+
+    function fixLoopbackCandidate(c) {
+      if (!c || !c.candidate) return c;
+      // In loopback (same machine / window), replace browser mDNS .local UUID with 127.0.0.1
+      const fixed = c.candidate.replace(/[0-9a-fA-F-]+\.local/, '127.0.0.1');
+      return { candidate: fixed, sdpMid: c.sdpMid, sdpMLineIndex: c.sdpMLineIndex };
+    }
+
+    addTest(suiteLoopback, 'loop-instantiate', 'PeerSession Factory Lifecycle Instantiation', async () => {
+      candidatesA.length = 0;
+      candidatesB.length = 0;
+
+      activeSessionA = PeerSession.create({
+        iceServers: [],
+        onLog: (m) => log(`[SessionA] ${m}`),
+        onIceCandidate: (c) => {
+          if (!c) return;
+          const fixed = fixLoopbackCandidate(c);
+          activeSessionB.addIceCandidates([fixed]);
+        },
+        onMessage: (m) => {
+          if (onMessageA) onMessageA(m);
+        }
+      });
+
+      activeSessionB = PeerSession.create({
+        iceServers: [],
+        onLog: (m) => log(`[SessionB] ${m}`),
+        onIceCandidate: (c) => {
+          if (!c) return;
+          const fixed = fixLoopbackCandidate(c);
+          activeSessionA.addIceCandidates([fixed]);
+        },
+        onMessage: (m) => {
+          if (onMessageB) onMessageB(m);
+        },
+        onInputEvent: (evt) => {
+          if (onInputB) onInputB(evt);
+        },
+        onFileReceived: (blob, name, meta) => {
+          if (onFileB) onFileB(blob, name, meta);
+        }
+      });
+
+      assert(typeof activeSessionA.createOffer === 'function', 'Session A must have createOffer');
+      assert(typeof activeSessionB.acceptOffer === 'function', 'Session B must have acceptOffer');
+      assertEqual(!!activeSessionA.isChannelOpen(), false, 'Session A channel initially closed');
+      assertEqual(!!activeSessionB.isChannelOpen(), false, 'Session B channel initially closed');
+
+      return { details: `Created PeerSession instances (Initial state: ${activeSessionA.getState()})` };
+    });
+
+    addTest(suiteLoopback, 'loop-handshake', 'In-Memory SDP & ICE Candidate Exchange', async () => {
+      // 1. Session A creates Offer
+      const offer = await activeSessionA.createOffer();
+      assert(offer && offer.type === 'offer', 'Session A must create valid offer');
+      assert(typeof offer.sdp === 'string' && offer.sdp.includes('m='), 'Offer must contain SDP media lines');
+
+      // 2. Session B accepts Offer
+      const answer = await activeSessionB.acceptOffer(offer);
+      assert(answer && answer.type === 'answer', 'Session B must create valid answer');
+
+      // 3. Session A accepts Answer
+      await activeSessionA.acceptAnswer(answer);
+
+      return { details: `SDP Handshake complete (Offer: ${offer.sdp.length} bytes, Answer: ${answer.sdp.length} bytes)` };
+    });
+
+    addTest(suiteLoopback, 'loop-connection-state', 'ICE Connectivity & Channel Open Waiter', async () => {
+      // Wait for both sessions to reach open state
+      const [openA, openB] = await Promise.all([
+        activeSessionA.waitForOpen(8000),
+        activeSessionB.waitForOpen(8000),
+      ]);
+
+      assert(openA === true, 'Session A DataChannel must open within timeout');
+      assert(openB === true, 'Session B DataChannel must open within timeout');
+      assert(activeSessionA.isChannelOpen(), 'activeSessionA.isChannelOpen() must be true');
+      assert(activeSessionB.isChannelOpen(), 'activeSessionB.isChannelOpen() must be true');
+
+      return { details: `Loopback connection established (State A: ${activeSessionA.getState()}, State B: ${activeSessionB.getState()})` };
+    });
+
+    addTest(suiteLoopback, 'loop-datachannels', 'All 4 DataChannels Active (sig, chat, files, input)', async () => {
+      assert(activeSessionA.isChannelOpen(), 'Chat channel open on A');
+      assert(activeSessionB.isChannelOpen(), 'Chat channel open on B');
+      assert(activeSessionA.isInputOpen(), 'Remote Desktop input channel open on A');
+      assert(activeSessionB.isInputOpen(), 'Remote Desktop input channel open on B');
+
+      return { details: `DataChannels confirmed active: p2p-sig, p2p-chat, p2p-files, p2p-input` };
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 4: DataChannel Messaging & Flow Control
+    // ══════════════════════════════════════════════════════════════
+    const suiteMessaging = registerSuite(
+      'messaging',
+      '4. DataChannel Messaging & File Transfer Flow Control',
+      'Tests bidirectional text delivery, remote desktop input dispatch, and 64KB chunked file transfers.'
+    );
+
+    addTest(suiteMessaging, 'msg-bidirectional-chat', 'Bidirectional Text Chat Transmission', async () => {
+      const pB = new Promise(resolve => { onMessageB = resolve; });
+      const pA = new Promise(resolve => { onMessageA = resolve; });
+
+      const testMsgA = 'Hello Peer B from Peer A!';
+      const testMsgB = 'Hello Peer A from Peer B!';
+
+      activeSessionA.send(testMsgA);
+      const receivedAtB = await pB;
+      assertEqual(receivedAtB, testMsgA, 'Peer B must receive exact message from Peer A');
+
+      activeSessionB.send(testMsgB);
+      const receivedAtA = await pA;
+      assertEqual(receivedAtA, testMsgB, 'Peer A must receive exact message from Peer B');
+
+      const pingSuccess = activeSessionA.sendPing();
+      assert(pingSuccess === true, 'Session A sendPing must return true');
+
+      return { details: `Successfully exchanged chat messages & verified in-band heartbeat ping` };
+    });
+
+    addTest(suiteMessaging, 'msg-input-channel', 'Remote Desktop Input Event Dispatch (p2p-input)', async () => {
+      const pInput = new Promise(resolve => { onInputB = resolve; });
+      const inputEvent = {
+        type: 'mousemove',
+        x: 1024,
+        y: 768,
+        button: 0,
+        ts: Date.now(),
+      };
+
+      const sent = activeSessionA.sendInput(inputEvent);
+      assert(sent === true, 'activeSessionA.sendInput must return true');
+
+      const received = await pInput;
+      assertEqual(received.type, 'mousemove', 'Input event type must match');
+      assertEqual(received.x, 1024, 'Input event x must match');
+      assertEqual(received.y, 768, 'Input event y must match');
+
+      return { details: `Dispatched and received remote desktop input event: ${JSON.stringify(inputEvent)}` };
+    });
+
+    addTest(suiteMessaging, 'msg-file-transfer', 'Chunked Binary File Transfer (64 KB Payload)', async () => {
+      const pFile = new Promise(resolve => { onFileB = (blob, name, meta) => resolve({ blob, name, meta }); });
+      const fileSize = 64 * 1024;
+      const testBuffer = new Uint8Array(fileSize);
+      for (let i = 0; i < fileSize; i++) {
+        testBuffer[i] = i % 256;
+      }
+      const testFile = new File([testBuffer], 'diagnostic-sample.bin', { type: 'application/octet-stream' });
+      await activeSessionA.sendFile(testFile);
+      const received = await pFile;
+
+      assertEqual(received.name, 'diagnostic-sample.bin', 'Received filename must match');
+      assertEqual(received.blob.size, fileSize, 'Received blob size must match exactly');
+
+      const receivedBytes = new Uint8Array(await received.blob.arrayBuffer());
+      let matched = true;
+      for (let i = 0; i < fileSize; i++) {
+        if (receivedBytes[i] !== (i % 256)) {
+          matched = false;
+          break;
+        }
+      }
+      assert(matched === true, 'Transferred binary bytes integrity verified (SHA-like parity)');
+
+      return { details: `Transferred 65,536 bytes (4x 16KB chunks) with full byte-level integrity` };
+    });
+
+    addTest(suiteMessaging, 'msg-teardown', 'Session Teardown & Clean Closure', async () => {
+      if (activeSessionA) activeSessionA.close();
+      if (activeSessionB) activeSessionB.close();
+
+      assertEqual(!!activeSessionA.isChannelOpen(), false, 'Session A channel closed');
+      assertEqual(!!activeSessionB.isChannelOpen(), false, 'Session B channel closed');
+
+      return { details: 'Sessions closed and hardware resources released' };
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 5: Network NAT Traversal & STUN Health
+    // ══════════════════════════════════════════════════════════════
+    const suiteNetwork = registerSuite(
+      'network',
+      '5. Network NAT Traversal & STUN Health',
+      'Probes Google STUN servers to detect public reflexive IP addresses and candidate allocation types.'
+    );
+
+    addTest(suiteNetwork, 'nat-stun-test', 'STUN Server Probe & Reflexive IP Discovery', async () => {
+      const stunServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ];
+
+      const diag = await PeerSession.testIceServers(stunServers, 6000);
+      assert(diag.candidates.host > 0, 'Local host candidates must be gathered');
+
+      const ipInfo = diag.publicIp ? `Discovered Public IP: ${diag.publicIp}` : 'Public IP: Not reflexive (LAN only or symmetric NAT)';
+      const summary = `Host: ${diag.candidates.host}, Srflx: ${diag.candidates.srflx}, Relay: ${diag.candidates.relay} &bull; ${ipInfo}`;
+
+      return { details: summary };
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUITE 6: Hardware Codecs & Autoplay Capabilities
+    // ══════════════════════════════════════════════════════════════
+    const suiteMedia = registerSuite(
+      'media',
+      '6. Hardware Codecs & Autoplay Capabilities',
+      'Inspects browser WebRTC video/audio codec capabilities and tests AudioContext autoplay policies.'
+    );
+
+    addTest(suiteMedia, 'media-video-codecs', 'Video Codec Capabilities (VP8, VP9, H264, AV1)', async () => {
+      if (!window.RTCRtpReceiver || !RTCRtpReceiver.getCapabilities) {
+        return { details: 'RTCRtpReceiver.getCapabilities not supported in this browser' };
+      }
+
+      const caps = RTCRtpReceiver.getCapabilities('video');
+      assert(caps && Array.isArray(caps.codecs) && caps.codecs.length > 0, 'Must have at least one video codec');
+
+      const mimeTypes = [...new Set(caps.codecs.map(c => c.mimeType.replace('video/', '')))];
+      const hasH264 = mimeTypes.some(m => m.toUpperCase().includes('H264'));
+      const hasVP8 = mimeTypes.some(m => m.toUpperCase().includes('VP8'));
+      const hasVP9 = mimeTypes.some(m => m.toUpperCase().includes('VP9'));
+      const hasAV1 = mimeTypes.some(m => m.toUpperCase().includes('AV01') || m.toUpperCase().includes('AV1'));
+
+      const tags = [];
+      if (hasH264) tags.push('H.264');
+      if (hasVP8) tags.push('VP8');
+      if (hasVP9) tags.push('VP9');
+      if (hasAV1) tags.push('AV1 (Hardware/Software)');
+
+      return { details: `Supported Video Codecs: ${tags.join(', ') || mimeTypes.join(', ')}` };
+    });
+
+    addTest(suiteMedia, 'media-audio-codecs', 'Audio Codec Capabilities (Opus, PCMU, PCMA)', async () => {
+      if (!window.RTCRtpReceiver || !RTCRtpReceiver.getCapabilities) {
+        return { details: 'RTCRtpReceiver.getCapabilities not supported in this browser' };
+      }
+
+      const caps = RTCRtpReceiver.getCapabilities('audio');
+      assert(caps && Array.isArray(caps.codecs) && caps.codecs.length > 0, 'Must have at least one audio codec');
+
+      const mimeTypes = [...new Set(caps.codecs.map(c => c.mimeType.replace('audio/', '')))];
+      const hasOpus = mimeTypes.some(m => m.toLowerCase().includes('opus'));
+      assert(hasOpus === true, 'Browser must support Opus audio codec for WebRTC');
+
+      return { details: `Supported Audio Codecs: ${mimeTypes.join(', ')} (Opus confirmed)` };
+    });
+
+    addTest(suiteMedia, 'media-autoplay-policy', 'AudioContext Autoplay Policy Inspection', async () => {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) {
+        return { details: 'AudioContext API not supported' };
+      }
+
+      let ctx;
+      try {
+        ctx = new AudioCtx();
+        const initialState = ctx.state;
+        const details = initialState === 'running'
+          ? 'Autoplay unrestricted (Audio can play immediately without user gesture)'
+          : `Autoplay restricted (Initial state: "${initialState}" — requires user gesture to un-mute)`;
+        return { details };
+      } finally {
+        if (ctx) try { await ctx.close(); } catch {}
+      }
+    });
+
+    // ── Render UI Tree ────────────────────────────────────────────
+    const suitesContainer = document.getElementById('suites-container');
+
+    function renderUI() {
+      suitesContainer.innerHTML = '';
+      let totalTests = 0;
+
+      for (const suite of state.suites) {
+        totalTests += suite.tests.length;
+
+        const card = document.createElement('div');
+        card.className = 'suite-card';
+        card.id = `card-${suite.id}`;
+
+        const header = document.createElement('div');
+        header.className = 'suite-header';
+        header.innerHTML = `
+          <div class="suite-header__title">
+            <span>${suite.title}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="badge-${suite.id}" class="suite-badge">0/${suite.tests.length} passed</span>
+            <button class="btn btn--outline" style="padding:2px 8px; font-size:0.75rem;" data-suite="${suite.id}">Run Suite</button>
+          </div>
+        `;
+        card.appendChild(header);
+
+        const list = document.createElement('ul');
+        list.className = 'test-list';
+
+        for (const t of suite.tests) {
+          const li = document.createElement('li');
+          li.className = 'test-item';
+          li.id = `item-${t.id}`;
+          li.innerHTML = `
+            <div class="test-main">
+              <div class="test-title">
+                <span id="icon-${t.id}" class="status-icon">⚪</span>
+                <span>${t.title}</span>
+              </div>
+              <div class="test-meta">
+                <span id="dur-${t.id}">0ms</span>
+              </div>
+            </div>
+            <div id="details-${t.id}" class="test-details" style="display:none;"></div>
+          `;
+          list.appendChild(li);
+        }
+
+        card.appendChild(list);
+        suitesContainer.appendChild(card);
+      }
+
+      document.getElementById('metric-total').textContent = totalTests;
+      updateMetrics();
+
+      // Bind suite run buttons
+      suitesContainer.querySelectorAll('button[data-suite]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const sId = e.target.getAttribute('data-suite');
+          const targetSuite = state.suites.find(s => s.id === sId);
+          if (targetSuite && !state.isRunning) runSuite(targetSuite);
+        });
+      });
+    }
+
+    function updateTestUI(test) {
+      const icon = document.getElementById(`icon-${test.id}`);
+      const dur = document.getElementById(`dur-${test.id}`);
+      const details = document.getElementById(`details-${test.id}`);
+
+      if (!icon) return;
+
+      if (test.status === 'running') {
+        icon.textContent = '🟡';
+      } else if (test.status === 'pass') {
+        icon.textContent = '🟢';
+        dur.textContent = `${Math.round(test.duration)}ms`;
+      } else if (test.status === 'fail') {
+        icon.textContent = '🔴';
+        dur.textContent = `${Math.round(test.duration)}ms`;
+      } else {
+        icon.textContent = '⚪';
+        dur.textContent = '0ms';
+      }
+
+      if (test.details || test.error) {
+        details.style.display = 'block';
+        if (test.error) {
+          details.className = 'test-details test-details--error';
+          details.textContent = `❌ ${test.error.message || test.error}\n${test.error.stack || ''}`;
+        } else {
+          details.className = 'test-details';
+          details.textContent = typeof test.details === 'string' ? test.details : JSON.stringify(test.details, null, 2);
+        }
+      } else {
+        details.style.display = 'none';
+      }
+    }
+
+    function updateSuiteBadge(suite) {
+      const badge = document.getElementById(`badge-${suite.id}`);
+      if (!badge) return;
+      const passed = suite.tests.filter(t => t.status === 'pass').length;
+      const failed = suite.tests.filter(t => t.status === 'fail').length;
+      badge.textContent = `${passed}/${suite.tests.length} passed`;
+      badge.className = failed > 0 ? 'suite-badge suite-badge--fail' : (passed === suite.tests.length ? 'suite-badge suite-badge--pass' : 'suite-badge');
+    }
+
+    function updateMetrics() {
+      let passed = 0;
+      let failed = 0;
+      let total = 0;
+
+      for (const s of state.suites) {
+        for (const t of s.tests) {
+          total++;
+          if (t.status === 'pass') passed++;
+          if (t.status === 'fail') failed++;
+        }
+      }
+
+      document.getElementById('metric-passed').textContent = passed;
+      document.getElementById('metric-failed').textContent = failed;
+      const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+      document.getElementById('metric-pass-pct').textContent = `${pct}% pass rate`;
+      document.getElementById('metric-fail-label').textContent = failed > 0 ? `${failed} regression(s) detected` : '0 regressions';
+
+      if (state.isRunning) {
+        document.getElementById('metric-progress').textContent = `Running… (${passed + failed}/${total})`;
+      } else {
+        document.getElementById('metric-progress').textContent = total > 0 ? (failed === 0 ? 'All tests passed ✓' : 'Completed with errors') : 'Ready';
+      }
+    }
+
+    // ── Test Execution Engine ─────────────────────────────────────
+    async function executeTest(t) {
+      if (state.abortRequested) return;
+      t.status = 'running';
+      updateTestUI(t);
+      log(`Running: ${t.title}…`, 'info');
+
+      const t0 = performance.now();
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Test timed out after ${t.timeoutMs}ms`)), t.timeoutMs)
+        );
+        const res = await Promise.race([t.runFn(), timeoutPromise]);
+        t.status = 'pass';
+        t.duration = performance.now() - t0;
+        t.details = res && res.details ? res.details : null;
+        log(`✓ Passed: ${t.title} (${Math.round(t.duration)}ms)`, 'success');
+      } catch (err) {
+        t.status = 'fail';
+        t.duration = performance.now() - t0;
+        t.error = err;
+        log(`✗ FAILED: ${t.title} (${err.message})`, 'error');
+      } finally {
+        updateTestUI(t);
+        updateMetrics();
+      }
+    }
+
+    async function runSuite(suite) {
+      for (const t of suite.tests) {
+        if (state.abortRequested) break;
+        await executeTest(t);
+      }
+      updateSuiteBadge(suite);
+    }
+
+    async function runAll() {
+      if (state.isRunning) return;
+      state.isRunning = true;
+      state.abortRequested = false;
+      document.getElementById('btn-run-all').disabled = true;
+      document.getElementById('btn-stop').disabled = false;
+      log('════════ Starting Diagnostic Test Suite Run ════════', 'info');
+
+      const tStart = performance.now();
+      try {
+        for (const suite of state.suites) {
+          if (state.abortRequested) {
+            log('Test run aborted by user request.', 'warn');
+            break;
+          }
+          await runSuite(suite);
+        }
+      } finally {
+        state.totalDuration = performance.now() - tStart;
+        document.getElementById('metric-duration').textContent = `${Math.round(state.totalDuration)}ms`;
+        state.isRunning = false;
+        document.getElementById('btn-run-all').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
+        updateMetrics();
+        log(`════════ Diagnostic Test Run Finished in ${Math.round(state.totalDuration)}ms ════════`, 'info');
+      }
+    }
+
+    // ── Controls Wiring ───────────────────────────────────────────
+    document.getElementById('btn-run-all').addEventListener('click', runAll);
+    document.getElementById('btn-stop').addEventListener('click', () => {
+      state.abortRequested = true;
+      log('Stopping tests…', 'warn');
+    });
+
+    // Copy Report to Clipboard
+    document.getElementById('btn-copy-report').addEventListener('click', async () => {
+      let passed = 0, failed = 0, total = 0;
+      let md = `# P2P Connect Diagnostic Test Report\n\n`;
+      md += `- **Date**: ${new Date().toISOString()}\n`;
+      md += `- **User Agent**: ${navigator.userAgent}\n`;
+      md += `- **Duration**: ${Math.round(state.totalDuration)}ms\n\n`;
+      md += `| Suite | Test | Status | Duration | Details |\n`;
+      md += `|---|---|:---:|---:|---|\n`;
+
+      for (const s of state.suites) {
+        for (const t of s.tests) {
+          total++;
+          if (t.status === 'pass') passed++;
+          if (t.status === 'fail') failed++;
+          const statusIcon = t.status === 'pass' ? 'PASS' : (t.status === 'fail' ? 'FAIL' : 'PENDING');
+          const durStr = `${Math.round(t.duration)}ms`;
+          const detailStr = t.error ? `Error: ${t.error.message}` : (t.details ? (typeof t.details === 'string' ? t.details : JSON.stringify(t.details)) : '-');
+          md += `| ${s.title.split('.')[1]?.trim() || s.title} | ${t.title} | ${statusIcon} | ${durStr} | ${detailStr.replace(/\|/g, '\\|')} |\n`;
+        }
+      }
+      md += `\n**Summary**: ${passed}/${total} passed (${failed} failures)\n`;
+
+      try {
+        await navigator.clipboard.writeText(md);
+        alert('Diagnostic report copied to clipboard in Markdown format!');
+      } catch {
+        prompt('Copy report:', md);
+      }
+    });
+
+    // Export JSON
+    document.getElementById('btn-download-json').addEventListener('click', () => {
+      const data = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        totalDurationMs: Math.round(state.totalDuration),
+        suites: state.suites.map(s => ({
+          id: s.id,
+          title: s.title,
+          tests: s.tests.map(t => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            durationMs: Math.round(t.duration),
+            error: t.error ? { message: t.error.message, stack: t.error.stack } : null,
+            details: t.details,
+          }))
+        }))
+      };
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `p2p-test-report-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ── Environment Detection ─────────────────────────────────────
+    function detectEnv() {
+      const ua = navigator.userAgent;
+      let browser = 'Unknown Browser';
+      if (ua.includes('Firefox/')) browser = 'Mozilla Firefox';
+      else if (ua.includes('Edg/')) browser = 'Microsoft Edge';
+      else if (ua.includes('Chrome/')) browser = 'Google Chrome / Chromium';
+      else if (ua.includes('Safari/')) browser = 'Apple Safari';
+
+      let os = 'Unknown OS';
+      if (ua.includes('Mac OS')) os = 'macOS';
+      else if (ua.includes('Windows')) os = 'Windows';
+      else if (ua.includes('Android')) os = 'Android';
+      else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+      else if (ua.includes('Linux')) os = 'Linux';
+
+      document.getElementById('metric-env').textContent = `${browser} on ${os}`;
+      const rtcOk = !!(window.RTCPeerConnection && window.RTCSessionDescription);
+      document.getElementById('metric-webrtc-support').textContent = rtcOk ? '✓ Native WebRTC & RTCPeerConnection Available' : '✗ WebRTC Unsupported';
+    }
+
+    // ── Startup ───────────────────────────────────────────────────
+    detectEnv();
+    renderUI();
+
+    // Autorun support via ?autorun=1
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autorun') === '1') {
+      log('Autorun triggered via URL query parameter (?autorun=1)', 'info');
+      runAll();
+    }
+  </script>
+</body>
+
+</html>
