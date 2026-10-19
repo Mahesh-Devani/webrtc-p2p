@@ -67,15 +67,22 @@ FILE_TO_TESTS_MAP = {
     'nostr-signaling.js': [
         'tests.test_invariants',
         'tests.test_mobile_lifecycle',
+        'tests.test_mock_relay',
     ],
     'nostr-transport.js': [
         'tests.test_invariants',
         'tests.test_mobile_lifecycle',
+        'tests.test_mock_relay',
     ],
     'nostr-crypto.js': [
         'tests.test_invariants',
     ],
     'nostr-relay.js': [
+        'tests.test_invariants',
+        'tests.test_mock_relay',
+    ],
+    'mock_relay.py': [
+        'tests.test_mock_relay',
         'tests.test_invariants',
     ],
     'token-codec.js': [
@@ -101,6 +108,7 @@ ALL_TEST_MODULES = [
     'tests.test_token_codec',
     'tests.test_mobile_lifecycle',
     'tests.test_diagnostics',
+    'tests.test_mock_relay',
 ]
 
 

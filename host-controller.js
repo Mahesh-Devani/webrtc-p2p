@@ -805,6 +805,16 @@ async function initSignaling() {
     onRelayStatus: (url, state) => console.log(`[Host Relay] ${url} -> ${state}`)
   });
 
+  // Check for ?relay=ws://... URL parameter for instant local mock relay testing
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const relayParam = params.get('relay');
+    if (relayParam && (relayParam.startsWith('ws://') || relayParam.startsWith('wss://'))) {
+      NostrTransport.addRelay(relayParam.trim());
+      console.log('[Host Mock Relay] Configured relay from URL:', relayParam.trim());
+    }
+  } catch { }
+
   await NostrTransport.connect();
 
   // Listen for connection signals from client

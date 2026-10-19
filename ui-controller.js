@@ -5055,6 +5055,16 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         onRelayStatus: () => renderRelayList(),
       });
 
+      // Check for ?relay=ws://... URL parameter for instant local mock relay testing
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const relayParam = params.get('relay');
+        if (relayParam && (relayParam.startsWith('ws://') || relayParam.startsWith('wss://'))) {
+          NostrTransport.addRelay(relayParam.trim());
+          console.log('[Mock Relay] Configured relay from URL:', relayParam.trim());
+        }
+      } catch { }
+
       await NostrTransport.connect();
       renderRelayList();
 
