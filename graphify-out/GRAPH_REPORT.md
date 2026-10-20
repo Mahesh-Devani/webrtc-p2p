@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-20)
 
 ## Corpus Check
-- 48 files · ~113,515 words
+- 48 files · ~113,777 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1113 nodes · 2164 edges · 59 communities (41 shown, 18 thin omitted)
+- 1114 nodes · 2168 edges · 59 communities (41 shown, 18 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 83 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d39d952b`
+- Built from commit: `a0f09808`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -77,7 +77,7 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `toast()` - 36 edges
-2. `hide()` - 28 edges
+2. `hide()` - 29 edges
 3. `initNostr()` - 28 edges
 4. `show()` - 26 edges
 5. `buildNostrSessionConfig()` - 23 edges
@@ -106,7 +106,7 @@
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
-Nodes (124): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), analyzeUserSupportComment(), appendChatBubble(), applyRdZoomTransform() (+116 more)
+Nodes (125): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), analyzeUserSupportComment(), appendChatBubble(), applyRdZoomTransform() (+117 more)
 
 ### Community 1 - "weierstrass"
 Cohesion: 0.07
@@ -277,15 +277,15 @@ Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encryp
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
+  _High betweenness centrality (0.059) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.05284791544333529 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.052509831135785334 - nodes in this community are weakly interconnected._
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `README.md`, `P2P Connect — System Design`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
 - **Are the 5 inferred relationships involving `buildNostrSessionConfig()` (e.g. with `handleFileAbort()` and `handleFileProgress()`) actually correct?**
   _`buildNostrSessionConfig()` has 5 INFERRED edges - model-reasoned connections that need verification._
 - **Should `weierstrass` be split into smaller, more focused modules?**

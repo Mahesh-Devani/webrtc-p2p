@@ -2215,7 +2215,7 @@ textarea {
   animation: pulse 1s infinite;
 }
 
-/* Virtual Trackpad Cursor Indicator */
+/* Virtual Trackpad & Direct Cursor Indicator */
 .rd-virtual-cursor {
   position: fixed;
   top: 0;
@@ -2226,7 +2226,13 @@ textarea {
   z-index: 550;
   transform: translate(-3px, -3px);
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
-  will-change: left, top;
+  will-change: left, top, transform, filter;
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+
+.rd-virtual-cursor.clicking {
+  transform: translate(-3px, -3px) scale(0.8);
+  filter: drop-shadow(0 0 10px #00d2ff) brightness(1.4);
 }
 
 .rd-virtual-cursor__icon {

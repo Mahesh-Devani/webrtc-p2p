@@ -121,6 +121,9 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("trackpadTwoFinger", self.ui_content)
         self.assertIn("initialPinchDistance", self.ui_content)
         self.assertIn("function respondFromAiSupportAgent", self.ui_content)
+        self.assertIn("triggerCursorClickAnimation", self.ui_content)
+        self.assertIn("directDragPending", self.ui_content)
+        self.assertIn("isDoubleTap", self.ui_content)
 
         # Elements in index.html
         self.assertIn('id="rd-btn-touch-mode"', self.html_content)
