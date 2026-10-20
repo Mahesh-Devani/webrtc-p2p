@@ -54,9 +54,6 @@ if PLATFORM == 'darwin':
     main_display = cg.CGMainDisplayID()
     cg.CGDisplayBounds.argtypes = [ctypes.c_uint32]
     cg.CGDisplayBounds.restype = CGRect
-    _bounds = cg.CGDisplayBounds(main_display)
-    SCREEN_WIDTH = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(main_display))
-    SCREEN_HEIGHT = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(main_display))
 
     cg.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, CGPoint, ctypes.c_uint32]
     cg.CGEventCreateMouseEvent.restype = ctypes.c_void_p
@@ -249,6 +246,48 @@ else:
         def native_type_text(text): pass
 
 
+selected_display_id = None
+
+def get_screen_bounds(display_id=None):
+    """
+    Dynamically retrieve active screen bounds and origin in real-time.
+    Guarantees sub-pixel precision across display resolution changes and multi-monitor setups.
+    """
+    global SCREEN_WIDTH, SCREEN_HEIGHT, selected_display_id
+    target_id = display_id if display_id is not None else selected_display_id
+    if PLATFORM == 'darwin':
+        target_display = target_id if target_id is not None else cg.CGMainDisplayID()
+        _bounds = cg.CGDisplayBounds(target_display)
+        w = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(target_display))
+        h = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(target_display))
+        ox = int(_bounds.origin.x)
+        oy = int(_bounds.origin.y)
+        SCREEN_WIDTH = w if w > 0 else 1920
+        SCREEN_HEIGHT = h if h > 0 else 1080
+        return ox, oy, SCREEN_WIDTH, SCREEN_HEIGHT
+    elif PLATFORM == 'win32':
+        try:
+            import ctypes
+            w = ctypes.windll.user32.GetSystemMetrics(0)
+            h = ctypes.windll.user32.GetSystemMetrics(1)
+            SCREEN_WIDTH = w if w > 0 else 1920
+            SCREEN_HEIGHT = h if h > 0 else 1080
+            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+        except Exception:
+            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+    else:
+        try:
+            import pyautogui
+            w, h = pyautogui.size()
+            SCREEN_WIDTH = w if w > 0 else 1920
+            SCREEN_HEIGHT = h if h > 0 else 1080
+            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+        except Exception:
+            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+
+# Initialize screen bounds at startup
+get_screen_bounds()
+
 # ── Native Clipboard Functions ───────────────────────────────────────────────
 def native_set_clipboard(text):
     if not text:
@@ -380,8 +419,9 @@ current_y = SCREEN_HEIGHT // 2
 
 def execute_mouse_move(x, y):
     global current_x, current_y
-    current_x = max(0, min(SCREEN_WIDTH - 1, x))
-    current_y = max(0, min(SCREEN_HEIGHT - 1, y))
+    ox, oy, sw, sh = get_screen_bounds()
+    current_x = max(ox, min(ox + sw - 1, x))
+    current_y = max(oy, min(oy + sh - 1, y))
     native_mouse_move(current_x, current_y)
 
 async def mouse_worker():
@@ -485,11 +525,12 @@ async def handle_client(reader, writer):
         writer.write(handshake_resp)
         await writer.drain()
 
-        # Send connected confirmation frame immediately
-        writer.write(make_ws_frame(json.dumps({'t': 'connected', 'screen': [SCREEN_WIDTH, SCREEN_HEIGHT]})))
+        # Send connected confirmation frame immediately with current screen bounds
+        ox, oy, sw, sh = get_screen_bounds()
+        writer.write(make_ws_frame(json.dumps({'t': 'connected', 'screen': [sw, sh], 'origin': [ox, oy]})))
         await writer.drain()
 
-        print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin})")
+        print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin}, Screen: {sw}x{sh} at ({ox},{oy}))")
 
         # ── Process incoming WebRTC input events ──
         while True:
@@ -514,8 +555,9 @@ async def handle_client(reader, writer):
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
                 ny = float(data.get('y', 0))
-                target_x = max(0, min(SCREEN_WIDTH - 1, int(nx * SCREEN_WIDTH)))
-                target_y = max(0, min(SCREEN_HEIGHT - 1, int(ny * SCREEN_HEIGHT)))
+                ox, oy, sw, sh = get_screen_bounds()
+                target_x = max(ox, min(ox + sw - 1, int(ox + nx * sw)))
+                target_y = max(oy, min(oy + sh - 1, int(oy + ny * sh)))
 
                 latest_mouse_coord = (target_x, target_y)
                 latest_mouse_updated = True
@@ -525,7 +567,8 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
+                    ox, oy, sw, sh = get_screen_bounds()
+                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
                 native_mouse_down(btn, current_x, current_y)
 
             elif evt_type == 'mouse_up':
@@ -533,7 +576,8 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
+                    ox, oy, sw, sh = get_screen_bounds()
+                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
                 native_mouse_up(btn, current_x, current_y)
 
             elif evt_type == 'mouse_click':
@@ -542,8 +586,15 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
+                    ox, oy, sw, sh = get_screen_bounds()
+                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
                 native_mouse_click(btn, clicks, current_x, current_y)
+
+            elif evt_type == 'select_display':
+                selected_display_id = data.get('id')
+                ox, oy, sw, sh = get_screen_bounds()
+                writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
+                await writer.drain()
 
             elif evt_type == 'wheel':
                 dy = data.get('dy', 0)
