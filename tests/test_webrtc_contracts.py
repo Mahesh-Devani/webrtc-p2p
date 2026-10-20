@@ -118,6 +118,9 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("function initMobileTouchAndSoftKeys", self.ui_content)
         self.assertIn("rdTouchMode === 'trackpad' || document.pointerLockElement === v", self.ui_content)
         self.assertIn("dist <= 25", self.ui_content)
+        self.assertIn("trackpadTwoFinger", self.ui_content)
+        self.assertIn("initialPinchDistance", self.ui_content)
+        self.assertIn("function respondFromAiSupportAgent", self.ui_content)
 
         # Elements in index.html
         self.assertIn('id="rd-btn-touch-mode"', self.html_content)

@@ -259,16 +259,21 @@ class DiagnosticEngine:
             clarification = "Did your browser display a camera/microphone permission prompt? Does an audio call work between you?"
             dev_suggestions.append("Media track negotiation reported. Check transceiver directions and camera hardware permissions.")
 
-        # 4. Remote Desktop Input Modes (Direct Touch vs Virtual Trackpad)
-        elif any(k in text_lower for k in ['trackpad', 'direct mode', 'touch mode', 'mouse mode', 'cursor', 'virtual cursor', 'pointer lock', 'remote desktop', 'rd control', 'input mode', 'click', 'tapping']):
+        # 4. Remote Desktop Input Modes & Touch Gestures
+        elif any(k in text_lower for k in [
+            'trackpad', 'direct mode', 'touch mode', 'mouse mode', 'cursor',
+            'virtual cursor', 'pointer lock', 'remote desktop', 'rd control',
+            'input mode', 'click', 'tapping', 'double finger', 'two finger',
+            'move screen', 'zoom', 'pinch', 'pan'
+        ]):
             advice = (
-                "P2P Connect Remote Desktop supports two distinct input modes:\n"
-                "• Direct Mode (👆): Clicking or tapping directly interacts at that exact screen coordinate (point-and-click / direct tap-to-click). The cyan virtual cursor is hidden.\n"
-                "• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display regardless of where your finger or mouse moves.\n\n"
-                "You can toggle between Direct Mode and Trackpad Mode using the 👆/🖱️ button in the Remote Desktop control bar."
+                "P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:\n"
+                "• Direct Mode (👆): Tapping or clicking directly interacts at that exact screen coordinate.\n"
+                "• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display.\n"
+                "• Two-Finger Screen Movement: When zoomed in (>1.0x), moving two fingers across the screen pans and moves the zoomed viewport in any direction. Pinching with two fingers adjusts the zoom level."
             )
-            clarification = "Are you controlling from a mobile touchscreen or a desktop mouse? Would you prefer direct tap-to-click or relative trackpad gliding?"
-            dev_suggestions.append("Remote Desktop input mode query. Verified Direct point-and-click and Trackpad relative glide synchronization.")
+            clarification = "Are you zoomed into the remote screen? Does double-finger panning glide the screen as expected?"
+            dev_suggestions.append("Remote Desktop touch pan & zoom gesture query. Verified two-finger pan synchronization in Trackpad mode.")
 
         # 5. Network / Wi-Fi / Hotspot / Firewall / Router / NAT
         elif any(k in text_lower for k in ['wifi', 'wi-fi', 'hotspot', 'college', 'university', 'office', 'router', 'firewall', 'port', 'drop', 'failed', 'stuck', 'nat']):

@@ -187,6 +187,12 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('direct mode', res4['reply'].lower())
         self.assertIn('trackpad mode', res4['reply'].lower())
 
+        # Case 5: User mentions two finger gesture / move zoomed in screen
+        res5 = DiagnosticEngine.analyze_comment("In trackpad mode, double finger touch to move zoomed in screen is not working", "aabbcc112233", mock_pkg)
+        self.assertTrue(res5['success'])
+        self.assertIn('two-finger', res5['reply'].lower())
+        self.assertIn('zoom', res5['reply'].lower())
+
     def test_chat_and_screenshot_endpoints_registered(self):
         """ai-diagnostic-agent.py must define /api/chat and /api/screenshot in do_POST."""
         content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')

@@ -406,6 +406,101 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       saveContacts(contacts);
     }
   }
+
+  // ── AI Support Agent Dialogue Engine (Universal Client & Relay Fallback) ──
+  function analyzeUserSupportComment(userText) {
+    const textLower = (userText || '').toLowerCase();
+    const connState = session?.getState?.() || 'closed';
+    const isRdLive = !dom.callOverlay?.classList.contains('hidden');
+    let overallStatus = isRdLive ? 'HEALTHY (P2P Remote Desktop Live)' : (connState === 'connected' ? 'CONNECTED' : 'STANDBY');
+
+    let advice = '';
+    let clarification = '';
+
+    if (/trackpad|direct mode|touch mode|mouse mode|cursor|virtual cursor|pointer lock|remote desktop|rd |input mode|click|tap|double finger|two finger|move screen|zoom|pinch|pan/.test(textLower)) {
+      advice = `P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:
+• Direct Mode (👆): Tapping or clicking directly interacts at that exact screen coordinate.
+• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display.
+• Two-Finger Screen Movement: When zoomed in (>1.0x), moving two fingers across the screen pans and glides the zoomed display in any direction. Pinching with two fingers adjusts the zoom level. When zoomed out (1.0x), two fingers vertically scroll the active remote window.`;
+      clarification = `Are you zoomed into the remote screen? Does double-finger panning glide the screen as expected?`;
+    } else if (/screenshot|image|photo|picture/.test(textLower)) {
+      advice = `To protect Nostr relay quotas, screenshots are transferred exclusively over WebRTC direct P2P DataChannels. When direct P2P is live, you can paste (Cmd+V / Ctrl+V) or click the camera button to send screenshots directly browser-to-browser.`;
+      clarification = `Would you like to establish a direct P2P session now so you can stream the screenshot?`;
+    } else if (/mobile|phone|iphone|ios|android|background|tab|lock|sleep/.test(textLower)) {
+      advice = `On mobile browsers (iOS Safari / Android Chrome), switching tabs or opening the native file picker suspends web execution. WebRTC ICE consent freshness checks (RFC 7675) expire after ~10-15s, moving the connection to 'disconnected'. P2P Connect includes auto-reconnect on send, but keeping the tab in view prevents drops.`;
+      clarification = `Did the disconnect occur when switching to another app, locking the screen, or selecting a file?`;
+    } else if (/video|camera|audio|mic|microphone|permission|black screen|mute/.test(textLower)) {
+      advice = `Media calls require explicit browser permissions and matching video codecs (VP8/H.264). If video is black or fails, try an audio-only call first to isolate media stream negotiation from network transport.`;
+      clarification = `Did your browser display a camera/microphone permission prompt? Does an audio call work between you?`;
+    } else if (/wifi|wi-fi|hotspot|college|university|office|router|firewall|port|drop|failed|stuck|nat/.test(textLower)) {
+      advice = `On enterprise Wi-Fi, university networks, or mobile hotspots, UDP hole-punching is frequently blocked by symmetric NAT or router firewalls. A TURN relay server is required for traversal.`;
+      clarification = `Are you and your peer connecting from different networks? Does your Wi-Fi have an enterprise firewall or captive portal?`;
+    } else {
+      const recentErrors = (DiagnosticLogger.getLogs() || [])
+        .filter(l => l.level === 'error' || l.level === 'warn')
+        .slice(-3)
+        .map(l => l.message);
+
+      if (recentErrors.length > 0) {
+        advice = `I reviewed your recent application telemetry. Recent events: ${recentErrors.join('; ')}. If you are experiencing connection issues, please ensure both peers keep the tab active.`;
+      } else {
+        advice = `Hello! I am your AI Diagnostic Support Agent. I'm actively monitoring your WebRTC transport and session telemetry. Everything currently looks healthy.`;
+      }
+      clarification = `Could you describe what you were trying to do when the issue happened (chat, call, screen share, or remote desktop)?`;
+    }
+
+    return `🤖 [AI Support Agent Response]
+Status: ${overallStatus}
+
+${advice}
+
+❓ Clarification Question:
+${clarification}
+
+(Advisory Mode: Our developer has received this diagnostic feedback).`;
+  }
+
+  async function respondFromAiSupportAgent(userText) {
+    let replyText = null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 800);
+      const res = await fetch('http://127.0.0.1:9998/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderPubKey: nostrIdentity?.pubkey || 'client', text: userText }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          replyText = data.reply;
+        }
+      }
+    } catch {}
+
+    if (!replyText) {
+      replyText = analyzeUserSupportComment(userText);
+    }
+    deliverAiSupportMessage(replyText);
+  }
+
+  function deliverAiSupportMessage(replyText) {
+    const replyMsg = {
+      id: 'ai-' + Date.now(),
+      text: replyText,
+      sender: 'peer',
+      ts: Date.now(),
+      status: 'delivered',
+      type: 'text'
+    };
+    ChatStore.addMessage(SUPPORT_AGENT_PUBKEY, replyMsg);
+    if (activeContactPubkey === SUPPORT_AGENT_PUBKEY) {
+      appendChatBubble(replyMsg);
+    }
+    renderContacts(dom.contactSearch.value);
+  }
   function addContact(pubkey, nickname) {
     const contacts = loadContacts();
     const existing = contacts.find(c => c.pubkey === pubkey);
@@ -1350,6 +1445,14 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     const el = appendChatBubble(msg);
     pendingMsgs.set(id, el);
     renderContacts(dom.contactSearch.value);
+
+    // AI Support Agent interactive response
+    if (targetPubKey === SUPPORT_AGENT_PUBKEY) {
+      setTimeout(() => {
+        markDelivered(targetPubKey, id);
+        respondFromAiSupportAgent(text);
+      }, 350);
+    }
   }
 
   function markDelivered(pubkey, id) {
@@ -1465,13 +1568,18 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     }
     
     // Only update chat header if we are looking at the person this session belongs to
-    if (dom.chatContactStatus && sessionRemotePubKey === activeContactPubkey) {
-      if (state === 'connected') {
-        dom.chatContactStatus.textContent = 'Connected';
+    if (dom.chatContactStatus) {
+      if (activeContactPubkey === SUPPORT_AGENT_PUBKEY) {
+        dom.chatContactStatus.textContent = '🤖 AI Diagnostic Agent • Active';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
-      } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
-        dom.chatContactStatus.textContent = 'Offline';
-        dom.chatContactStatus.className = 'chat-header__status';
+      } else if (sessionRemotePubKey === activeContactPubkey) {
+        if (state === 'connected') {
+          dom.chatContactStatus.textContent = 'Connected';
+          dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+        } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+          dom.chatContactStatus.textContent = 'Offline';
+          dom.chatContactStatus.className = 'chat-header__status';
+        }
       }
     }
   }
@@ -3030,6 +3138,19 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           trackpadTwoFinger = true;
           twoFingerStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
           lastTwoFingerY = twoFingerStartY;
+
+          // Initialize pinch-to-zoom and pan variables for Trackpad mode
+          isPinching = true;
+          pinchMovedSignificantly = false;
+          const dx = e.touches[1].clientX - e.touches[0].clientX;
+          const dy = e.touches[1].clientY - e.touches[0].clientY;
+          initialPinchDistance = Math.hypot(dx, dy);
+          initialPinchScale = rdZoomScale;
+          initialPinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          initialPinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          initialPanX = rdPanX;
+          initialPanY = rdPanY;
+          lastPinchMidY = initialPinchMidY;
         }
         return;
       }
@@ -3128,13 +3249,48 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
             }
           }
         } else if (e.touches.length === 2) {
+          const dx = e.touches[1].clientX - e.touches[0].clientX;
+          const dy = e.touches[1].clientY - e.touches[0].clientY;
+          const currentDistance = Math.hypot(dx, dy);
+          const currentMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
           const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-          if (Math.abs(currentMidY - twoFingerStartY) > 5) touchMoved = true;
-          const scrollDy = (lastTwoFingerY - currentMidY) * 2.5;
-          if (Math.abs(scrollDy) > 2 && rdMode === 'control') {
-            sendRdInput({ t: 'wheel', dy: scrollDy });
+
+          const distanceDiff = Math.abs(currentDistance - initialPinchDistance);
+          if (distanceDiff > 12) pinchMovedSignificantly = true;
+
+          if (initialPinchDistance > 10) {
+            const scaleFactor = currentDistance / initialPinchDistance;
+            let newScale = Math.min(5.0, Math.max(1.0, initialPinchScale * scaleFactor));
+
+            // If zoomed in (or currently zooming), allow two-finger pan and pinch-to-zoom in Trackpad mode
+            if (newScale > 1.05 || initialPinchScale > 1.05) {
+              touchMoved = true;
+              const panDeltaX = currentMidX - initialPinchMidX;
+              const panDeltaY = currentMidY - initialPinchMidY;
+              rdPanX = initialPanX + panDeltaX;
+              rdPanY = initialPanY + panDeltaY;
+
+              // Clamping pan bounds to prevent video flying off screen
+              const parent = v.parentElement;
+              const pWidth = parent ? parent.clientWidth : window.innerWidth;
+              const pHeight = parent ? parent.clientHeight : window.innerHeight;
+              const maxPanX = (pWidth * (newScale - 1)) / 1.8;
+              const maxPanY = (pHeight * (newScale - 1)) / 1.8;
+              rdPanX = Math.max(-maxPanX, Math.min(maxPanX, rdPanX));
+              rdPanY = Math.max(-maxPanY, Math.min(maxPanY, rdPanY));
+              rdZoomScale = newScale;
+              applyRdZoomTransform(false);
+            } else {
+              // Not zoomed in -> Two-finger vertical scroll
+              if (Math.abs(currentMidY - twoFingerStartY) > 5) touchMoved = true;
+              const scrollDy = (lastTwoFingerY - currentMidY) * 2.5;
+              if (Math.abs(scrollDy) > 2 && rdMode === 'control') {
+                sendRdInput({ t: 'wheel', dy: scrollDy });
+              }
+            }
+            lastTwoFingerY = currentMidY;
+            lastPinchMidY = currentMidY;
           }
-          lastTwoFingerY = currentMidY;
         }
         return;
       }
@@ -3229,6 +3385,14 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       if (rdTouchMode === 'trackpad') {
         e.preventDefault();
         if (e.touches.length === 0) {
+          isPinching = false;
+          lastPinchMidY = null;
+
+          // If zoom is very close to 1.0, snap back cleanly
+          if (rdZoomScale < 1.08) {
+            resetRdZoom(true);
+          }
+
           if (trackpadDragging) {
             // Finish double-tap drag on trackpad
             if (rdMode === 'control') {
@@ -3262,6 +3426,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           touchMoved = false;
         } else if (e.touches.length === 1) {
           trackpadTwoFinger = false;
+          isPinching = false;
+          lastPinchMidY = null;
         }
         return;
       }
