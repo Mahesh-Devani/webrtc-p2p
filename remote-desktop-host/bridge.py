@@ -513,15 +513,27 @@ async def handle_client(reader, writer):
 
             elif evt_type == 'mouse_down':
                 btn = int(data.get('btn', 0))
+                if 'x' in data and 'y' in data:
+                    nx = float(data.get('x', 0))
+                    ny = float(data.get('y', 0))
+                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
                 native_mouse_down(btn, current_x, current_y)
 
             elif evt_type == 'mouse_up':
                 btn = int(data.get('btn', 0))
+                if 'x' in data and 'y' in data:
+                    nx = float(data.get('x', 0))
+                    ny = float(data.get('y', 0))
+                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
                 native_mouse_up(btn, current_x, current_y)
 
             elif evt_type == 'mouse_click':
                 btn = int(data.get('btn', 0))
                 clicks = 2 if data.get('dbl') else 1
+                if 'x' in data and 'y' in data:
+                    nx = float(data.get('x', 0))
+                    ny = float(data.get('y', 0))
+                    execute_mouse_move(int(nx * SCREEN_WIDTH), int(ny * SCREEN_HEIGHT))
                 native_mouse_click(btn, clicks, current_x, current_y)
 
             elif evt_type == 'wheel':

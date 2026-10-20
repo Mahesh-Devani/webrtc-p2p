@@ -54,15 +54,15 @@
     "semantic_hash": "4174bee53d63f3b5b812b2714383d3d3"
   },
   "remote-desktop-host/bridge.js": {
-    "mtime": 1791981200.2153113,
-    "seen": 1792181220.542261,
-    "ast_hash": "f7645025f59797aa9a7ff5b7e8020198",
-    "semantic_hash": "f7645025f59797aa9a7ff5b7e8020198"
+    "mtime": 1792495373.8491633,
+    "seen": 1792495488.9708748,
+    "ast_hash": "80f9371e062156335ae446a66b3933ff",
+    "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1792206843.763684,
-    "seen": 1792207574.251462,
-    "ast_hash": "a52c418548a7c6bf85edca2e38fe9c02",
+    "mtime": 1792495362.615805,
+    "seen": 1792495488.970876,
+    "ast_hash": "827d8bec948ebe8bbf0bd75e3167ef46",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792392097.8399882,
-    "seen": 1792392149.3780532,
-    "ast_hash": "de2da8f4bc25aeb7cccbe60fdec6e846",
+    "mtime": 1792495345.0166824,
+    "seen": 1792495488.9708889,
+    "ast_hash": "cec95d0cae5ee701b6b141e7424dc42d",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792391767.8173892,
-    "seen": 1792392149.378059,
-    "ast_hash": "08499e263a2847cfe9fa0230798215d7",
+    "mtime": 1792495425.3902192,
+    "seen": 1792495488.9708958,
+    "ast_hash": "154e20e6c83734abb5063370fdb0980e",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -228,9 +228,9 @@
     "semantic_hash": ""
   },
   "tests/test_webrtc_contracts.py": {
-    "mtime": 1792392135.267729,
-    "seen": 1792392149.378052,
-    "ast_hash": "d55d874c5438841568a55de1096391b9",
+    "mtime": 1792495461.3887043,
+    "seen": 1792495488.970888,
+    "ast_hash": "449c64a7719e6be0206cbe13b61b3f32",
     "semantic_hash": ""
   },
   ".agents/skills/regression-testing/SKILL.md": {
@@ -246,15 +246,15 @@
     "semantic_hash": ""
   },
   "support-agent/ai-diagnostic-agent.py": {
-    "mtime": 1792345273.100618,
-    "seen": 1792345314.2570088,
-    "ast_hash": "a1e727f87f5684fdcfe19e51880d3c0a",
+    "mtime": 1792495407.3339396,
+    "seen": 1792495488.970881,
+    "ast_hash": "37d20de41e3904b490938e635d874706",
     "semantic_hash": ""
   },
   "tests/test_diagnostics.py": {
-    "mtime": 1792331389.0667408,
-    "seen": 1792331451.0960598,
-    "ast_hash": "87296ac302f5c9960fe521cd5d29f79b",
+    "mtime": 1792495451.1360047,
+    "seen": 1792495488.970885,
+    "ast_hash": "3b7965d2c36d4b8e0e475dba369120f5",
     "semantic_hash": ""
   },
   "support-agent/support-identity.example.json": {

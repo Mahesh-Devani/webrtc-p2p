@@ -2649,6 +2649,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     if (dom.rdTouchModeLabel) {
       dom.rdTouchModeLabel.textContent = rdTouchMode === 'trackpad' ? 'Trackpad' : 'Direct';
     }
+    if (dom.rdBtnTouchMode) {
+      dom.rdBtnTouchMode.title = rdTouchMode === 'trackpad'
+        ? 'Input Mode: Virtual Trackpad (Relative Glide) — Click to switch to Direct (Point & Click)'
+        : 'Input Mode: Direct (Point & Click / Tap) — Click to switch to Trackpad (Relative Glide)';
+    }
     if (rdTouchMode === 'trackpad') {
       renderVirtualCursor();
     } else {
@@ -2726,7 +2731,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       e.stopPropagation();
       const newMode = rdTouchMode === 'direct' ? 'trackpad' : 'direct';
       setRdTouchMode(newMode);
-      toast(newMode === 'trackpad' ? 'Virtual Trackpad mode enabled' : 'Direct Touch mode enabled', 'info');
+      toast(newMode === 'trackpad' ? 'Virtual Trackpad mode enabled (Relative Glide)' : 'Direct mode enabled (Point & Click / Tap)', 'info');
     });
 
     dom.rdBtnSoftKeysToggle?.addEventListener('click', (e) => {
@@ -2836,27 +2841,48 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     v._rdListenersAttached = true;
 
     let lastMoveTime = 0;
+    let lastMouseClientX = null;
+    let lastMouseClientY = null;
+
+    v.addEventListener('mouseleave', () => {
+      lastMouseClientX = null;
+      lastMouseClientY = null;
+    });
+
     v.addEventListener('mousemove', (e) => {
       if (rdMode === 'view') return;
       const now = performance.now();
       if (now - lastMoveTime < 16) return; // ~60fps
       lastMoveTime = now;
 
-      if (document.pointerLockElement === v) {
+      // TRACKPAD MODE or POINTER LOCK: relative glide of virtualCursor
+      if (rdTouchMode === 'trackpad' || document.pointerLockElement === v) {
         const rect = v.getBoundingClientRect();
         const targetWidth = rect.width || window.innerWidth;
         const targetHeight = rect.height || window.innerHeight;
-        virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + e.movementX / targetWidth));
-        virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + e.movementY / targetHeight));
-        renderVirtualCursor();
-        if (rdMode === 'pointer') {
-          sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
-        } else if (rdMode === 'control') {
-          sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+        let dx = e.movementX;
+        let dy = e.movementY;
+        if (dx === undefined || (dx === 0 && dy === 0 && lastMouseClientX !== null && document.pointerLockElement !== v)) {
+          dx = e.clientX - lastMouseClientX;
+          dy = e.clientY - lastMouseClientY;
+        }
+        lastMouseClientX = e.clientX;
+        lastMouseClientY = e.clientY;
+
+        if (dx || dy) {
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + dx / targetWidth));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + dy / targetHeight));
+          renderVirtualCursor();
+          if (rdMode === 'pointer') {
+            sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
+          } else if (rdMode === 'control') {
+            sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+          }
         }
         return;
       }
 
+      // DIRECT MODE: point directly at normalized video coordinates
       const coords = getNormalizedVideoCoordinates(e, v);
       if (!coords) return;
 
@@ -2869,7 +2895,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('mousedown', (e) => {
       if (rdMode === 'view') return;
-      const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
+      const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
+        ? virtualCursor
+        : getNormalizedVideoCoordinates(e, v);
       if (!coords) return;
 
       if (rdMode === 'pointer') {
@@ -2881,7 +2909,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('mouseup', (e) => {
       if (rdMode === 'control') {
-        const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
+        const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
+          ? virtualCursor
+          : getNormalizedVideoCoordinates(e, v);
         sendRdInput({ t: 'mouse_up', btn: e.button, x: coords ? coords.x : 0, y: coords ? coords.y : 0 });
       }
     });
@@ -2901,7 +2931,9 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     v.addEventListener('dblclick', (e) => {
       if (rdMode === 'control') {
-        const coords = (document.pointerLockElement === v) ? virtualCursor : getNormalizedVideoCoordinates(e, v);
+        const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
+          ? virtualCursor
+          : getNormalizedVideoCoordinates(e, v);
         if (coords) {
           sendRdInput({ t: 'mouse_click', btn: e.button, dbl: true, x: coords.x, y: coords.y });
         }
@@ -3076,16 +3108,20 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       if (e.touches.length === 1 && !isPinching) {
         const t0 = e.touches[0];
         const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
-        if (dist > 8) {
-          touchMoved = true;
+        if (dist > 15) {
           clearTimeout(longPressTimer);
+        }
+        if (dist > 25) {
+          touchMoved = true;
         }
 
         const coords = getNormalizedVideoCoordinates(t0, v);
         if (!coords) return;
 
         // In Direct Touch mode, dragging across the screen performs a true drag (selecting text, dragging windows/icons)
-        if (touchMoved && !isDirectDragging && !isLongPress && rdMode === 'control') {
+        // Engage direct dragging only if distance moved > 25px and held for > 100ms
+        const elapsed = Date.now() - touchStartTime;
+        if (touchMoved && elapsed > 100 && !isDirectDragging && !isLongPress && rdMode === 'control') {
           isDirectDragging = true;
           sendRdInput({ t: 'mouse_down', btn: 0, x: coords.x, y: coords.y });
         }
@@ -3222,31 +3258,32 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
           return;
         }
 
-        if (!touchMoved) {
-          const elapsed = Date.now() - touchStartTime;
-          if (elapsed < 350) {
-            const lastTouch = e.changedTouches[0];
-            const coords = getNormalizedVideoCoordinates(lastTouch, v);
-            if (coords) {
-              const now = Date.now();
-              if (now - lastTapTime < 320 && lastTapCoords && Math.hypot(coords.x - lastTapCoords.x, coords.y - lastTapCoords.y) < 0.05) {
-                // Double tap -> Double click
-                lastTapTime = 0;
-                lastTapCoords = null;
-                if (rdMode === 'control') {
-                  sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
-                  sendRdInput({ t: 'mouse_click', btn: 0, dbl: true, x: coords.x, y: coords.y });
-                }
-              } else {
-                // Single tap -> Left click
-                lastTapTime = now;
-                lastTapCoords = coords;
-                if (rdMode === 'pointer') {
-                  sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
-                } else if (rdMode === 'control') {
-                  sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
-                  sendRdInput({ t: 'mouse_click', btn: 0, x: coords.x, y: coords.y });
-                }
+        const lastTouch = e.changedTouches[0];
+        const dist = lastTouch ? Math.hypot(lastTouch.clientX - touchStartX, lastTouch.clientY - touchStartY) : 0;
+        const elapsed = Date.now() - touchStartTime;
+
+        // Clean direct tap detection: under 400ms duration and within 25px displacement
+        if (elapsed < 400 && dist <= 25) {
+          const coords = getNormalizedVideoCoordinates(lastTouch, v);
+          if (coords) {
+            const now = Date.now();
+            if (now - lastTapTime < 320 && lastTapCoords && Math.hypot(coords.x - lastTapCoords.x, coords.y - lastTapCoords.y) < 0.05) {
+              // Double tap -> Double click
+              lastTapTime = 0;
+              lastTapCoords = null;
+              if (rdMode === 'control') {
+                sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+                sendRdInput({ t: 'mouse_click', btn: 0, dbl: true, x: coords.x, y: coords.y });
+              }
+            } else {
+              // Single tap -> Direct Left click
+              lastTapTime = now;
+              lastTapCoords = coords;
+              if (rdMode === 'pointer') {
+                sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
+              } else if (rdMode === 'control') {
+                sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+                sendRdInput({ t: 'mouse_click', btn: 0, x: coords.x, y: coords.y });
               }
             }
           }

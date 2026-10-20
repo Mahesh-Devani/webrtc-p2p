@@ -259,7 +259,18 @@ class DiagnosticEngine:
             clarification = "Did your browser display a camera/microphone permission prompt? Does an audio call work between you?"
             dev_suggestions.append("Media track negotiation reported. Check transceiver directions and camera hardware permissions.")
 
-        # 4. Network / Wi-Fi / Hotspot / Firewall / Router / NAT
+        # 4. Remote Desktop Input Modes (Direct Touch vs Virtual Trackpad)
+        elif any(k in text_lower for k in ['trackpad', 'direct mode', 'touch mode', 'mouse mode', 'cursor', 'virtual cursor', 'pointer lock', 'remote desktop', 'rd control', 'input mode', 'click', 'tapping']):
+            advice = (
+                "P2P Connect Remote Desktop supports two distinct input modes:\n"
+                "• Direct Mode (👆): Clicking or tapping directly interacts at that exact screen coordinate (point-and-click / direct tap-to-click). The cyan virtual cursor is hidden.\n"
+                "• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display regardless of where your finger or mouse moves.\n\n"
+                "You can toggle between Direct Mode and Trackpad Mode using the 👆/🖱️ button in the Remote Desktop control bar."
+            )
+            clarification = "Are you controlling from a mobile touchscreen or a desktop mouse? Would you prefer direct tap-to-click or relative trackpad gliding?"
+            dev_suggestions.append("Remote Desktop input mode query. Verified Direct point-and-click and Trackpad relative glide synchronization.")
+
+        # 5. Network / Wi-Fi / Hotspot / Firewall / Router / NAT
         elif any(k in text_lower for k in ['wifi', 'wi-fi', 'hotspot', 'college', 'university', 'office', 'router', 'firewall', 'port', 'drop', 'failed', 'stuck', 'nat']):
             if has_host_only:
                 advice = (

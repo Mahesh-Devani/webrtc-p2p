@@ -116,6 +116,8 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("const latchedModifiers =", self.ui_content)
         self.assertIn("function unlatchAllModifiers", self.ui_content)
         self.assertIn("function initMobileTouchAndSoftKeys", self.ui_content)
+        self.assertIn("rdTouchMode === 'trackpad' || document.pointerLockElement === v", self.ui_content)
+        self.assertIn("dist <= 25", self.ui_content)
 
         # Elements in index.html
         self.assertIn('id="rd-btn-touch-mode"', self.html_content)

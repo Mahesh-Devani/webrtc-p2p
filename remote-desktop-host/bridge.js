@@ -59,12 +59,21 @@ wss.on('connection', (ws, req) => {
         const y = Math.round(data.y * screenHeight);
         await mouse.setPosition(new Point(x, y));
       } else if (data.t === 'mouse_down') {
+        if (typeof data.x === 'number' && typeof data.y === 'number') {
+          await mouse.setPosition(new Point(Math.round(data.x * screenWidth), Math.round(data.y * screenHeight)));
+        }
         const btn = BUTTON_MAP[data.btn] || Button.LEFT;
         await mouse.pressButton(btn);
       } else if (data.t === 'mouse_up') {
+        if (typeof data.x === 'number' && typeof data.y === 'number') {
+          await mouse.setPosition(new Point(Math.round(data.x * screenWidth), Math.round(data.y * screenHeight)));
+        }
         const btn = BUTTON_MAP[data.btn] || Button.LEFT;
         await mouse.releaseButton(btn);
       } else if (data.t === 'mouse_click') {
+        if (typeof data.x === 'number' && typeof data.y === 'number') {
+          await mouse.setPosition(new Point(Math.round(data.x * screenWidth), Math.round(data.y * screenHeight)));
+        }
         const btn = BUTTON_MAP[data.btn] || Button.LEFT;
         if (data.dbl) {
           await mouse.doubleClick(btn);

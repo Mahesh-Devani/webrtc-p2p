@@ -181,6 +181,12 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertTrue(res3['success'])
         self.assertIn('quota', res3['reply'].lower())
 
+        # Case 4: User mentions trackpad / direct mode
+        res4 = DiagnosticEngine.analyze_comment("The trackpad & direct mode still work like trackpad mode", "aabbcc112233", mock_pkg)
+        self.assertTrue(res4['success'])
+        self.assertIn('direct mode', res4['reply'].lower())
+        self.assertIn('trackpad mode', res4['reply'].lower())
+
     def test_chat_and_screenshot_endpoints_registered(self):
         """ai-diagnostic-agent.py must define /api/chat and /api/screenshot in do_POST."""
         content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
