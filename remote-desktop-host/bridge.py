@@ -19,6 +19,7 @@ Features:
 
 import sys
 import os
+import time
 import json
 import asyncio
 import argparse
@@ -247,14 +248,31 @@ else:
 
 
 selected_display_id = None
+_cached_bounds = (0, 0, 1920, 1080)
+_cached_bounds_time = 0.0
+_cached_display_id = None
 
-def get_screen_bounds(display_id=None):
+# Screen Bounds Cache Configuration (in seconds):
+# Default: 300 seconds (5 minutes). Refreshed immediately on each new connection or display selection.
+# Configurable via CLI argument `--bounds-ttl <seconds>` or environment variable `P2P_BOUNDS_TTL`.
+DEFAULT_BOUNDS_CACHE_TTL = float(os.environ.get("P2P_BOUNDS_TTL", 300.0))
+BOUNDS_CACHE_TTL = DEFAULT_BOUNDS_CACHE_TTL
+
+def get_screen_bounds(display_id=None, force=False):
     """
-    Dynamically retrieve active screen bounds and origin in real-time.
-    Guarantees sub-pixel precision across display resolution changes and multi-monitor setups.
+    Dynamically retrieve active screen bounds and origin with a configurable TTL cache (default 300s / 5 min).
+    Refreshed on each connection attempt and whenever display selection changes.
+    Eliminates OS API overhead during high-frequency mouse streaming (60-120Hz).
     """
     global SCREEN_WIDTH, SCREEN_HEIGHT, selected_display_id
+    global _cached_bounds, _cached_bounds_time, _cached_display_id, BOUNDS_CACHE_TTL
+
     target_id = display_id if display_id is not None else selected_display_id
+    now = time.monotonic()
+
+    if not force and target_id == _cached_display_id and (now - _cached_bounds_time < BOUNDS_CACHE_TTL):
+        return _cached_bounds
+
     if PLATFORM == 'darwin':
         target_display = target_id if target_id is not None else cg.CGMainDisplayID()
         _bounds = cg.CGDisplayBounds(target_display)
@@ -264,7 +282,10 @@ def get_screen_bounds(display_id=None):
         oy = int(_bounds.origin.y)
         SCREEN_WIDTH = w if w > 0 else 1920
         SCREEN_HEIGHT = h if h > 0 else 1080
-        return ox, oy, SCREEN_WIDTH, SCREEN_HEIGHT
+        _cached_bounds = (ox, oy, SCREEN_WIDTH, SCREEN_HEIGHT)
+        _cached_bounds_time = now
+        _cached_display_id = target_id
+        return _cached_bounds
     elif PLATFORM == 'win32':
         try:
             import ctypes
@@ -272,7 +293,10 @@ def get_screen_bounds(display_id=None):
             h = ctypes.windll.user32.GetSystemMetrics(1)
             SCREEN_WIDTH = w if w > 0 else 1920
             SCREEN_HEIGHT = h if h > 0 else 1080
-            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+            _cached_bounds = (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+            _cached_bounds_time = now
+            _cached_display_id = target_id
+            return _cached_bounds
         except Exception:
             return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
     else:
@@ -281,12 +305,15 @@ def get_screen_bounds(display_id=None):
             w, h = pyautogui.size()
             SCREEN_WIDTH = w if w > 0 else 1920
             SCREEN_HEIGHT = h if h > 0 else 1080
-            return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
+            _cached_bounds = (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+            _cached_bounds_time = now
+            _cached_display_id = target_id
+            return _cached_bounds
         except Exception:
             return 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT
 
 # Initialize screen bounds at startup
-get_screen_bounds()
+get_screen_bounds(force=True)
 
 # ── Native Clipboard Functions ───────────────────────────────────────────────
 def native_set_clipboard(text):
@@ -525,8 +552,8 @@ async def handle_client(reader, writer):
         writer.write(handshake_resp)
         await writer.drain()
 
-        # Send connected confirmation frame immediately with current screen bounds
-        ox, oy, sw, sh = get_screen_bounds()
+        # Send connected confirmation frame immediately with fresh screen bounds
+        ox, oy, sw, sh = get_screen_bounds(force=True)
         writer.write(make_ws_frame(json.dumps({'t': 'connected', 'screen': [sw, sh], 'origin': [ox, oy]})))
         await writer.drain()
 
@@ -592,7 +619,7 @@ async def handle_client(reader, writer):
 
             elif evt_type == 'select_display':
                 selected_display_id = data.get('id')
-                ox, oy, sw, sh = get_screen_bounds()
+                ox, oy, sw, sh = get_screen_bounds(force=True)
                 writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
                 await writer.drain()
 
@@ -678,8 +705,11 @@ async def handle_client(reader, writer):
         except Exception:
             pass
 
-async def main(host, port, token, extra_origins, allow_all):
-    global ACTIVE_AUTH_TOKEN, ACTIVE_ALLOWED_ORIGINS, ALLOW_ALL_ORIGINS
+async def main(host, port, token, extra_origins, allow_all, bounds_ttl=None):
+    global ACTIVE_AUTH_TOKEN, ACTIVE_ALLOWED_ORIGINS, ALLOW_ALL_ORIGINS, BOUNDS_CACHE_TTL
+
+    if bounds_ttl is not None:
+        BOUNDS_CACHE_TTL = float(bounds_ttl)
 
     ACTIVE_AUTH_TOKEN = load_or_create_token(token)
     ACTIVE_ALLOWED_ORIGINS = set(DEFAULT_ALLOWED_ORIGINS)
@@ -707,6 +737,7 @@ async def main(host, port, token, extra_origins, allow_all):
     if ssl_ctx:
         print(f"  Secure WSS: wss://{host}:9998 (TLS with cert.pem)")
     print(f"  Screen Resolution: {SCREEN_WIDTH} x {SCREEN_HEIGHT}")
+    print(f"  Bounds Cache TTL:  {BOUNDS_CACHE_TTL:.0f}s (on connection & 5m background check)")
     print(f"  Platform: {PLATFORM} (Native CoreGraphics / Win32 acceleration)")
     print("  Security Hardening Status:")
     if ALLOW_ALL_ORIGINS:
@@ -739,9 +770,10 @@ if __name__ == '__main__':
     parser.add_argument("--token", default=None, help="Custom authorization token secret")
     parser.add_argument("--allow-origin", action="append", default=[], help="Additional allowed Origin URL")
     parser.add_argument("--allow-all-origins", action="store_true", help="Disable Origin checking")
+    parser.add_argument("--bounds-ttl", type=float, default=DEFAULT_BOUNDS_CACHE_TTL, help="Screen bounds cache TTL in seconds (default: 300.0 / 5 min)")
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(args.host, args.port, args.token, args.allow_origin, args.allow_all_origins))
+        asyncio.run(main(args.host, args.port, args.token, args.allow_origin, args.allow_all_origins, args.bounds_ttl))
     except KeyboardInterrupt:
         print("\n[+] Host bridge stopped.")
