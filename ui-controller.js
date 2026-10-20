@@ -2197,16 +2197,22 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     const clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
     const clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
 
-    const clickX = clientX - rect.left - offsetX;
-    const clickY = clientY - rect.top - offsetY;
-
-    if (clickX < 0 || clickX > actualWidth || clickY < 0 || clickY > actualHeight) {
+    // Discard only if event occurred far outside the video container
+    if (clientX < rect.left - 40 || clientX > rect.right + 40 || clientY < rect.top - 40 || clientY > rect.bottom + 40) {
       return null;
     }
 
+    const clickX = clientX - rect.left - offsetX;
+    const clickY = clientY - rect.top - offsetY;
+
+    // Clamping to [0, actualWidth] and [0, actualHeight] guarantees that reaching the top
+    // letterbox margin or container border reaches exactly y = 0.0 (top edge of remote desktop)
+    const clampedX = Math.max(0, Math.min(actualWidth, clickX));
+    const clampedY = Math.max(0, Math.min(actualHeight, clickY));
+
     return {
-      x: Math.max(0, Math.min(1, clickX / actualWidth)),
-      y: Math.max(0, Math.min(1, clickY / actualHeight)),
+      x: Math.max(0, Math.min(1, clampedX / actualWidth)),
+      y: Math.max(0, Math.min(1, clampedY / actualHeight)),
     };
   }
 
@@ -2731,7 +2737,14 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
       e.stopPropagation();
       const newMode = rdTouchMode === 'direct' ? 'trackpad' : 'direct';
       setRdTouchMode(newMode);
-      toast(newMode === 'trackpad' ? 'Virtual Trackpad mode enabled (Relative Glide)' : 'Direct mode enabled (Point & Click / Tap)', 'info');
+      toast(newMode === 'trackpad' ? 'Trackpad mode enabled (Relative Glide)' : 'Direct mode enabled (Point & Click / Tap)', 'info');
+
+      // On desktop devices with mouse/trackpad, request pointer lock in trackpad mode for unconstrained movement
+      if (newMode === 'trackpad' && !('ontouchstart' in window) && !document.pointerLockElement) {
+        dom.remoteVideo?.requestPointerLock?.();
+      } else if (newMode === 'direct' && document.pointerLockElement) {
+        document.exitPointerLock?.();
+      }
     });
 
     dom.rdBtnSoftKeysToggle?.addEventListener('click', (e) => {
@@ -2844,7 +2857,19 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     let lastMouseClientX = null;
     let lastMouseClientY = null;
 
-    v.addEventListener('mouseleave', () => {
+    v.addEventListener('mouseleave', (e) => {
+      // In Trackpad mode without pointer lock, if cursor leaves near an edge, snap to that edge
+      if (rdTouchMode === 'trackpad' && document.pointerLockElement !== v) {
+        const rect = v.getBoundingClientRect();
+        if (e.clientY <= rect.top + 20) virtualCursor.y = 0.0;
+        else if (e.clientY >= rect.bottom - 20) virtualCursor.y = 1.0;
+        if (e.clientX <= rect.left + 20) virtualCursor.x = 0.0;
+        else if (e.clientX >= rect.right - 20) virtualCursor.x = 1.0;
+        renderVirtualCursor();
+        if (rdMode === 'control') {
+          sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
+        }
+      }
       lastMouseClientX = null;
       lastMouseClientY = null;
     });
@@ -2869,15 +2894,25 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
         lastMouseClientX = e.clientX;
         lastMouseClientY = e.clientY;
 
+        const sens = (document.pointerLockElement === v) ? 1.0 : 1.8;
         if (dx || dy) {
-          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + dx / targetWidth));
-          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + dy / targetHeight));
-          renderVirtualCursor();
-          if (rdMode === 'pointer') {
-            sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
-          } else if (rdMode === 'control') {
-            sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
-          }
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / targetWidth));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / targetHeight));
+        }
+
+        // When not pointer-locked, moving physical mouse to the edges allows reaching full bounds (0.0 / 1.0)
+        if (document.pointerLockElement !== v) {
+          if (e.clientY <= rect.top + 16) virtualCursor.y = 0.0;
+          if (e.clientY >= rect.bottom - 16) virtualCursor.y = 1.0;
+          if (e.clientX <= rect.left + 16) virtualCursor.x = 0.0;
+          if (e.clientX >= rect.right - 16) virtualCursor.x = 1.0;
+        }
+
+        renderVirtualCursor();
+        if (rdMode === 'pointer') {
+          sendRdInput({ t: 'pointer', x: virtualCursor.x, y: virtualCursor.y, active: true });
+        } else if (rdMode === 'control') {
+          sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
         }
         return;
       }

@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792495345.0166824,
-    "seen": 1792495488.9708889,
-    "ast_hash": "cec95d0cae5ee701b6b141e7424dc42d",
+    "mtime": 1792498900.2694106,
+    "seen": 1792498922.0322418,
+    "ast_hash": "3f6dcbb90886dfcc802a1f577f05e32e",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792495425.3902192,
-    "seen": 1792495488.9708958,
-    "ast_hash": "154e20e6c83734abb5063370fdb0980e",
+    "mtime": 1792498911.6778975,
+    "seen": 1792498922.032248,
+    "ast_hash": "238b8432af266a3bc59707bbc362a3bb",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
