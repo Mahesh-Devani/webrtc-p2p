@@ -45,9 +45,18 @@ if PLATFORM == 'darwin':
     class CGPoint(ctypes.Structure):
         _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
 
+    class CGSize(ctypes.Structure):
+        _fields_ = [("width", ctypes.c_double), ("height", ctypes.c_double)]
+
+    class CGRect(ctypes.Structure):
+        _fields_ = [("origin", CGPoint), ("size", CGSize)]
+
     main_display = cg.CGMainDisplayID()
-    SCREEN_WIDTH = int(cg.CGDisplayPixelsWide(main_display))
-    SCREEN_HEIGHT = int(cg.CGDisplayPixelsHigh(main_display))
+    cg.CGDisplayBounds.argtypes = [ctypes.c_uint32]
+    cg.CGDisplayBounds.restype = CGRect
+    _bounds = cg.CGDisplayBounds(main_display)
+    SCREEN_WIDTH = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(main_display))
+    SCREEN_HEIGHT = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(main_display))
 
     cg.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, CGPoint, ctypes.c_uint32]
     cg.CGEventCreateMouseEvent.restype = ctypes.c_void_p

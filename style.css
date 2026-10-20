@@ -2215,30 +2215,83 @@ textarea {
   animation: pulse 1s infinite;
 }
 
-/* Virtual Trackpad & Direct Cursor Indicator */
+/* Precision Point Cursor (Replacing cyan arrow for sub-pixel accuracy) */
 .rd-virtual-cursor {
   position: fixed;
   top: 0;
   left: 0;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   pointer-events: none;
   z-index: 550;
-  transform: translate(-3px, -3px);
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
-  will-change: left, top, transform, filter;
-  transition: transform 0.08s ease, filter 0.08s ease;
+  transform: translate(-50%, -50%);
+  will-change: left, top;
 }
 
-.rd-virtual-cursor.clicking {
-  transform: translate(-3px, -3px) scale(0.8);
-  filter: drop-shadow(0 0 10px #00d2ff) brightness(1.4);
+.rd-point-cursor {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.rd-virtual-cursor__icon {
-  width: 100%;
-  height: 100%;
-  display: block;
+.rd-point-cursor__ring {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.8), inset 0 0 3px rgba(0, 0, 0, 0.35);
+  background: rgba(0, 229, 255, 0.12);
+  transition: transform 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+}
+
+.rd-point-cursor__dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 4px #00e5ff, 0 0 8px rgba(0, 229, 255, 0.8);
+}
+
+.rd-point-cursor__ripple {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #00e5ff;
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
+}
+
+.rd-virtual-cursor.clicking .rd-point-cursor__ring {
+  transform: scale(0.7);
+  border-color: #00e5ff;
+  background: rgba(0, 229, 255, 0.4);
+}
+
+.rd-virtual-cursor.clicking .rd-point-cursor__ripple {
+  animation: pointClickPulse 0.28s ease-out forwards;
+}
+
+.rd-virtual-cursor.right-clicking .rd-point-cursor__ring {
+  transform: scale(1.3);
+  border-color: #ffaa00;
+  background: rgba(255, 170, 0, 0.3);
+}
+
+.rd-virtual-cursor.right-clicking .rd-point-cursor__ripple {
+  border-color: #ffaa00;
+  animation: pointClickPulse 0.28s ease-out forwards;
+}
+
+@keyframes pointClickPulse {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
 
 /* Remote Laser Pointer */

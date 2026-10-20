@@ -131,6 +131,7 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn('id="rd-btn-soft-keys-toggle"', self.html_content)
         self.assertIn('id="rd-soft-keys-bar"', self.html_content)
         self.assertIn('id="rd-hidden-input"', self.html_content)
+        self.assertIn('class="rd-point-cursor"', self.html_content)
 
     def test_sidebar_live_host_status_ping(self):
         """Package 3: Live host status badges in sidebar and fleet ping mechanism."""

@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1792495362.615805,
-    "seen": 1792495488.970876,
-    "ast_hash": "827d8bec948ebe8bbf0bd75e3167ef46",
+    "mtime": 1792509526.1891048,
+    "seen": 1792509871.599881,
+    "ast_hash": "63d3b31d5aa955ae6e3ab3dedfaa8a30",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792504107.2572145,
-    "seen": 1792504170.675337,
-    "ast_hash": "ef5d83ac63265178ddb3df5a56831d57",
+    "mtime": 1792509846.2664967,
+    "seen": 1792509871.599895,
+    "ast_hash": "cfe8af494fd21e90cafc9702ee874375",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792504128.2158864,
-    "seen": 1792504170.675343,
-    "ast_hash": "9df2305503c0d2e047a4595fcd29eb29",
+    "mtime": 1792509753.7842443,
+    "seen": 1792509871.599901,
+    "ast_hash": "06a8ded4407ddadc4aa1a643813fe179",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -228,9 +228,9 @@
     "semantic_hash": ""
   },
   "tests/test_webrtc_contracts.py": {
-    "mtime": 1792504118.1609926,
-    "seen": 1792504170.675336,
-    "ast_hash": "646906c8d55ac591041e620da9b8bdcf",
+    "mtime": 1792509739.8441033,
+    "seen": 1792509871.599894,
+    "ast_hash": "eda71894d1fe2b3b0f3689b1951a8381",
     "semantic_hash": ""
   },
   ".agents/skills/regression-testing/SKILL.md": {
@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "support-agent/ai-diagnostic-agent.py": {
-    "mtime": 1792504093.762265,
-    "seen": 1792504170.675328,
-    "ast_hash": "e04b1780cb36380edf614f54bb67371f",
+    "mtime": 1792509841.7754898,
+    "seen": 1792509871.5998871,
+    "ast_hash": "de894de72b0f110219fe087a298774ec",
     "semantic_hash": ""
   },
   "tests/test_diagnostics.py": {

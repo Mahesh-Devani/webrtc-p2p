@@ -419,8 +419,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
 
     if (/trackpad|direct mode|touch mode|mouse mode|cursor|virtual cursor|pointer lock|remote desktop|rd |input mode|click|tap|double finger|two finger|move screen|zoom|pinch|pan/.test(textLower)) {
       advice = `P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:
-• Direct Mode (👆): Touch anywhere to move the mouse pointer to that exact coordinate; double-tap to click; double-tap & drag to select/move; long-press (500ms) for Right Click.
-• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display.
+• Touch Mode / Direct Mode (👆): Direct tap instantly clicks; double-tap double-clicks; touch & drag moves windows/selects text; long-press (500ms) right-clicks.
+• Trackpad Mode (🖱️): The screen acts as a relative laptop touchpad, gliding the precision point cursor; 1-finger tap clicks; 2-finger tap right-clicks; 2-finger drag scrolls.
 • Two-Finger Screen Movement: When zoomed in (>1.0x), moving two fingers across the screen pans and glides the zoomed display in any direction. Pinching with two fingers adjusts the zoom level. When zoomed out (1.0x), two fingers vertically scroll the active remote window.`;
       clarification = `Are you zoomed into the remote screen? Does double-finger panning glide the screen as expected?`;
     } else if (/screenshot|image|photo|picture/.test(textLower)) {
@@ -2278,13 +2278,15 @@ ${clarification}
   }
 
   function getNormalizedVideoCoordinates(e, videoEl) {
-    if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return null;
+    if (!videoEl) return null;
     const rect = videoEl.getBoundingClientRect();
     const elWidth = rect.width;
     const elHeight = rect.height;
     if (elWidth <= 0 || elHeight <= 0) return null;
 
-    const videoRatio = videoEl.videoWidth / videoEl.videoHeight;
+    const vWidth = videoEl.videoWidth || elWidth;
+    const vHeight = videoEl.videoHeight || elHeight;
+    const videoRatio = vWidth / vHeight;
     const elRatio = elWidth / elHeight;
 
     let actualWidth, actualHeight, offsetX, offsetY;
@@ -2318,8 +2320,8 @@ ${clarification}
     const clampedY = Math.max(0, Math.min(actualHeight, clickY));
 
     return {
-      x: Math.max(0, Math.min(1, clampedX / actualWidth)),
-      y: Math.max(0, Math.min(1, clampedY / actualHeight)),
+      x: actualWidth > 0 ? Math.max(0, Math.min(1, clampedX / actualWidth)) : 0,
+      y: actualHeight > 0 ? Math.max(0, Math.min(1, clampedY / actualHeight)) : 0,
     };
   }
 
@@ -2760,12 +2762,12 @@ ${clarification}
       dom.rdTouchModeIcon.textContent = rdTouchMode === 'trackpad' ? '🖱️' : '👆';
     }
     if (dom.rdTouchModeLabel) {
-      dom.rdTouchModeLabel.textContent = rdTouchMode === 'trackpad' ? 'Trackpad' : 'Direct';
+      dom.rdTouchModeLabel.textContent = rdTouchMode === 'trackpad' ? 'Trackpad' : 'Touch';
     }
     if (dom.rdBtnTouchMode) {
       dom.rdBtnTouchMode.title = rdTouchMode === 'trackpad'
-        ? 'Input Mode: Virtual Trackpad (Relative Glide) — Click to switch to Direct (Touch to Move, Double-Tap to Click)'
-        : 'Input Mode: Direct (Touch to Move, Double-Tap to Click) — Click to switch to Trackpad (Relative Glide)';
+        ? 'Input Mode: Trackpad (Glide Cursor) — Tap to switch to Touch Mode'
+        : 'Input Mode: Touch (Direct Tap to Click) — Tap to switch to Trackpad Mode';
     }
     if (rdMode === 'control' || rdMode === 'pointer') {
       renderVirtualCursor();
@@ -2774,12 +2776,15 @@ ${clarification}
     }
   }
 
-  function triggerCursorClickAnimation() {
+  function triggerCursorClickAnimation(btn = 0) {
     if (!dom.rdVirtualCursor) return;
-    dom.rdVirtualCursor.classList.add('clicking');
+    const cls = btn === 2 ? 'right-clicking' : 'clicking';
+    dom.rdVirtualCursor.classList.remove('clicking', 'right-clicking');
+    void dom.rdVirtualCursor.offsetWidth;
+    dom.rdVirtualCursor.classList.add(cls);
     setTimeout(() => {
-      dom.rdVirtualCursor?.classList.remove('clicking');
-    }, 180);
+      dom.rdVirtualCursor?.classList.remove(cls);
+    }, 280);
   }
 
   function renderVirtualCursor() {
@@ -2800,9 +2805,9 @@ ${clarification}
       return;
     }
 
-    const videoRatio = (targetVideo.videoWidth && targetVideo.videoHeight)
-      ? (targetVideo.videoWidth / targetVideo.videoHeight)
-      : (rect.width / rect.height);
+    const vWidth = targetVideo.videoWidth || rect.width;
+    const vHeight = targetVideo.videoHeight || rect.height;
+    const videoRatio = vWidth / vHeight;
     const elRatio = rect.width / rect.height;
 
     let actualWidth, actualHeight, offsetX, offsetY;
@@ -2852,7 +2857,7 @@ ${clarification}
       e.stopPropagation();
       const newMode = rdTouchMode === 'direct' ? 'trackpad' : 'direct';
       setRdTouchMode(newMode);
-      toast(newMode === 'trackpad' ? 'Trackpad mode enabled (Relative Glide)' : 'Direct mode enabled (Touch to Move, Double-Tap to Click)', 'info');
+      toast(newMode === 'trackpad' ? 'Trackpad mode enabled (Glide & Tap)' : 'Touch mode enabled (Direct Tap to Click)', 'info');
 
       // On desktop devices with mouse/trackpad, request pointer lock in trackpad mode for unconstrained movement
       if (newMode === 'trackpad' && !('ontouchstart' in window) && !document.pointerLockElement) {
@@ -3171,7 +3176,7 @@ ${clarification}
         return;
       }
 
-      // DIRECT TOUCH MODE
+      // DIRECT TOUCH MODE (Touch Mode like Chrome Remote Desktop)
       if (e.touches.length === 1) {
         isPinching = false;
         touchStartTime = Date.now();
@@ -3184,7 +3189,6 @@ ${clarification}
 
         const coords = getNormalizedVideoCoordinates(t0, v);
         if (coords) {
-          // Immediately move virtual cursor and remote pointer to where touched
           virtualCursor.x = coords.x;
           virtualCursor.y = coords.y;
           renderVirtualCursor();
@@ -3195,14 +3199,6 @@ ${clarification}
             sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
           }
 
-          // Check if this touch is a double-tap drag (touch down within 380ms of previous tap)
-          if (touchStartTime - lastTapTime < 380 && lastTapCoords &&
-              Math.hypot(coords.x - lastTapCoords.x, coords.y - lastTapCoords.y) < 0.08) {
-            directDragPending = true;
-          } else {
-            directDragPending = false;
-          }
-
           // Long press timer (500ms) for Right Click
           clearTimeout(longPressTimer);
           longPressTimer = setTimeout(() => {
@@ -3211,8 +3207,8 @@ ${clarification}
               navigator.vibrate?.(60);
               if (rdMode === 'control') {
                 sendRdInput({ t: 'mouse_click', btn: 2, x: coords.x, y: coords.y });
-                triggerCursorClickAnimation();
-                toast('Right Click sent', 'info');
+                triggerCursorClickAnimation(2);
+                toast('Right Click', 'info');
               }
             }
           }, 500);
@@ -3326,7 +3322,7 @@ ${clarification}
         return;
       }
 
-      // DIRECT TOUCH MODE
+      // DIRECT TOUCH MODE (Touch Mode like Chrome Remote Desktop)
       if (e.touches.length === 1 && !isPinching) {
         const t0 = e.touches[0];
         const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
@@ -3340,13 +3336,13 @@ ${clarification}
         const coords = getNormalizedVideoCoordinates(t0, v);
         if (!coords) return;
 
-        // Immediately update virtual cursor and remote pointer position as finger moves
         virtualCursor.x = coords.x;
         virtualCursor.y = coords.y;
         renderVirtualCursor();
 
-        // Double-tap drag: engage mouse_down drag only if double-tap drag was initiated
-        if (directDragPending && !isDirectDragging && dist > 10 && !isLongPress && rdMode === 'control') {
+        // Direct Touch Drag: after holding 100ms and moving > 10px, engage true drag
+        const elapsed = Date.now() - touchStartTime;
+        if (touchMoved && elapsed > 100 && !isDirectDragging && !isLongPress && rdMode === 'control') {
           isDirectDragging = true;
           sendRdInput({ t: 'mouse_down', btn: 0, x: coords.x, y: coords.y });
         }
@@ -3443,8 +3439,8 @@ ${clarification}
                 if (rdMode === 'control') {
                   sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
                   sendRdInput({ t: 'mouse_click', btn: 2, x: virtualCursor.x, y: virtualCursor.y });
-                  triggerCursorClickAnimation();
-                  toast('Right Click sent', 'info');
+                  triggerCursorClickAnimation(2);
+                  toast('Right Click', 'info');
                 }
               } else {
                 lastTrackpadTapTime = Date.now();
@@ -3453,7 +3449,7 @@ ${clarification}
                 } else if (rdMode === 'control') {
                   sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
                   sendRdInput({ t: 'mouse_click', btn: 0, x: virtualCursor.x, y: virtualCursor.y });
-                  triggerCursorClickAnimation();
+                  triggerCursorClickAnimation(0);
                 }
               }
             }
@@ -3469,7 +3465,7 @@ ${clarification}
         return;
       }
 
-      // DIRECT TOUCH MODE
+      // DIRECT TOUCH MODE (Touch Mode like Chrome Remote Desktop)
       if (e.touches.length === 0) {
         isPinching = false;
         lastPinchMidY = null;
@@ -3482,18 +3478,12 @@ ${clarification}
         if (isLongPress) {
           isLongPress = false;
           isDirectDragging = false;
-          directDragPending = false;
-          lastTapTime = 0;
-          lastTapCoords = null;
           return;
         }
 
         if (isDirectDragging) {
           // Direct drag completed: send mouse_up
           isDirectDragging = false;
-          directDragPending = false;
-          lastTapTime = 0;
-          lastTapCoords = null;
           const lastTouch = e.changedTouches[0];
           const coords = getNormalizedVideoCoordinates(lastTouch, v);
           if (rdMode === 'control') {
@@ -3502,7 +3492,6 @@ ${clarification}
           return;
         }
 
-        directDragPending = false;
         const lastTouch = e.changedTouches[0];
         const dist = lastTouch ? Math.hypot(lastTouch.clientX - touchStartX, lastTouch.clientY - touchStartY) : 0;
         const elapsed = Date.now() - touchStartTime;
@@ -3511,50 +3500,36 @@ ${clarification}
         if (elapsed < 400 && dist <= 25) {
           const coords = getNormalizedVideoCoordinates(lastTouch, v);
           if (coords) {
-            // Keep virtualCursor at the tap coordinate
             virtualCursor.x = coords.x;
             virtualCursor.y = coords.y;
             renderVirtualCursor();
 
             const now = Date.now();
-            const isDoubleTap = (now - lastTapTime < 380 && lastTapCoords &&
+            const isDoubleTap = (now - lastTapTime < 350 && lastTapCoords &&
               Math.hypot(coords.x - lastTapCoords.x, coords.y - lastTapCoords.y) < 0.08);
 
             if (isDoubleTap) {
-              // Double tap detected: Left click!
+              // Double Tap -> Double Click!
               lastTapTime = 0;
               lastTapCoords = null;
-
-              // Check if follow-up tap right after a previous click (for double click)
-              const isFollowUpDblClick = (now - lastClickTime < 380 && lastClickCoords &&
-                Math.hypot(coords.x - lastClickCoords.x, coords.y - lastClickCoords.y) < 0.08);
-
               if (rdMode === 'pointer') {
                 sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
               } else if (rdMode === 'control') {
                 sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
-                if (isFollowUpDblClick) {
-                  sendRdInput({ t: 'mouse_click', btn: 0, dbl: true, x: coords.x, y: coords.y });
-                  toast('Double Click', 'info');
-                  lastClickTime = 0;
-                  lastClickCoords = null;
-                } else {
-                  sendRdInput({ t: 'mouse_click', btn: 0, x: coords.x, y: coords.y });
-                  toast('Click', 'info');
-                  lastClickTime = now;
-                  lastClickCoords = coords;
-                }
-                triggerCursorClickAnimation();
-                navigator.vibrate?.(40);
+                sendRdInput({ t: 'mouse_click', btn: 0, dbl: true, x: coords.x, y: coords.y });
+                triggerCursorClickAnimation(0);
+                toast('Double Click', 'info');
               }
             } else {
-              // Single tap: moves the mouse pointer to where touched without clicking
+              // Single Tap -> Direct Left Click! (Like Chrome Remote Desktop touch mode)
               lastTapTime = now;
               lastTapCoords = coords;
               if (rdMode === 'pointer') {
-                sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, active: true });
+                sendRdInput({ t: 'pointer', x: coords.x, y: coords.y, click: true });
               } else if (rdMode === 'control') {
                 sendRdInput({ t: 'mouse_move', x: coords.x, y: coords.y });
+                sendRdInput({ t: 'mouse_click', btn: 0, x: coords.x, y: coords.y });
+                triggerCursorClickAnimation(0);
               }
             }
           }

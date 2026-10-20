@@ -268,8 +268,8 @@ class DiagnosticEngine:
         ]):
             advice = (
                 "P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:\n"
-                "• Direct Mode (👆): Touch anywhere to move the mouse pointer to that exact coordinate; double-tap to click; double-tap & drag to select/move; long-press (500ms) for Right Click.\n"
-                "• Virtual Trackpad Mode (🖱️): The screen acts as a relative touchpad surface, gliding the cyan virtual cursor across the remote display.\n"
+                "• Touch Mode / Direct Mode (👆): Direct tap instantly clicks; double-tap double-clicks; touch & drag moves windows/selects text; long-press (500ms) right-clicks.\n"
+                "• Trackpad Mode (🖱️): The screen acts as a relative laptop touchpad, gliding the precision point cursor; 1-finger tap clicks; 2-finger tap right-clicks; 2-finger drag scrolls.\n"
                 "• Two-Finger Screen Movement: When zoomed in (>1.0x), moving two fingers across the screen pans and moves the zoomed viewport in any direction. Pinching with two fingers adjusts the zoom level."
             )
             clarification = "Are you zoomed into the remote screen? Does double-finger panning glide the screen as expected?"
