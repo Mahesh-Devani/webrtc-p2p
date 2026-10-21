@@ -260,6 +260,13 @@ class TestDiagnosticSystem(unittest.TestCase):
         ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
         self.assertNotIn('isHostStreamLive', ui_content, "ui-controller.js must not contain isHostStreamLive (host-only function)")
 
+    def test_support_agent_screenshot_handling(self):
+        """ui-controller.js must handle screenshots for SUPPORT_AGENT_PUBKEY directly without WebRTC P2P dialing."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('activeContactPubkey === SUPPORT_AGENT_PUBKEY', ui_content)
+        self.assertIn('remotePubKey === SUPPORT_AGENT_PUBKEY', ui_content)
+        self.assertIn('/api/screenshot', ui_content)
+
 
 if __name__ == '__main__':
     unittest.main()

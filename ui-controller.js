@@ -1355,19 +1355,14 @@ ${clarification}
     const isConnecting = (connectingPromisePubKey === pubkey) || (session && nostrActiveSessionId && sessionRemotePubKey === pubkey && session.getState?.() !== 'closed' && session.getState?.() !== 'failed');
     
     if (isSupportBot) {
-        dom.chatContactStatus.textContent = isConnected ? 'Connected (Direct P2P Ready)' : '🤖 AI Diagnostic Agent • Always Ready';
+        dom.chatContactStatus.textContent = '🤖 AI Diagnostic Agent • Active';
         dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
         hide(dom.btnAudioCall);
         hide(dom.btnVideoCall);
         hide(dom.btnRemoteDesktop);
+        hide(dom.btnConnectPeer);
         if (dom.btnChatSendDiag) show(dom.btnChatSendDiag);
         if (dom.btnAttachScreenshot) show(dom.btnAttachScreenshot);
-        if (isConnected) {
-            hide(dom.btnConnectPeer);
-        } else {
-            show(dom.btnConnectPeer);
-            dom.btnConnectPeer.title = 'Connect Direct P2P Channel (for Screenshots)';
-        }
     } else {
         if (dom.btnChatSendDiag) hide(dom.btnChatSendDiag);
         if (dom.btnAttachScreenshot) hide(dom.btnAttachScreenshot);
@@ -1562,7 +1557,9 @@ ${clarification}
       const isScreenshot = msg.fileName.toLowerCase().includes('screenshot') || (msg.text && msg.text.includes('📷 Screenshot'));
       const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
       if (isScreenshot) {
-        content = `📷 <strong>Screenshot</strong>${sizeStr}<div style="font-size:0.72rem; color:var(--c-primary); margin-top:3px;">⚡ Direct P2P Transfer (Zero Nostr Quota)</div>`;
+        const previewImg = msg.previewUrl ? `<div style="margin-top:6px;"><img src="${escapeHtml(msg.previewUrl)}" style="max-width:220px;max-height:220px;border-radius:6px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);" alt="Screenshot preview" /></div>` : '';
+        const tag = activeContactPubkey === SUPPORT_AGENT_PUBKEY ? 'Diagnostic Upload' : 'Direct P2P Transfer (Zero Nostr Quota)';
+        content = `📷 <strong>Screenshot</strong>${sizeStr}${previewImg}<div style="font-size:0.72rem; color:var(--c-primary); margin-top:3px;">⚡ ${tag}</div>`;
       } else {
         content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
       }
@@ -1859,6 +1856,16 @@ ${clarification}
   async function ensurePeerConnected(remotePubKey, { timeoutMs = 25000 } = {}) {
     if (!remotePubKey) return false;
 
+    // The AI Support Agent is an automated virtual service, not a WebRTC peer.
+    if (remotePubKey === SUPPORT_AGENT_PUBKEY) {
+      if (activeContactPubkey === SUPPORT_AGENT_PUBKEY && dom.chatContactStatus) {
+        dom.chatContactStatus.textContent = '🤖 AI Diagnostic Agent • Active';
+        dom.chatContactStatus.className = 'chat-header__status chat-header__status--online';
+        hide(dom.btnConnectPeer);
+      }
+      return false;
+    }
+
     // 1. If already open and active with this contact
     if (session && sessionRemotePubKey === remotePubKey && typeof session.isChannelOpen === 'function' && session.isChannelOpen()) {
       if (activeContactPubkey === remotePubKey) {
@@ -2065,6 +2072,7 @@ ${clarification}
 
     // 1. Optimize & scale image on offscreen canvas to keep size under 200 KB
     let optimizedBlob = null;
+    let base64Data = null;
     try {
       optimizedBlob = await new Promise((resolve, reject) => {
         const img = new Image();
@@ -2088,6 +2096,7 @@ ${clarification}
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
+          base64Data = canvas.toDataURL('image/jpeg', 0.82);
           canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.82);
         };
         img.onerror = reject;
@@ -2101,7 +2110,84 @@ ${clarification}
     if (!optimizedBlob) optimizedBlob = file;
     const fileName = `screenshot-${Date.now()}.jpg`;
 
-    // 2. Strict Quota Enforcement
+    // 2. Dedicated Handler for AI Support Agent
+    // The AI Support Agent is an automated diagnostic service, not a WebRTC peer.
+    // Ingest the screenshot directly into the conversation & local diagnostic engine.
+    if (activeContactPubkey === SUPPORT_AGENT_PUBKEY) {
+      toast('Uploading screenshot to AI Support Agent… 📸');
+      const previewUrl = URL.createObjectURL(optimizedBlob);
+      const msg = {
+        id: 'ss-' + Date.now(),
+        text: `📷 Screenshot uploaded for AI Diagnostic Analysis (${(optimizedBlob.size / 1024).toFixed(1)} KB)`,
+        sender: 'self',
+        ts: Date.now(),
+        status: 'delivered',
+        type: 'file',
+        fileName,
+        fileSize: optimizedBlob.size,
+        previewUrl,
+      };
+
+      // Persist metadata strictly without base64 to respect localStorage isolation
+      ChatStore.addMessage(SUPPORT_AGENT_PUBKEY, {
+        id: msg.id,
+        text: msg.text,
+        sender: msg.sender,
+        ts: msg.ts,
+        status: msg.status,
+        type: msg.type,
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+      });
+      appendChatBubble(msg);
+
+      // Attempt to forward screenshot to local Python Support Agent endpoint if running
+      if (base64Data) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 1200);
+          fetch('http://127.0.0.1:9998/api/screenshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              senderPubKey: nostrIdentity?.pubkey || 'client',
+              data: base64Data
+            }),
+            signal: controller.signal
+          }).then(r => {
+            clearTimeout(timer);
+            if (r.ok) {
+              DiagnosticLogger.record('info', ['[AI Support Agent] Screenshot archived locally on port 9998']);
+            }
+          }).catch(() => {
+            clearTimeout(timer);
+          });
+        } catch {}
+      }
+
+      // Deliver AI Support Agent response after a natural review pause
+      setTimeout(() => {
+        const connState = session?.getState?.() || 'closed';
+        const isRdLive = !dom.callOverlay?.classList.contains('hidden');
+        const bridgeStr = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Connected 🟢' : 'Disconnected 🔴') : 'Standby / Offline ⚪';
+
+        const botReply = `🤖 [AI Support Agent Review]
+📷 Screenshot received and logged (${(optimizedBlob.size / 1024).toFixed(1)} KB).
+
+📊 Current Telemetry Snapshot:
+• WebRTC Connection: \`${connState}\`
+• Remote Desktop: ${isRdLive ? (rdMode || 'active') : 'Inactive'} (OS Bridge: ${bridgeStr})
+
+💡 Next Steps:
+If this screenshot depicts a connection drop, blank video, or remote control issue, feel free to describe what you see or click '📋 Send Diag' to transmit your full technical log package!`;
+        deliverAiSupportMessage(botReply);
+      }, 500);
+
+      toast('Screenshot submitted to AI Support Agent! ✓');
+      return;
+    }
+
+    // 3. Strict Quota Enforcement for Human Peers
     // Senders MUST NOT send screenshot binaries over Nostr relays!
     const isP2pOpen = session && session.isChannelOpen?.();
     if (isP2pOpen) {
