@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-21)
 
 ## Corpus Check
-- 49 files · ~118,662 words
+- 51 files · ~119,272 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1158 nodes · 2236 edges · 61 communities (34 shown, 27 thin omitted)
+- 1175 nodes · 2251 edges · 65 communities (36 shown, 29 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 83 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f56ff082`
+- Built from commit: `7d55ce1f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -41,7 +41,7 @@
 - TestMockNostrRelay
 - MockNostrRelay
 - AGENTS.md — Developer & AI Agent Guide for P2P Connect
-- test_two_peer_handshake.py
+- ai-diagnostic-agent.py
 - pathlib
 - DiagnosticServer
 - cdp_client.py
@@ -57,15 +57,19 @@
 - mock_relay.py
 - ColoredTextTestResult
 - P2P Connect — Architecture & Production Notes
+- verifyEvent
 - P2P Connect — High-Level Design
 - TestWebRtcContracts
 - ._process_nostr_message
 - P2P Connect — Architecture
+- 2. Triage Procedure
 - TestMobileLifecycle
 - P2P Connect — Roadmap
 - P2P Connect — Native OS Remote Desktop Host Agent
-- handleNext
+- 🚀 1. Recommended Triage Prompts
 - createCipher
+- classifyKind
+- QuietHTTPHandler
 - run.sh
 
 ## God Nodes (most connected - your core abstractions)
@@ -95,15 +99,15 @@
 ## Import Cycles
 - None detected.
 
-## Communities (61 total, 27 thin omitted)
+## Communities (65 total, 29 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
 Nodes (126): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), analyzeUserSupportComment(), appendChatBubble(), applyRdZoomTransform() (+118 more)
 
 ### Community 1 - "weierstrass"
-Cohesion: 0.07
-Nodes (51): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+43 more)
+Cohesion: 0.08
+Nodes (47): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+39 more)
 
 ### Community 2 - "update"
 Cohesion: 0.12
@@ -119,15 +123,15 @@ Nodes (35): DiagnosticLogger, addAuthorizedClient(), broadcastBridgeStatus(), bt
 
 ### Community 5 - "nostr.bundle.js"
 Cohesion: 0.04
-Nodes (42): binarySearch(), bytes2(), chachaCore(), classifyKind(), concatBytes(), createCurve(), FpSqrt(), getFilterLimit() (+34 more)
+Nodes (43): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve(), FpInvertBatch(), FpPow(), FpSqrt() (+35 more)
 
 ### Community 6 - "check-invariants.py"
 Cohesion: 0.07
 Nodes (16): 1. `test_no_query_params_on_internal_imports` Failed, check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist() (+8 more)
 
 ### Community 7 - "decode"
-Cohesion: 0.12
-Nodes (22): bytesToHex2(), createRumor(), createSeal(), createWrap(), fastEventHash(), finalizeEvent(), finishReactionEvent(), finishRepostEvent() (+14 more)
+Cohesion: 0.15
+Nodes (19): bytesToHex2(), createRumor(), createSeal(), createWrap(), encrypt2(), fastEventHash(), finalizeEvent(), finishReactionEvent() (+11 more)
 
 ### Community 8 - "NostrRelay"
 Cohesion: 0.07
@@ -138,8 +142,8 @@ Cohesion: 0.09
 Nodes (21): author, bugs, url, description, devDependencies, serve, homepage, keywords (+13 more)
 
 ### Community 10 - "encode"
-Cohesion: 0.21
-Nodes (16): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+8 more)
+Cohesion: 0.19
+Nodes (17): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+9 more)
 
 ### Community 11 - "remote-desktop-host/package.json"
 Cohesion: 0.14
@@ -154,8 +158,8 @@ Cohesion: 0.05
 Nodes (44): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 1. `webrtc-core.js` — PeerSession, 2. `nostr-crypto.js` — NostrCrypto, 3. `nostr-relay.js` — NostrRelay, 4. `nostr-transport.js` — NostrTransport, 5. `nostr-signaling.js` — NostrSignaling (+36 more)
 
 ### Community 15 - "bytes3"
-Cohesion: 0.13
-Nodes (22): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+14 more)
+Cohesion: 0.17
+Nodes (18): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+10 more)
 
 ### Community 16 - "serve-https.py"
 Cohesion: 0.17
@@ -176,10 +180,6 @@ Nodes (3): make_close_frame(), make_pong_frame(), read_ws_frame()
 ### Community 24 - "AGENTS.md — Developer & AI Agent Guide for P2P Connect"
 Cohesion: 0.08
 Nodes (26): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview & Philosophy, 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 2. Technology Stack & External Dependencies, 2. Zero-Build Philosophy, 3. Custom Antigravity Skill & Subagent, 3. Media Track Replacement vs Renegotiation (+18 more)
-
-### Community 25 - "test_two_peer_handshake.py"
-Cohesion: 0.13
-Nodes (3): analyze_file(), print_inbox(), QuietHTTPHandler
 
 ### Community 26 - "pathlib"
 Cohesion: 0.16
@@ -209,6 +209,10 @@ Nodes (13): 1. When to Use This Skill, 2. Test Architecture & Coverage, 2. `test
 Cohesion: 0.13
 Nodes (14): Architecture Overview, Connection Flow, Long-term (production infrastructure), Medium-term (minimal server), Module Responsibilities, P2P Connect — Architecture & Production Notes, Real-World Limitations of No-Signaling-Server Design, Risks of Manual Signaling (+6 more)
 
+### Community 41 - "verifyEvent"
+Cohesion: 0.14
+Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
+
 ### Community 43 - "P2P Connect — High-Level Design"
 Cohesion: 0.14
 Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4. Feature Set, 5. Security Model, 6. Technology Stack, 7. File Map, Key Properties (+5 more)
@@ -216,6 +220,10 @@ Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4.
 ### Community 47 - "P2P Connect — Architecture"
 Cohesion: 0.05
 Nodes (38): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 5. Security Model, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs (+30 more)
+
+### Community 49 - "2. Triage Procedure"
+Cohesion: 0.22
+Nodes (8): 1. When to Use This Skill, 2. Triage Procedure, Step 1: List and Inspect Inbox Contents, Step 2: Deep Package Diagnosis, Step 3: Codebase Cross-Referencing, Step 4: Propose Fix for Developer Review, Step 5: Implementation & Verification, Support Triage & Issue Resolution Skill
 
 ### Community 51 - "P2P Connect — Roadmap"
 Cohesion: 0.22
@@ -225,24 +233,28 @@ Nodes (8): 💡 Backlog / Ideas, P2P Connect — Roadmap, ✅ Phase 0: Foundatio
 Cohesion: 0.07
 Nodes (28): 1. Install & Start Service, 1. Install & Start Service, 1. Install via Batch Script (Recommended), 2. Manage the Service, 2. Manual Setup via PowerShell / Command Prompt, 2. Useful systemd Commands, 3. Manage & Check Status, 3. Uninstall (+20 more)
 
-### Community 54 - "handleNext"
-Cohesion: 0.18
-Nodes (11): getHex64(), getSubscriptionId(), handleNext(), matchEventId(), matchEventPubkey(), matchFilter(), matchFilters(), _onmessage() (+3 more)
+### Community 54 - "🚀 1. Recommended Triage Prompts"
+Cohesion: 0.25
+Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Operates, 📋 Developer Triage Prompt Guide, Full Autonomous Diagnosis & Fix Proposal, Inspect Screenshots & Visual Errors, Quick Triage & Summary (Everyday Check), Specific Client Investigation
 
 ### Community 55 - "createCipher"
 Cohesion: 0.40
 Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
 
+### Community 58 - "classifyKind"
+Cohesion: 0.40
+Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
+
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 416 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **27 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 429 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+  _High betweenness centrality (0.070) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
@@ -250,8 +262,8 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.051299060254284136 - nodes in this community are weakly interconnected._
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
-  _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08078431372549019 - nodes in this community are weakly interconnected._
 - **Should `update` be split into smaller, more focused modules?**
   _Cohesion score 0.11576354679802955 - nodes in this community are weakly interconnected._
