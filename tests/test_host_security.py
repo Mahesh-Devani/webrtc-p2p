@@ -137,6 +137,16 @@ class TestHostSecurity(unittest.TestCase):
         self.assertIn('bridgeConnectGeneration', content)
         self.assertIn('currentGen !== bridgeConnectGeneration', content)
 
+    def test_bridge_auto_reconnect_and_liveness_telemetry(self):
+        """host-controller.js must auto-reconnect to OS bridge and broadcast bridgeActive telemetry."""
+        content = (PROJECT_ROOT / 'host-controller.js').read_text(encoding='utf-8')
+
+        self.assertIn('scheduleBridgeReconnect', content)
+        self.assertIn('clearBridgeReconnectTimer', content)
+        self.assertIn('broadcastBridgeStatus', content)
+        self.assertIn('bridgeActive: bridgeConnected', content)
+        self.assertIn('bridgeActive: !!active', content)
+
 
 if __name__ == '__main__':
     unittest.main()

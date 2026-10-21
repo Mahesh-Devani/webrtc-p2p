@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792390387.1885643,
-    "seen": 1792390588.9162612,
-    "ast_hash": "99590395eb1596ebf18f19811dfaa483",
+    "mtime": 1792541225.39398,
+    "seen": 1792541528.787256,
+    "ast_hash": "7caa8fdf549b7b4a8c392a09238ec0c1",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792509846.2664967,
-    "seen": 1792509871.599895,
-    "ast_hash": "cfe8af494fd21e90cafc9702ee874375",
+    "mtime": 1792541402.586515,
+    "seen": 1792541528.7872782,
+    "ast_hash": "f84f21c31734f0fe300589fc55e373dc",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "tests/test_host_security.py": {
-    "mtime": 1792306720.2707758,
-    "seen": 1792306737.56321,
-    "ast_hash": "25c58c526e85a19e93248ced3e8d1dd3",
+    "mtime": 1792541507.2681534,
+    "seen": 1792541528.787274,
+    "ast_hash": "e62f91de31cb68518a7db347bb84df86",
     "semantic_hash": ""
   },
   "tests/test_invariants.py": {
@@ -246,15 +246,15 @@
     "semantic_hash": ""
   },
   "support-agent/ai-diagnostic-agent.py": {
-    "mtime": 1792509841.7754898,
-    "seen": 1792509871.5998871,
-    "ast_hash": "de894de72b0f110219fe087a298774ec",
+    "mtime": 1792541450.8902946,
+    "seen": 1792541528.7872682,
+    "ast_hash": "c77315d8d54d090d35f3cc489bcc3172",
     "semantic_hash": ""
   },
   "tests/test_diagnostics.py": {
-    "mtime": 1792503054.1462018,
-    "seen": 1792503103.277823,
-    "ast_hash": "29fb263d00dc39493a8a16da5acca3a0",
+    "mtime": 1792541520.2883048,
+    "seen": 1792541528.787274,
+    "ast_hash": "bcce67cb29b1e410d644ce130c950a27",
     "semantic_hash": ""
   },
   "support-agent/support-identity.example.json": {
@@ -264,9 +264,9 @@
     "semantic_hash": ""
   },
   "support-controller.js": {
-    "mtime": 1792331080.1557584,
-    "seen": 1792331451.0960598,
-    "ast_hash": "c3d96abb13d21bedbbcaa6c3003d9520",
+    "mtime": 1792541463.324763,
+    "seen": 1792541528.7872698,
+    "ast_hash": "fdb8a78789baed6ff7ca27149959cd2d",
     "semantic_hash": ""
   },
   "support.html": {

@@ -407,7 +407,164 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     }
   }
 
-  // ── AI Support Agent Dialogue Engine (Universal Client & Relay Fallback) ──
+  // ── AI Support Agent Dialogue & Diagnostics Engine ──
+  function runClientDiagnosticRules(pkg) {
+    const findings = [];
+    const rootCauses = [];
+    const recommendations = [];
+
+    const env = pkg?.environment || {};
+    const webrtc = pkg?.webrtc || {};
+    const relays = Array.isArray(pkg?.relays) ? pkg.relays : [];
+    const logs = Array.isArray(pkg?.recentLogs) ? pkg.recentLogs : [];
+    const meta = pkg?.meta || {};
+
+    const connState = webrtc.connectionState || 'unknown';
+    const iceState = webrtc.iceConnectionState || 'unknown';
+
+    // 1. Host Bridge Check
+    const bridgeState = meta.hostBridgeActive;
+    const isRdSession = meta.rdMode || !dom.callOverlay?.classList.contains('hidden');
+    const hasBridgeLogs = logs.some(l => (l.message || '').includes('[Host Bridge]') && ((l.message || '').includes('failed') || (l.message || '').includes('timeout') || (l.message || '').includes('Disconnected')));
+
+    if (bridgeState === false || (isRdSession && hasBridgeLogs && bridgeState !== true)) {
+      rootCauses.push('Host OS Native Bridge (bridge.py) is disconnected on port 9999. Control inputs cannot reach the OS (session is View-Only).');
+      findings.push({
+        category: 'Host Bridge',
+        level: 'ERROR',
+        message: 'Host OS Bridge daemon is offline or unreachable on ws://127.0.0.1:9999.'
+      });
+      recommendations.push('Run `python3 remote-desktop-host/bridge.py` on the host machine to re-enable remote control.');
+      recommendations.push('In the host dashboard (host.html), verify that the OS Bridge badge displays "Active".');
+    } else if (isRdSession && bridgeState === true) {
+      findings.push({
+        category: 'Host Bridge',
+        level: 'SUCCESS',
+        message: 'Host OS Bridge is connected and active on port 9999.'
+      });
+    }
+
+    // 2. WebRTC Connection State
+    if (connState === 'connected') {
+      findings.push({
+        category: 'WebRTC',
+        level: 'SUCCESS',
+        message: 'WebRTC PeerConnection is active and connected.'
+      });
+      if (webrtc.selectedCandidatePair) {
+        const rtt = webrtc.selectedCandidatePair.currentRoundTripTimeMs;
+        findings.push({
+          category: 'WebRTC',
+          level: 'INFO',
+          message: `Selected candidate pair RTT: ${rtt !== undefined ? rtt + 'ms' : 'active'}`
+        });
+      }
+    } else if (connState === 'failed' || connState === 'disconnected') {
+      rootCauses.push(`WebRTC connection state is "${connState}" (ICE: "${iceState}").`);
+      findings.push({
+        category: 'WebRTC',
+        level: 'ERROR',
+        message: `P2P direct channel dropped or failed to establish (${connState}).`
+      });
+      if (/iPhone|iPad|Android/i.test(env.userAgent || '')) {
+        recommendations.push('On mobile devices, avoid switching apps or locking the screen, which triggers RFC 7675 consent timeouts.');
+      }
+    } else if (connState === 'connecting') {
+      findings.push({
+        category: 'WebRTC',
+        level: 'WARN',
+        message: 'WebRTC handshake is in progress or stalled.'
+      });
+    }
+
+    // 3. ICE Candidate Distribution & Symmetric NAT
+    const localCands = Array.isArray(webrtc.localCandidates) ? webrtc.localCandidates : [];
+    const candTypes = localCands.map(c => c?.type).filter(Boolean);
+    const hasHost = candTypes.includes('host');
+    const hasSrflx = candTypes.includes('srflx');
+    const hasRelay = candTypes.includes('relay');
+
+    if (localCands.length > 0) {
+      findings.push({
+        category: 'NAT/ICE',
+        level: 'INFO',
+        message: `Candidates: host=${candTypes.filter(t => t === 'host').length}, srflx=${candTypes.filter(t => t === 'srflx').length}, relay=${candTypes.filter(t => t === 'relay').length}`
+      });
+      if (hasHost && !hasSrflx && !hasRelay) {
+        rootCauses.push('Only local host candidates gathered — no public STUN (srflx) or TURN (relay) candidates.');
+        recommendations.push('Configure a TURN server in Settings > Custom ICE Servers to traverse symmetric NAT.');
+      }
+    }
+
+    // 4. Nostr Relays
+    const connectedRelays = relays.filter(r => r.state === 'connected' || r.status === 'connected');
+    if (relays.length > 0 && connectedRelays.length === 0) {
+      rootCauses.push('All signaling Nostr relays are disconnected.');
+      findings.push({
+        category: 'Relays',
+        level: 'ERROR',
+        message: '0 of ' + relays.length + ' relays connected.'
+      });
+      recommendations.push('Check your internet connection or test alternative Nostr relays.');
+    } else if (relays.length > 0) {
+      findings.push({
+        category: 'Relays',
+        level: 'SUCCESS',
+        message: `${connectedRelays.length} of ${relays.length} signaling relays connected.`
+      });
+    }
+
+    // Overall Status
+    let overallStatus = 'HEALTHY';
+    if (rootCauses.length > 0 || connState === 'failed' || (relays.length > 0 && connectedRelays.length === 0)) {
+      overallStatus = 'CRITICAL';
+    } else if (connState === 'disconnected' || connState === 'connecting' || findings.some(f => f.level === 'WARN' || f.level === 'ERROR')) {
+      overallStatus = 'WARNING';
+    }
+
+    if (rootCauses.length === 0) {
+      rootCauses.push('No critical communication or WebRTC faults detected in telemetry.');
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('Session parameters and signaling pathways appear optimal.');
+    }
+
+    return {
+      overallStatus,
+      findings,
+      rootCauses,
+      recommendations,
+      generatedAt: pkg?.generatedAt || new Date().toISOString()
+    };
+  }
+
+  function formatAiDiagnosticReport(analysis, pkg) {
+    const statusIcon = analysis.overallStatus === 'HEALTHY' ? '🟢' : (analysis.overallStatus === 'WARNING' ? '⚠️' : '🚨');
+    const rootCausesList = (analysis.rootCauses || []).map(rc => `• ${rc}`).join('\n');
+    const recsList = (analysis.recommendations || []).map(r => `👉 ${r}`).join('\n');
+
+    const webrtcState = pkg?.webrtc?.connectionState || session?.getState?.() || 'unknown';
+    const iceState = pkg?.webrtc?.iceConnectionState || 'unknown';
+    const isRdLive = !dom.callOverlay?.classList.contains('hidden');
+    const bridgeStr = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Connected 🟢' : 'Disconnected 🔴') : 'Standby';
+
+    return `🤖 [AI Diagnostic Analysis Report]
+Status: ${statusIcon} ${analysis.overallStatus}
+
+📌 Identified Root Causes:
+${rootCausesList}
+
+📊 Telemetry Breakdown:
+• WebRTC Connection: \`${webrtcState}\` (ICE: \`${iceState}\`)
+• Remote Desktop: ${isRdLive ? (rdMode || 'active') : 'Inactive'} (OS Bridge: ${bridgeStr})
+• Discovered Candidates: host=${(pkg?.webrtc?.localCandidates || []).filter(c => c?.type === 'host').length}, STUN=${(pkg?.webrtc?.localCandidates || []).filter(c => c?.type === 'srflx').length}, TURN=${(pkg?.webrtc?.localCandidates || []).filter(c => c?.type === 'relay').length}
+
+💡 Recommended Actions:
+${recsList}
+
+(Advisory Mode: Your session telemetry has been analyzed).`;
+  }
+
   function analyzeUserSupportComment(userText) {
     const textLower = (userText || '').toLowerCase();
     const connState = session?.getState?.() || 'closed';
@@ -417,7 +574,29 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     let advice = '';
     let clarification = '';
 
-    if (/trackpad|direct mode|touch mode|mouse mode|cursor|virtual cursor|pointer lock|remote desktop|rd |input mode|click|tap|double finger|two finger|move screen|zoom|pinch|pan/.test(textLower)) {
+    if (/view only|view-only|control (is )?not working|cant click|cannot click|not clicking|clicks? not (working|registering)|mouse not (moving|clicking)|keyboard not (working|typing)|bridge|not responding/.test(textLower)) {
+      const bridgeStatus = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Connected 🟢' : 'Disconnected 🔴') : 'Standby / Offline ⚪';
+      advice = `Remote Desktop input control requires the host OS native bridge ('bridge.py' on port 9999) to inject clicks, touches, and keystrokes into the host operating system.
+
+Current Host OS Bridge State: ${bridgeStatus}
+${rdHostBridgeActive === false ? '⚠️ Your host OS bridge is currently disconnected. In this state, the session automatically protects host integrity by running in View-Only mode, and mouse/touch clicks cannot be executed.' : ''}
+
+To restore interactive control:
+1. On the host computer, ensure the bridge daemon is running:
+   python3 remote-desktop-host/bridge.py
+2. On the Host Web Dashboard (host.html), verify that the OS Bridge status badge displays "Active".
+3. Once the bridge reconnects, interactive mouse, keyboard, and touch control will resume automatically.`;
+      clarification = `Is python3 bridge.py running on the host computer? Does the Host dashboard show the Bridge badge as 'Active'?`;
+    } else if (/diagnostic|logpkg|log package|telemetry|report|logs/.test(textLower)) {
+      const bridgeStr = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Active 🟢' : 'Disconnected 🔴') : 'Standby';
+      advice = `I am continuously monitoring your local WebRTC connection, ICE candidates, and relay telemetry:
+• WebRTC Connection: ${connState}
+• Remote Desktop Mode: ${isRdLive ? (rdMode || 'active') : 'inactive'}
+• Host Bridge: ${bridgeStr}
+• Discovered Candidates: STUN/TURN traversal active.
+You can click '📋 Send Diag' in the chat anytime to run a complete automated health analysis.`;
+      clarification = `Would you like me to analyze a specific connection drop or remote desktop symptom?`;
+    } else if (/trackpad|direct mode|touch mode|mouse mode|cursor|virtual cursor|pointer lock|remote desktop|rd |input mode|click|tap|double finger|two finger|move screen|zoom|pinch|pan/.test(textLower)) {
       advice = `P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:
 • Touch Mode / Direct Mode (👆): Direct tap instantly clicks; double-tap double-clicks; touch & drag moves windows/selects text; long-press (500ms) right-clicks.
 • Trackpad Mode (🖱️): The screen acts as a relative laptop touchpad, gliding the precision point cursor; 1-finger tap clicks; 2-finger tap right-clicks; 2-finger drag scrolls.
@@ -2162,6 +2341,8 @@ ${clarification}
   let rdFitMode = 'contain'; // 'contain' | 'fill' | 'cover'
   let rdKeyboardLocked = false;
   let rdControlGranted = false;
+  let rdHostBridgeActive = null;
+  let lastBridgeWarningToastTime = 0;
   let rdRemoteLaserTimer = null;
   let localBridgeWs = null;
   let bridgeConnected = false;
@@ -2327,6 +2508,13 @@ ${clarification}
 
   function sendRdInput(evt) {
     if (session && typeof session.sendInput === 'function') {
+      if (rdHostBridgeActive === false && evt && (evt.t === 'click' || evt.t === 'mouse_down' || evt.t === 'key_down')) {
+        const now = Date.now();
+        if (now - lastBridgeWarningToastTime > 5000) {
+          lastBridgeWarningToastTime = now;
+          toast('⚠️ Host OS Bridge is offline — remote control inputs cannot be injected. Run bridge.py on host.', 'warn');
+        }
+      }
       return session.sendInput(evt);
     }
     return false;
@@ -2336,9 +2524,20 @@ ${clarification}
     if (!evt || !evt.t) return;
 
     if (evt.t === 'host_status') {
+      if (typeof evt.bridgeActive === 'boolean') {
+        const prevBridge = rdHostBridgeActive;
+        rdHostBridgeActive = evt.bridgeActive;
+        if (prevBridge !== null && prevBridge !== rdHostBridgeActive) {
+          if (rdHostBridgeActive) {
+            toast('🟢 Host OS Bridge connected! Mouse & keyboard control active.');
+          } else {
+            toast('⚠️ Host OS Bridge disconnected — session is currently view-only.', 'warn');
+          }
+        }
+      }
       if (evt.warning) {
         toast(evt.warning, 'warn');
-        if (dom.remoteNoVideo) {
+        if (dom.remoteNoVideo && evt.hasVideo === false) {
           dom.remoteNoVideo.innerHTML = `
             <div style="text-align:center;max-width:340px;line-height:1.5;padding:16px;">
               <div style="font-size:2rem;margin-bottom:8px;">⚠️</div>
@@ -2349,7 +2548,7 @@ ${clarification}
           show(dom.remoteNoVideo);
         }
       } else {
-        if (dom.remoteNoVideo) {
+        if (dom.remoteNoVideo && evt.hasVideo !== false) {
           dom.remoteNoVideo.textContent = 'Waiting for peer video…';
         }
       }
@@ -2379,7 +2578,14 @@ ${clarification}
 
     if (evt.t === 'control_granted') {
       rdControlGranted = true;
-      toast('Remote control granted! You can now control the peer screen.');
+      if (typeof evt.bridgeActive === 'boolean') {
+        rdHostBridgeActive = evt.bridgeActive;
+      }
+      if (rdHostBridgeActive === false) {
+        toast('Remote control granted, but Host OS Bridge is disconnected (view-only). Run bridge.py on host.', 'warn');
+      } else {
+        toast('Remote control granted! You can now control the peer screen.');
+      }
       setRdMode('control');
       return;
     }
@@ -5366,12 +5572,22 @@ ${clarification}
 
   dom.btnSendAiAgent?.addEventListener('click', async () => {
     try {
-      toast('Transmitting diagnostics to AI Support Agent…');
+      toast('Analyzing diagnostics with AI Support Agent…');
       const pkg = await DiagnosticLogger.generateLogPackage({
         session,
         remotePubKey: activeContactPubkey,
-        relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : []
+        relayList: NostrTransport.getRelayStates ? NostrTransport.getRelayStates() : [],
+        extra: {
+          activeContact: activeContactPubkey,
+          appName: 'P2P Connect',
+          rdMode,
+          rdControlGranted,
+          hostBridgeActive: typeof rdHostBridgeActive === 'boolean' ? rdHostBridgeActive : null,
+          isHostStreamLive: isHostStreamLive ? isHostStreamLive() : false
+        }
       });
+
+      let analysisResult = null;
 
       // 1. Try local HTTP endpoint on http://127.0.0.1:9998/api/logpkg (fast 600ms probe)
       let sentLocal = false;
@@ -5387,87 +5603,87 @@ ${clarification}
         clearTimeout(probeTimer);
         if (resp.ok) {
           const result = await resp.json();
-          const status = result.analysis?.overallStatus || 'Analyzed';
-          toast(`AI Agent: ${status}! Check terminal suggestions.`);
-          DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested locally:', JSON.stringify(result.analysis?.rootCauses || [])]);
+          analysisResult = result.analysis;
+          DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested locally:', JSON.stringify(analysisResult?.rootCauses || [])]);
           updateDiagnosticsDashboard();
           sentLocal = true;
         }
       } catch {
-        // Local server not reachable — proceed to Nostr remote transmission
+        // Local server not reachable — proceed to Nostr / client engine
       }
 
-      if (sentLocal) {
-        ensureSupportAgentContact();
-        openChat(SUPPORT_AGENT_PUBKEY);
-        hide(dom.diagnosticsModal);
-        return;
-      }
-
-      // 2. Remote User: Transmit over Nostr relays directly to SUPPORT_AGENT_PUBKEY!
+      // 2. Remote User: Transmit over Nostr relays directly to SUPPORT_AGENT_PUBKEY
       if (nostrIdentity && NostrTransport.isConnected()) {
-        toast('Transmitting encrypted diagnostics to AI Support Agent over Nostr…');
+        try {
+          // Quota protection: prune to essential diagnostic telemetry only (< 2 KB)
+          const prunedPkg = {
+            app: pkg.app,
+            version: pkg.version,
+            generatedAt: pkg.generatedAt,
+            identity: pkg.identity,
+            environment: {
+              platform: pkg.environment?.platform,
+              online: pkg.environment?.online,
+              effectiveType: pkg.environment?.connection?.effectiveType,
+            },
+            meta: pkg.meta,
+            relays: pkg.relays,
+            webrtc: {
+              status: pkg.webrtc?.status,
+              connectionState: pkg.webrtc?.connectionState,
+              iceConnectionState: pkg.webrtc?.iceConnectionState,
+              selectedCandidatePair: pkg.webrtc?.selectedCandidatePair,
+              localCandidates: (pkg.webrtc?.localCandidates || []).slice(0, 8),
+            },
+            recentLogs: (pkg.recentLogs || [])
+              .filter(l => l.level === 'error' || l.level === 'warn')
+              .slice(-15),
+          };
 
-        // Quota protection: prune to essential diagnostic telemetry only (< 2 KB)
-        const prunedPkg = {
-          app: pkg.app,
-          version: pkg.version,
-          generatedAt: pkg.generatedAt,
-          identity: pkg.identity,
-          environment: {
-            platform: pkg.environment?.platform,
-            online: pkg.environment?.online,
-            effectiveType: pkg.environment?.connection?.effectiveType,
-          },
-          relays: pkg.relays,
-          webrtc: {
-            status: pkg.webrtc?.status,
-            connectionState: pkg.webrtc?.connectionState,
-            iceConnectionState: pkg.webrtc?.iceConnectionState,
-            selectedCandidatePair: pkg.webrtc?.selectedCandidatePair,
-          },
-          recentLogs: (pkg.recentLogs || [])
-            .filter(l => l.level === 'error' || l.level === 'warn')
-            .slice(-15),
-        };
+          const jsonStr = JSON.stringify(prunedPkg);
+          const compressedBytes = pako.deflate(new TextEncoder().encode(jsonStr), { level: 9 });
+          const binary = String.fromCharCode.apply(null, compressedBytes);
+          const b64Compressed = btoa(binary);
 
-        // Compress pruned payload with pako deflate
-        const jsonStr = JSON.stringify(prunedPkg);
-        const compressedBytes = pako.deflate(new TextEncoder().encode(jsonStr), { level: 9 });
-        const binary = String.fromCharCode.apply(null, compressedBytes);
-        const b64Compressed = btoa(binary);
-
-        await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
-          type: 'diagnostic_logpkg',
-          session: 'diag-' + Date.now(),
-          data: b64Compressed,
-        });
-
-        toast('Encrypted diagnostics transmitted to AI Support Agent! ⚡');
-        DiagnosticLogger.record('info', ['[AI Support Agent] Pruned diagnostics sent over Nostr to', SUPPORT_AGENT_PUBKEY]);
-
-        // Auto-open chat conversation with AI Support Agent
-        ensureSupportAgentContact();
-        openChat(SUPPORT_AGENT_PUBKEY);
-        hide(dom.diagnosticsModal);
-
-        // Record a diagnostic card bubble in the chat store
-        const diagMsg = {
-          id: 'diag-sub-' + Date.now(),
-          text: `📋 Diagnostic Log Package transmitted (Status: ${pkg.webrtc?.connectionState || 'evaluating'}). Awaiting AI review…`,
-          sender: 'self',
-          ts: Date.now(),
-          status: 'sent',
-          type: 'text'
-        };
-        ChatStore.addMessage(SUPPORT_AGENT_PUBKEY, diagMsg);
-        appendChatBubble(diagMsg);
-        return;
+          await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+            type: 'diagnostic_logpkg',
+            session: 'diag-' + Date.now(),
+            data: b64Compressed,
+          });
+          DiagnosticLogger.record('info', ['[AI Support Agent] Pruned diagnostics sent over Nostr to', SUPPORT_AGENT_PUBKEY]);
+        } catch (nostrErr) {
+          console.warn('[AI Support Agent] Nostr relay transmission non-fatal error:', nostrErr);
+        }
       }
 
-      // 3. Fallback: prompt user to download file
-      toast('Nostr not connected. Downloading logpkg instead…');
-      DiagnosticLogger.downloadLogPackage(pkg);
+      // 3. Guarantee immediate, responsive AI analysis delivered in chat!
+      if (!analysisResult) {
+        analysisResult = runClientDiagnosticRules(pkg);
+      }
+      const reportMarkdown = formatAiDiagnosticReport(analysisResult, pkg);
+
+      ensureSupportAgentContact();
+      openChat(SUPPORT_AGENT_PUBKEY);
+      hide(dom.diagnosticsModal);
+
+      // Record user's diagnostic submission card in chat
+      const diagMsg = {
+        id: 'diag-sub-' + Date.now(),
+        text: `📋 Diagnostic Log Package submitted (Status: ${pkg.webrtc?.connectionState || 'evaluating'}).`,
+        sender: 'self',
+        ts: Date.now(),
+        status: 'delivered',
+        type: 'text'
+      };
+      ChatStore.addMessage(SUPPORT_AGENT_PUBKEY, diagMsg);
+      appendChatBubble(diagMsg);
+
+      // Deliver AI Support Agent's rich diagnostic report directly into conversation
+      setTimeout(() => {
+        deliverAiSupportMessage(reportMarkdown);
+      }, 450);
+
+      toast(`AI Support Agent: ${analysisResult.overallStatus} report delivered to chat!`);
     } catch (err) {
       console.error('Diagnostic transmission failed:', err);
       toast('Transmission failed: ' + err.message);

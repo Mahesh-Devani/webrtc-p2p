@@ -426,6 +426,41 @@ function escapeHtml(s) {
 
 // ── 2. Local OS Bridge Connection (ws://127.0.0.1:9999 / wss://:9998) ─
 let bridgeConnectGeneration = 0;
+let bridgeReconnectTimer = null;
+let bridgeReconnectDelay = 2000;
+
+function clearBridgeReconnectTimer() {
+  if (bridgeReconnectTimer) {
+    clearTimeout(bridgeReconnectTimer);
+    bridgeReconnectTimer = null;
+  }
+}
+
+function scheduleBridgeReconnect(immediate = false) {
+  clearBridgeReconnectTimer();
+  const delay = immediate ? 50 : bridgeReconnectDelay;
+  bridgeReconnectTimer = setTimeout(() => {
+    bridgeReconnectTimer = null;
+    console.log(`[Host Bridge] Auto-reconnecting to OS bridge (delay: ${delay}ms)...`);
+    connectBridge(false);
+  }, delay);
+  if (!immediate) {
+    bridgeReconnectDelay = Math.min(Math.round(bridgeReconnectDelay * 1.5), 15000);
+  }
+}
+
+function broadcastBridgeStatus(active) {
+  if (activeSession && typeof activeSession.sendInput === 'function') {
+    try {
+      activeSession.sendInput({
+        t: 'host_status',
+        bridgeActive: !!active,
+        hasVideo: isHostStreamLive(),
+        warning: active ? null : 'Host OS Bridge disconnected — input control paused (view-only).'
+      });
+    } catch {}
+  }
+}
 
 function getCandidateBridgeUrls() {
   const isHttps = window.location.protocol === 'https:';
@@ -453,6 +488,10 @@ function getCandidateBridgeUrls() {
 }
 
 function connectBridge(force = false) {
+  if (force) {
+    clearBridgeReconnectTimer();
+    bridgeReconnectDelay = 2000;
+  }
   if (!force && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) return;
 
   const currentGen = ++bridgeConnectGeneration;
@@ -484,11 +523,13 @@ function connectBridge(force = false) {
     if (attemptIdx >= urlsToTry.length) {
       bridgeConnected = false;
       bridgeWs = null;
+      broadcastBridgeStatus(false);
       if (dom.hostBridgePill) {
         dom.hostBridgePill.className = 'badge badge--failed';
         dom.hostBridgePill.textContent = 'Not Running (run bridge.py)';
       }
       document.getElementById('bridge-setup-details')?.setAttribute('open', '');
+      scheduleBridgeReconnect();
       return;
     }
 
@@ -533,6 +574,8 @@ function connectBridge(force = false) {
         }
         settled = true;
         cleanup();
+        clearBridgeReconnectTimer();
+        bridgeReconnectDelay = 2000;
         bridgeWs = ws;
         bridgeConnected = true;
         console.log(`[Host Bridge] Successfully connected to: ${currentUrl}`);
@@ -541,6 +584,7 @@ function connectBridge(force = false) {
           dom.hostBridgePill.textContent = 'Active';
         }
         document.getElementById('bridge-setup-details')?.removeAttribute('open');
+        broadcastBridgeStatus(true);
       };
 
       ws.onmessage = (evt) => {
@@ -549,11 +593,14 @@ function connectBridge(force = false) {
           const msg = JSON.parse(evt.data);
           if (msg.t === 'connected' || msg.t === 'auth_ok') {
             bridgeConnected = true;
+            clearBridgeReconnectTimer();
+            bridgeReconnectDelay = 2000;
             if (dom.hostBridgePill) {
               dom.hostBridgePill.className = 'badge badge--connected';
               dom.hostBridgePill.textContent = 'Active';
             }
             document.getElementById('bridge-setup-details')?.removeAttribute('open');
+            broadcastBridgeStatus(true);
           }
           if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors')) {
             try { activeSession.sendInput(msg); } catch {}
@@ -568,10 +615,12 @@ function connectBridge(force = false) {
           // The winning active socket was disconnected
           bridgeConnected = false;
           bridgeWs = null;
+          broadcastBridgeStatus(false);
           if (dom.hostBridgePill) {
             dom.hostBridgePill.className = 'badge badge--idle';
-            dom.hostBridgePill.textContent = 'Disconnected (click Retry)';
+            dom.hostBridgePill.textContent = 'Disconnected (auto-reconnecting...)';
           }
+          scheduleBridgeReconnect();
         } else if (!bridgeConnected) {
           // Probe failed, advance to next candidate
           advance();
@@ -1007,8 +1056,24 @@ async function initSignaling() {
               }
               return;
             }
+            if (evt.t === 'control_request') {
+              if (!bridgeConnected || !bridgeWs || bridgeWs.readyState !== WebSocket.OPEN) {
+                connectBridge(false);
+              }
+              peerSession.sendInput({
+                t: 'control_granted',
+                hostName: dom.hostNameInput?.value?.trim() || 'Remote Host',
+                hasVideo: isHostStreamLive(),
+                bridgeActive: bridgeConnected
+              });
+              return;
+            }
             if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
               try { bridgeWs.send(JSON.stringify(evt)); } catch {}
+            } else {
+              if (!bridgeConnected && !bridgeReconnectTimer) {
+                scheduleBridgeReconnect(true);
+              }
             }
           },
           onCallEnded: () => {
@@ -1024,23 +1089,34 @@ async function initSignaling() {
           onChannelOpen: () => {
             console.log('[Host] P2P Connected with remote controller!');
 
+            // Proactively ensure bridge is connected or connecting
+            if (!bridgeConnected || !bridgeWs || bridgeWs.readyState !== WebSocket.OPEN) {
+              console.log('[Host] Remote client connected while bridge disconnected; attempting immediate bridge reconnect...');
+              connectBridge(false);
+            }
+
             // Automatically grant control to the authorized client!
             peerSession.sendInput({
               t: 'control_granted',
               hostName: dom.hostNameInput?.value?.trim() || 'Remote Host',
-              hasVideo: isHostStreamLive()
+              hasVideo: isHostStreamLive(),
+              bridgeActive: bridgeConnected
             });
 
             // If screen capture is not active, alert the controller
             if (!isHostStreamLive()) {
               peerSession.sendInput({
                 t: 'host_status',
+                bridgeActive: bridgeConnected,
+                hasVideo: false,
                 warning: 'Host screen capture is not active. Click "Start Desktop Capture" on the host computer.'
               });
             } else {
               peerSession.sendInput({
                 t: 'host_status',
-                warning: ''
+                bridgeActive: bridgeConnected,
+                hasVideo: true,
+                warning: !bridgeConnected ? 'Host OS Bridge is disconnected — input control is paused (view-only).' : ''
               });
             }
 

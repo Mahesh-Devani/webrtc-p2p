@@ -166,6 +166,31 @@ class DiagnosticEngine:
                 'message': 'Mobile browser environment detected. Background tab suspension may induce transient ICE consent timeouts.'
             })
 
+        # 6. Remote Desktop & Host OS Bridge Checks
+        meta = pkg.get('meta', {})
+        bridge_active = meta.get('hostBridgeActive')
+        is_rd = meta.get('rdMode') or any('rd' in str(l.get('message', '')).lower() for l in logs)
+        has_bridge_error = any(
+            '[Host Bridge]' in l.get('message', '') and any(w in l.get('message', '').lower() for w in ['failed', 'timeout', 'disconnected', 'not running'])
+            for l in logs
+        )
+
+        if bridge_active is False or (is_rd and has_bridge_error and bridge_active is not True):
+            root_causes.append('Host OS Bridge (bridge.py on port 9999) is disconnected. Remote Desktop control inputs cannot be injected (session is view-only).')
+            findings.append({
+                'category': 'Host Bridge',
+                'level': 'ERROR',
+                'message': 'Host OS Bridge daemon is offline or unreachable on ws://127.0.0.1:9999.'
+            })
+            recommendations.append('Run `python3 remote-desktop-host/bridge.py` on the host computer to restore input control.')
+            recommendations.append('Check host dashboard (host.html) to verify OS Bridge badge displays "Active".')
+        elif is_rd and bridge_active is True:
+            findings.append({
+                'category': 'Host Bridge',
+                'level': 'SUCCESS',
+                'message': 'Host OS Bridge is connected and active on port 9999.'
+            })
+
         # Overall Status
         if any(f['level'] == 'ERROR' for f in findings):
             overall_status = 'CRITICAL'
@@ -173,6 +198,22 @@ class DiagnosticEngine:
             overall_status = 'WARNING'
         else:
             overall_status = 'HEALTHY'
+
+        status_icon = '🟢' if overall_status == 'HEALTHY' else ('⚠️' if overall_status == 'WARNING' else '🚨')
+        root_causes_text = '\n'.join(f'• {rc}' for rc in (root_causes if root_causes else ['None identified — communication paths look normal.']))
+        recs_text = '\n'.join(f'👉 {r}' for r in (recommendations if recommendations else ['Communication parameters appear configured correctly.']))
+
+        markdown_report = (
+            f"🤖 [AI Diagnostic Analysis Report]\n"
+            f"Status: {status_icon} {overall_status}\n\n"
+            f"📌 Identified Root Causes:\n{root_causes_text}\n\n"
+            f"📊 Telemetry Breakdown:\n"
+            f"• WebRTC Connection: `{conn_state}` (ICE: `{ice_state}`)\n"
+            f"• Discovered Candidates: host={cand_types.count('host')}, STUN={cand_types.count('srflx')}, TURN={cand_types.count('relay')}\n"
+            f"• Signaling Relays: {len(connected_relays)} of {len(relays)} connected\n\n"
+            f"💡 Recommended Actions:\n{recs_text}\n\n"
+            f"(Advisory Mode: Your session telemetry has been analyzed)."
+        )
 
         return {
             'timestamp': time.time(),
@@ -182,6 +223,7 @@ class DiagnosticEngine:
             'rootCauses': root_causes if root_causes else ['None identified — communication paths look normal.'],
             'findings': findings,
             'recommendations': recommendations if recommendations else ['Communication parameters appear configured correctly.'],
+            'markdownReport': markdown_report,
             'clientPubKey': identity.get('clientPubKey'),
             'targetPubKey': identity.get('targetPubKey'),
         }
@@ -259,7 +301,40 @@ class DiagnosticEngine:
             clarification = "Did your browser display a camera/microphone permission prompt? Does an audio call work between you?"
             dev_suggestions.append("Media track negotiation reported. Check transceiver directions and camera hardware permissions.")
 
-        # 4. Remote Desktop Input Modes & Touch Gestures
+        # 4. View-Only Mode / Remote Control Not Working / Host Bridge Disconnection
+        elif any(k in text_lower for k in [
+            'view only', 'view-only', 'control is not working', 'control not working',
+            'cant click', 'cannot click', 'not clicking', 'clicks not', 'mouse not',
+            'keyboard not', 'bridge', 'not responding'
+        ]):
+            is_bridge_down = (pkg and pkg.get('meta', {}).get('hostBridgeActive') is False)
+            bridge_status = "Disconnected 🔴" if is_bridge_down else "Offline or Standby ⚪"
+            advice = (
+                "Remote Desktop input control requires the host OS native bridge ('bridge.py' on port 9999) "
+                "to inject mouse clicks, touch taps, and keystrokes into the host operating system.\n\n"
+                f"Host OS Bridge State: {bridge_status}\n"
+                "When the host bridge is not connected, the session automatically protects host integrity by running in View-Only mode.\n\n"
+                "To restore remote control:\n"
+                "1. On the host computer, start the bridge: python3 remote-desktop-host/bridge.py\n"
+                "2. Check that the 'Host Bridge' badge on host.html displays 'Active'.\n"
+                "3. Once connected, clicks and keystrokes will immediately be injected into the remote OS."
+            )
+            clarification = "Is python3 bridge.py running on the host machine? Does the host page badge show 'Active'?"
+            dev_suggestions.append("Remote Desktop view-only / control report. Verify bridge.py auto-reconnect and WebSocket port 9999 reachability.")
+
+        # 5. Diagnostic Logpkg / Status
+        elif any(k in text_lower for k in ['diagnostic', 'logpkg', 'log package', 'telemetry', 'report', 'logs']):
+            advice = (
+                f"I am actively monitoring your connection and session telemetry (Overall Status: {overall_status}).\n"
+                f"• WebRTC: {webrtc.get('connectionState', 'standby')} (ICE: {webrtc.get('iceConnectionState', 'standby')})\n"
+                f"• Discovered Candidates: host={cand_types.count('host')}, STUN={cand_types.count('srflx')}, TURN={cand_types.count('relay')}\n"
+                f"• Relays: {len([r for r in relays if r.get('state') == 'connected'])} of {len(relays)} connected.\n"
+                "You can click '📋 Send Diag' in the chat anytime to run a full diagnostic analysis."
+            )
+            clarification = "Would you like me to analyze a specific connection drop or remote desktop symptom?"
+            dev_suggestions.append("Diagnostic telemetry status requested. Provided summary of live parameters.")
+
+        # 6. Remote Desktop Input Modes & Touch Gestures
         elif any(k in text_lower for k in [
             'trackpad', 'direct mode', 'touch mode', 'mouse mode', 'cursor',
             'virtual cursor', 'pointer lock', 'remote desktop', 'rd control',

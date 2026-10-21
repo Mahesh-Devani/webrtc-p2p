@@ -201,10 +201,25 @@ export const SupportController = (() => {
 
     // Fallback client-side analysis if Python engine is not currently running
     if (!analysis) {
+      const isBridgeDown = pkg.meta?.hostBridgeActive === false;
+      const rootCauses = [];
+      const recs = [];
+      if (isBridgeDown) {
+        rootCauses.push('Host OS Bridge (bridge.py) is disconnected on port 9999 (session is View-Only).');
+        recs.push('Run python3 remote-desktop-host/bridge.py on the host computer to restore input control.');
+      }
+      if (pkg.webrtc?.connectionState === 'failed') {
+        rootCauses.push('WebRTC connection state is "failed". Symmetric NAT or enterprise firewall blocking direct P2P.');
+        recs.push('Configure a TURN server under Settings > Custom ICE Servers.');
+      }
+      if (rootCauses.length === 0) {
+        rootCauses.push('Communication parameters and signaling telemetry appear normal.');
+        recs.push('Keep browser tab active to maintain WebRTC ICE consent freshness.');
+      }
       analysis = {
-        overallStatus: (pkg.webrtc?.connectionState === 'failed' || pkg.recentLogs?.length > 0) ? 'WARNING' : 'HEALTHY',
-        rootCauses: ['Diagnostic package received over Nostr; local Python engine offline.'],
-        recommendations: ['Run python3 support-agent/ai-diagnostic-agent.py to enable local rules engine.'],
+        overallStatus: rootCauses.some(rc => rc.includes('failed') || rc.includes('disconnected')) ? 'WARNING' : 'HEALTHY',
+        rootCauses,
+        recommendations: recs,
       };
     }
 

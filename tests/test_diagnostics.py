@@ -215,6 +215,46 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('chat-msg--diag-card', ui_content, "chat-msg--diag-card missing in ui-controller.js")
         self.assertIn('session.sendFile', ui_content, "session.sendFile missing for screenshot transfer")
 
+    def test_ai_agent_host_bridge_rule(self):
+        """DiagnosticEngine must flag Host Bridge disconnection when hostBridgeActive is false."""
+        mock_pkg = {
+            'generatedAt': '2026-10-18T12:00:00Z',
+            'version': 'v7',
+            'webrtc': {'connectionState': 'connected'},
+            'relays': [{'url': 'wss://relay.primal.net', 'state': 'connected'}],
+            'meta': {'hostBridgeActive': False, 'rdMode': 'control'},
+            'recentLogs': [],
+            'identity': {'clientPubKey': 'aabbcc112233'}
+        }
+        analysis = DiagnosticEngine.analyze(mock_pkg)
+        root_causes_str = ' '.join(analysis['rootCauses']).lower()
+        self.assertIn('host os bridge', root_causes_str)
+        self.assertIn('view-only', root_causes_str)
+
+    def test_ai_agent_view_only_comment_analysis(self):
+        """DiagnosticEngine.analyze_comment must handle view-only and control-not-working queries."""
+        mock_pkg = {
+            'generatedAt': '2026-10-18T12:00:00Z',
+            'version': 'v7',
+            'webrtc': {'connectionState': 'connected'},
+            'relays': [{'url': 'wss://relay.primal.net', 'state': 'connected'}],
+            'meta': {'hostBridgeActive': False, 'rdMode': 'control'},
+            'recentLogs': [],
+            'identity': {'clientPubKey': 'aabbcc112233'}
+        }
+        res = DiagnosticEngine.analyze_comment("Control is not working on rd session, it has become view only", "aabbcc112233", mock_pkg)
+        self.assertTrue(res['success'])
+        self.assertIn('bridge', res['reply'].lower())
+        self.assertIn('view-only', res['reply'].lower())
+
+    def test_ui_controller_in_app_diagnostic_reporting(self):
+        """ui-controller.js must define runClientDiagnosticRules, formatAiDiagnosticReport, and deliver AI diagnostic messages."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('function runClientDiagnosticRules', ui_content)
+        self.assertIn('function formatAiDiagnosticReport', ui_content)
+        self.assertIn('deliverAiSupportMessage', ui_content)
+        self.assertIn('rdHostBridgeActive', ui_content)
+
 
 if __name__ == '__main__':
     unittest.main()
