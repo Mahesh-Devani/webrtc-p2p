@@ -272,6 +272,38 @@ class DiagnosticEngine:
         all_relays_down = len(relays) > 0 and all(r.get('state') != 'connected' and r.get('status') != 'connected' for r in relays)
         session_failed = any('failed to start session' in l.get('message', '').lower() for l in logs)
 
+        # Check if GEMINI_API_KEY is configured in environment for true LLM reasoning
+        gemini_api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+        if gemini_api_key:
+            try:
+                import urllib.request
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+                prompt = (
+                    f"You are the expert technical AI Support Agent for P2P Connect (browser WebRTC P2P app with Remote Desktop and Nostr signaling).\n"
+                    f"Telemetry: Overall Status={overall_status}, Root Causes={analysis.get('rootCauses')}, Relays={len(relays)}.\n"
+                    f"User message: {text}\n"
+                    f"Respond concisely with root cause and actionable steps. End with '❓ Clarification Question: <question>'."
+                )
+                payload = json.dumps({
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.3, "maxOutputTokens": 600}
+                }).encode('utf-8')
+                req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    res_json = json.loads(response.read().decode('utf-8'))
+                    gemini_text = res_json.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                    if gemini_text:
+                        return {
+                            'success': True,
+                            'overallStatus': overall_status,
+                            'reply': f"🤖 [AI Support Agent Response]\nStatus: {overall_status}\n\n{gemini_text.strip()}\n\n(AI Powered via Gemini LLM)",
+                            'clarification': '',
+                            'advice': gemini_text.strip(),
+                            'developerSuggestions': [f"Gemini LLM response delivered for user query: {text[:50]}"],
+                        }
+            except Exception as e:
+                print(f"[AI Support Agent] Gemini call error: {e}")
+
         # Keyword matching & context-aware dialogue
         # 1. Screenshot / Image
         if any(k in text_lower for k in ['screenshot', 'image', 'photo', 'picture']):
@@ -334,10 +366,28 @@ class DiagnosticEngine:
             clarification = "Would you like me to analyze a specific connection drop or remote desktop symptom?"
             dev_suggestions.append("Diagnostic telemetry status requested. Provided summary of live parameters.")
 
-        # 6. Remote Desktop Input Modes & Touch Gestures
+        # 6. Remote Desktop Connection History & Standby Status
+        elif any(k in text_lower for k in [
+            'never connected', 'last connected', 'connection time', 'shows as never',
+            'standby', 'no screen', 'my computer', 'remote desktop shows'
+        ]):
+            advice = (
+                "Regarding Remote Desktop Connection History & Host Status Badges:\n\n"
+                "1. 'Never connected':\n"
+                "This timestamp displays the duration and relative time since your last completed Remote Desktop session. "
+                "When you establish a connection to your host and disconnect, it updates to show e.g. 'Connected 5m ago (Duration: 12m 4s)'. "
+                "If you connected earlier, session timestamps have now been synchronized to ensure all session starts and ends are persisted in local storage.\n\n"
+                "2. 'Standby (No Screen)':\n"
+                "This indicates that Nostr signaling and network pings between client and host are operational, but desktop screen capture is not currently active on the host PC. "
+                "On the host computer, open host.html and click 'Start Desktop Capture' to share the screen. Once sharing begins, the badge will switch to '🟢 Online (Capture Active)'."
+            )
+            clarification = "Is desktop screen capture currently running on your host computer (host.html)?"
+            dev_suggestions.append("User inquired about 'Never connected' or 'Standby (No Screen)' status. Provided explanation of host capture lifecycle and session timestamp persistence.")
+
+        # 7. Remote Desktop Input Modes & Touch Gestures
         elif any(k in text_lower for k in [
             'trackpad', 'direct mode', 'touch mode', 'mouse mode', 'cursor',
-            'virtual cursor', 'pointer lock', 'remote desktop', 'rd control',
+            'virtual cursor', 'pointer lock', 'rd control',
             'input mode', 'click', 'tapping', 'double finger', 'two finger',
             'move screen', 'zoom', 'pinch', 'pan'
         ]):

@@ -267,6 +267,32 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('remotePubKey === SUPPORT_AGENT_PUBKEY', ui_content)
         self.assertIn('/api/screenshot', ui_content)
 
+    def test_remote_desktop_session_timestamp_persistence(self):
+        """ui-controller.js must record rdSessionStart and rdSessionEnd with lastConnected and lastDuration."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('function recordRdSessionStart', ui_content)
+        self.assertIn('function recordRdSessionEnd', ui_content)
+        self.assertIn('dev.lastConnected = Date.now()', ui_content)
+        self.assertIn('dev.lastDuration = durationSec', ui_content)
+
+    def test_support_agent_remote_desktop_status_handling(self):
+        """DiagnosticEngine and ui-controller.js must recognize 'never connected' and 'standby' queries."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('never connected', ui_content)
+        self.assertIn('gemini-api-key', ui_content)
+        
+        # Python DiagnosticEngine check
+        res = DiagnosticEngine.analyze_comment("Under my remote desktops, for my computer it wrongly shows as never connected", "aabbcc112233")
+        self.assertTrue(res['success'])
+        self.assertIn('never connected', res['reply'].lower())
+        self.assertIn('standby (no screen)', res['reply'].lower())
+
+    def test_diagnostic_bubble_no_duplicate_clarification(self):
+        """formatDiagnosticBubbleHtml must not duplicate the clarification question in the advice body."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn('clarIdx !== -1', ui_content)
+        self.assertIn('textWithoutClar.slice(0, clarIdx)', ui_content)
+
 
 if __name__ == '__main__':
     unittest.main()

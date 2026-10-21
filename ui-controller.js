@@ -205,6 +205,8 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnSaveTurn: $('#btn-save-turn'),
     btnTestIce: $('#btn-test-ice'),
     iceTestResults: $('#ice-test-results'),
+    geminiApiKeyInput: $('#gemini-api-key-input'),
+    btnSaveGeminiKey: $('#btn-save-gemini-key'),
     btnExportKey: $('#btn-export-key'),
     importKeyFile: $('#import-key-file'),
     settingsPrivkey: $('#settings-privkey'),
@@ -596,6 +598,15 @@ To restore interactive control:
 • Discovered Candidates: STUN/TURN traversal active.
 You can click '📋 Send Diag' in the chat anytime to run a complete automated health analysis.`;
       clarification = `Would you like me to analyze a specific connection drop or remote desktop symptom?`;
+    } else if (/never connected|last connected|connection time|remote desktop.*shows|shows.*never|standby.*no screen|no screen|my computer/.test(textLower)) {
+      advice = `Regarding Remote Desktop Connection History & Host Status Badges:
+
+1. "Never connected":
+This badge tracks the duration and relative time since your last completed Remote Desktop session. When you establish an active connection to your host and disconnect, it updates to show e.g. "Connected 5m ago (Duration: 12m 4s)". If you were connected previously, session timestamp synchronization is now active to persist session start and end times in local storage.
+
+2. "Standby (No Screen)":
+This indicates that the client successfully reached your host computer over Nostr signaling with active pings, but desktop screen capture is not currently running on the host PC. On your host machine, open host.html and click "Start Desktop Capture". Once screen sharing is active, the badge switches to "🟢 Online (Capture Active)".`;
+      clarification = `Is desktop screen capture currently active on your host computer (host.html)?`;
     } else if (/trackpad|direct mode|touch mode|mouse mode|cursor|virtual cursor|pointer lock|remote desktop|rd |input mode|click|tap|double finger|two finger|move screen|zoom|pinch|pan/.test(textLower)) {
       advice = `P2P Connect Remote Desktop supports two distinct interaction modes and multi-touch gestures:
 • Touch Mode / Direct Mode (👆): Direct tap instantly clicks; double-tap double-clicks; touch & drag moves windows/selects text; long-press (500ms) right-clicks.
@@ -641,24 +652,78 @@ ${clarification}
 
   async function respondFromAiSupportAgent(userText) {
     let replyText = null;
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 800);
-      const res = await fetch('http://127.0.0.1:9998/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderPubKey: nostrIdentity?.pubkey || 'client', text: userText }),
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.reply) {
-          replyText = data.reply;
-        }
-      }
-    } catch {}
 
+    // 1. Direct LLM Intelligence via Google Gemini API if user configured API Key
+    const geminiKey = localStorage.getItem('gemini-api-key')?.trim();
+    if (geminiKey) {
+      try {
+        const connState = session?.getState?.() || 'closed';
+        const isRdLive = !dom.callOverlay?.classList.contains('hidden');
+        const bridgeStr = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Connected 🟢' : 'Disconnected 🔴') : 'Standby / Offline ⚪';
+        const devices = loadRemoteDevices();
+        const devSummary = devices.map(d => `${d.name}: ${d.pubkey.slice(0, 8)}... (${formatConnectionTime(d.lastConnected, d.lastDuration)})`).join('; ') || 'None';
+        const recentLogs = (DiagnosticLogger.getLogs() || []).slice(-5).map(l => `[${l.level}] ${l.message}`).join(' | ');
+
+        const systemPrompt = `You are the expert technical AI Support Agent for P2P Connect (a zero-backend browser-to-browser WebRTC application featuring Remote Desktop, Nostr signaling, and encrypted chunked file transfer).
+Application Telemetry Context:
+• WebRTC Connection: ${connState}
+• Remote Desktop: ${isRdLive ? (rdMode || 'active') : 'Inactive'} (OS Bridge: ${bridgeStr})
+• Configured Remote Desktops: ${devSummary}
+• Recent Logs: ${recentLogs}
+
+Provide a direct, technically accurate, and concise response to the user. Explain any root cause clearly and offer actionable steps. If further information is needed, end with a concise '❓ Clarification Question: <question>'.`;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question:\n${userText}` }] }
+            ],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 600,
+            }
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const gemData = await res.json();
+          const cand = gemData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (cand) {
+            replyText = `🤖 [AI Support Agent Response]\nStatus: INFO\n\n${cand.trim()}\n\n(AI Powered via Gemini LLM)`;
+          }
+        }
+      } catch (e) {
+        console.warn('[AI Support Agent] Gemini LLM query failed, falling back to local diagnostics:', e);
+      }
+    }
+
+    // 2. Query local Python AI diagnostic server if running
+    if (!replyText) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 800);
+        const res = await fetch('http://127.0.0.1:9998/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderPubKey: nostrIdentity?.pubkey || 'client', text: userText }),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.reply) {
+            replyText = data.reply;
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Fallback to client-side rule-based diagnostic engine
     if (!replyText) {
       replyText = analyzeUserSupportComment(userText);
     }
@@ -925,15 +990,31 @@ ${clarification}
 
   let rdSessionStartTime = null;
 
+  function recordRdSessionStart(pubkey) {
+    if (!rdSessionStartTime) {
+      rdSessionStartTime = Date.now();
+    }
+    const targetPk = pubkey || (activeRemoteDesktopDevice ? activeRemoteDesktopDevice.pubkey : null);
+    if (!targetPk) return;
+    const devices = loadRemoteDevices();
+    const dev = devices.find(d => d.pubkey.toLowerCase() === targetPk.toLowerCase());
+    if (dev) {
+      dev.lastConnected = Date.now();
+      saveRemoteDevices(devices);
+      renderRemoteDevices();
+    }
+  }
+
   function recordRdSessionEnd() {
     if (activeRemoteDesktopDevice && rdSessionStartTime) {
       const durationSec = Math.max(1, Math.round((Date.now() - rdSessionStartTime) / 1000));
       const devices = loadRemoteDevices();
-      const dev = devices.find(d => d.pubkey === activeRemoteDesktopDevice.pubkey);
+      const dev = devices.find(d => d.pubkey.toLowerCase() === activeRemoteDesktopDevice.pubkey.toLowerCase());
       if (dev) {
         dev.lastConnected = Date.now();
         dev.lastDuration = durationSec;
         saveRemoteDevices(devices);
+        renderRemoteDevices();
       }
     }
     rdSessionStartTime = null;
@@ -1463,8 +1544,13 @@ ${clarification}
     // If no explicit Findings/Recommendations sections, extract main advice paragraphs
     let adviceHtml = '';
     if (findings.length === 0 && recs.length === 0) {
-      const lines = rawText.split('\n')
-        .filter(l => !l.startsWith('🤖') && !l.startsWith('Status:') && !l.startsWith('❓') && !l.includes('Advisory Mode'))
+      let textWithoutClar = rawText;
+      const clarIdx = textWithoutClar.search(/❓\s*Clarification (?:Question|Needed):/i);
+      if (clarIdx !== -1) {
+        textWithoutClar = textWithoutClar.slice(0, clarIdx);
+      }
+      const lines = textWithoutClar.split('\n')
+        .filter(l => !l.startsWith('🤖') && !l.startsWith('Status:') && !l.includes('Advisory Mode'))
         .join('\n').trim();
       if (lines) {
         adviceHtml = `<div class="diag-card__section" style="white-space: pre-wrap;">${escapeHtml(lines)}</div>`;
@@ -2281,6 +2367,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         }
         const isRdMatch = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || (isWaitingForRemoteDesktop && sessionRemotePubKey === remotePubKey);
         if (isRdMatch) {
+          recordRdSessionStart(remotePubKey);
           mediaActive = true;
           hide(dom.connectBanner);
           show(dom.callOverlay);
@@ -2346,6 +2433,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         const isRdStream = (activeRemoteDesktopDevice && (activeRemoteDesktopDevice.pubkey.toLowerCase() === remotePubKey.toLowerCase())) || isWaitingForRemoteDesktop;
 
         if (isRdStream) {
+          recordRdSessionStart(remotePubKey);
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
           dom.remoteVideo.srcObject = stream;
@@ -5313,6 +5401,9 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     renderRelayList();
     renderIceServerList();
     updateStorageInfo();
+    if (dom.geminiApiKeyInput) {
+      dom.geminiApiKeyInput.value = localStorage.getItem('gemini-api-key') || '';
+    }
     if (nostrIdentity && window.QRCode) {
       QRCode.toCanvas(dom.qrPubkey, nostrIdentity.publicKey, { width: 180, margin: 2, color: { dark: '#000', light: '#fff' } }, () => {});
     }
@@ -5385,6 +5476,18 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     saveCustomIceServers([]);
     renderIceServerList();
     toast('Custom servers cleared. Built-in servers active.');
+  });
+
+  // AI Support Agent (Gemini API Key configuration)
+  dom.btnSaveGeminiKey?.addEventListener('click', () => {
+    const key = dom.geminiApiKeyInput?.value?.trim() || '';
+    if (key) {
+      localStorage.setItem('gemini-api-key', key);
+      toast('Gemini API key saved! AI Support Agent upgraded to LLM intelligence. 🧠✓');
+    } else {
+      localStorage.removeItem('gemini-api-key');
+      toast('Gemini API key removed. Using local diagnostic heuristics.');
+    }
   });
 
   // Test ICE Connectivity
