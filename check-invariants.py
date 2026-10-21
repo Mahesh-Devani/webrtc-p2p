@@ -364,7 +364,7 @@ def check_signal_type_whitelist():
 
     required = ['offer', 'answer', 'ice', 'close', 'message',
                 'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong',
-                'diagnostic_logpkg']
+                'diagnostic_logpkg', 'diagnostic_screenshot', 'user_comment']
     for t in required:
         if f"'{t}'" not in content and f'"{t}"' not in content:
             violations.append(f'nostr-transport.js: Signal type "{t}" not in whitelist')

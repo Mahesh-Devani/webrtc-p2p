@@ -300,6 +300,34 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('clarIdx !== -1', ui_content)
         self.assertIn('textWithoutClar.slice(0, clarIdx)', ui_content)
 
+    def test_remote_nostr_screenshot_and_comment_support(self):
+        """Remote telemetry (diagnostic_screenshot and user_comment) must be sent, whitelisted, and ingested."""
+        # 1. nostr-transport.js whitelist
+        transport_content = (PROJECT_ROOT / 'nostr-transport.js').read_text(encoding='utf-8')
+        self.assertIn("'diagnostic_screenshot'", transport_content)
+        self.assertIn("'user_comment'", transport_content)
+
+        # 2. ui-controller.js remote Nostr dispatch
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertIn("type: 'diagnostic_screenshot'", ui_content)
+        self.assertIn("type: 'user_comment'", ui_content)
+        self.assertIn('pako.deflate', ui_content)
+
+        # 3. support-controller.js ingestion and forwarding to Python endpoints
+        support_content = (PROJECT_ROOT / 'support-controller.js').read_text(encoding='utf-8')
+        self.assertIn("type === 'diagnostic_screenshot'", support_content)
+        self.assertIn("type === 'user_comment'", support_content)
+        self.assertIn('LOCAL_PYTHON_SCREENSHOT_URL', support_content)
+        self.assertIn('LOCAL_PYTHON_CHAT_URL', support_content)
+
+    def test_autonomous_headless_chrome_bridge(self):
+        """ai-diagnostic-agent.py must provide autonomous Nostr bridge via headless Chrome."""
+        agent_content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
+        self.assertIn('def find_chrome_binary', agent_content)
+        self.assertIn('def launch_headless_bridge', agent_content)
+        self.assertIn('--no-headless', agent_content)
+        self.assertIn('--headless=new', agent_content)
+
 
 if __name__ == '__main__':
     unittest.main()

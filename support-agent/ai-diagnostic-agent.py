@@ -26,6 +26,10 @@ import json
 import time
 import argparse
 import mimetypes
+import subprocess
+import shutil
+import tempfile
+import atexit
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -716,7 +720,105 @@ class DiagnosticServer(BaseHTTPRequestHandler):
         sys.stdout.write(f"[HTTP] {self.address_string()} - {format % args}\n")
 
 
-def run_server(port=DEFAULT_PORT):
+def find_chrome_binary():
+    """Locate Google Chrome or Chromium executable on the host system."""
+    env_bin = os.environ.get('CHROME_BIN') or os.environ.get('GOOGLE_CHROME_BIN')
+    if env_bin and os.path.isfile(env_bin):
+        return env_bin
+
+    if sys.platform == 'darwin':
+        candidates = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+            '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+    elif sys.platform.startswith('linux'):
+        candidates = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/snap/bin/chromium',
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+    elif sys.platform == 'win32':
+        candidates = [
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+            os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
+            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+
+    for name in ('google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome'):
+        found = shutil.which(name)
+        if found:
+            return found
+
+    return None
+
+
+def launch_headless_bridge(port: int):
+    """Launch headless Chrome to run support.html as an autonomous Nostr relay bridge."""
+    chrome_bin = find_chrome_binary()
+    if not chrome_bin:
+        print(f"[AI Support Agent] ℹ️ Headless Chrome not detected.")
+        print(f"[AI Support Agent] ℹ️ Open http://127.0.0.1:{port}/support.html in a browser to bridge Nostr relays.\n")
+        return None
+
+    profile_dir = tempfile.mkdtemp(prefix="p2p_support_chrome_")
+    url = f"http://127.0.0.1:{port}/support.html"
+
+    cmd = [
+        chrome_bin,
+        '--headless=new',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-default-browser-check',
+        f'--user-data-dir={profile_dir}',
+        url,
+    ]
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True if sys.platform != 'win32' else False,
+        )
+        print(f"[AI Support Agent] 🌐 Autonomous Nostr Bridge active (Headless Chrome PID: {proc.pid})")
+        print(f"[AI Support Agent] 📡 Subscribed to Nostr relays via {url}\n")
+
+        def cleanup():
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            shutil.rmtree(profile_dir, ignore_errors=True)
+
+        atexit.register(cleanup)
+        return proc, cleanup
+    except Exception as e:
+        print(f"[AI Support Agent] ⚠️ Failed to launch headless Chrome bridge: {e}")
+        print(f"[AI Support Agent] ℹ️ Open {url} in a browser to bridge Nostr relays.\n")
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        return None
+
+
+def run_server(port=DEFAULT_PORT, headless=True):
     INBOX_DIR.mkdir(parents=True, exist_ok=True)
     server_address = ('127.0.0.1', port)
     httpd = HTTPServer(server_address, DiagnosticServer)
@@ -729,10 +831,19 @@ def run_server(port=DEFAULT_PORT):
     print(f"• Ready to receive and diagnose WebRTC / Nostr log packages.")
     print(f"• Press Ctrl+C to stop.")
     print(f"══════════════════════════════════════════════════════════════\n")
+
+    bridge = None
+    if headless:
+        bridge = launch_headless_bridge(port)
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[AI Support Agent] Shutting down.")
+    finally:
+        if bridge:
+            proc, cleanup = bridge
+            cleanup()
         httpd.server_close()
 
 
@@ -823,6 +934,7 @@ if __name__ == '__main__':
     parser.add_argument('--analyze', type=str, help="Path to a downloaded diagnostic .json file to analyze offline")
     parser.add_argument('--inbox', action='store_true', help="List and summarize all ingested packages and comments in diagnostics-inbox/")
     parser.add_argument('--port', type=int, default=DEFAULT_PORT, help=f"Port for HTTP ingestion server (default: {DEFAULT_PORT})")
+    parser.add_argument('--no-headless', action='store_true', help="Do not spawn headless Chrome Nostr bridge automatically")
     args = parser.parse_args()
 
     if args.inbox:
@@ -830,4 +942,4 @@ if __name__ == '__main__':
     elif args.analyze:
         analyze_file(Path(args.analyze))
     else:
-        run_server(args.port)
+        run_server(args.port, headless=not args.no_headless)

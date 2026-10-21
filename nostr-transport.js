@@ -450,7 +450,7 @@ export const NostrTransport = (() => {
             _logHandler(`[Nostr] Unknown payload version: ${payload.v}`, 'warn');
             return;
         }
-        if (!['offer', 'answer', 'ice', 'close', 'message', 'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong', 'diagnostic_logpkg'].includes(payload.type)) {
+        if (!['offer', 'answer', 'ice', 'close', 'message', 'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong', 'diagnostic_logpkg', 'diagnostic_screenshot', 'user_comment'].includes(payload.type)) {
             _logHandler(`[Nostr] Unknown signal type: ${payload.type}`, 'warn');
             return;
         }

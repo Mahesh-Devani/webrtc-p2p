@@ -35,6 +35,7 @@ The **AI Support Agent** in P2P Connect is a dual-tier diagnostic and issue repo
 
 ### Tier 2: Developer Ingestion Server & Inbox (`diagnostics-inbox/`)
 - A lightweight, zero-dependency Python service ([`ai-diagnostic-agent.py`](ai-diagnostic-agent.py)) listening on `http://127.0.0.1:9998/`.
+- **Autonomous Nostr Bridge**: When started, `ai-diagnostic-agent.py` automatically launches a background headless Chrome instance running `http://127.0.0.1:9998/support.html`. This bridge subscribes to Nostr relays under the developer's dedicated support keypair (`support-identity.json`), decrypts incoming NIP-44 diagnostic signals from remote users anywhere in the world, and posts them to port 9998.
 - Ingests incoming technical telemetry:
   - `logpkg_<timestamp>_<pubkey>.json`: Full WebRTC telemetry, ICE candidates, relay states, and redacted system logs (< 2 KB).
   - `comment_<timestamp>_<pubkey>.json`: User questions, reported symptoms, and timestamped dialogue.
@@ -73,7 +74,11 @@ Whenever you want to review user-reported issues, you can prompt Antigravity dir
 
 ### Start Ingestion Server (Port 9998)
 ```bash
+# Default: Starts HTTP server and autonomous headless Chrome bridge for Nostr
 python3 support-agent/ai-diagnostic-agent.py
+
+# Optional: Run without headless Chrome (open http://127.0.0.1:9998/support.html manually)
+python3 support-agent/ai-diagnostic-agent.py --no-headless
 ```
 
 ### Triage Inbox (List All Received Issues)

@@ -2207,6 +2207,27 @@ ${clarification}
             clearTimeout(timer);
           });
         } catch {}
+
+        // Forward screenshot over Nostr relays directly to developer
+        if (nostrIdentity && NostrTransport.isConnected()) {
+          try {
+            if (typeof pako !== 'undefined' && typeof pako.deflate === 'function') {
+              const compressedBytes = pako.deflate(new TextEncoder().encode(base64Data), { level: 9 });
+              const binary = String.fromCharCode.apply(null, compressedBytes);
+              const b64Compressed = btoa(binary);
+              NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+                type: 'diagnostic_screenshot',
+                session: 'ss-' + Date.now(),
+                fileName,
+                fileSize: optimizedBlob.size,
+                data: b64Compressed
+              }).catch(e => console.warn('[AI Support Agent] Screenshot Nostr relay send error:', e));
+              DiagnosticLogger.record('info', ['[AI Support Agent] Screenshot sent over Nostr to developer']);
+            }
+          } catch (nostrErr) {
+            console.warn('[AI Support Agent] Screenshot Nostr send failed:', nostrErr);
+          }
+        }
       }
 
       // Deliver AI Support Agent response after a natural review pause

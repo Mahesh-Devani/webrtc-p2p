@@ -158,10 +158,65 @@ export const SupportController = (() => {
   }
 
   /**
-   * Handle incoming encrypted diagnostic log package from remote user over Nostr.
+   * Handle incoming encrypted diagnostic signals from remote user over Nostr.
    */
   async function handleDiagnosticSignal(signal) {
     const { type, data, senderPubKey } = signal;
+
+    if (type === 'diagnostic_screenshot') {
+      log(`📸 Incoming diagnostic screenshot received from ${senderPubKey.slice(0, 8)}…`, 'info');
+      let imgData = null;
+      try {
+        let b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4 !== 0) b64 += '=';
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const decompressed = pako.inflate(bytes);
+        imgData = new TextDecoder().decode(decompressed);
+      } catch (err) {
+        imgData = data;
+      }
+
+      if (imgData) {
+        try {
+          await fetch(LOCAL_PYTHON_SCREENSHOT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senderPubKey, data: imgData }),
+          });
+          log(`✅ Screenshot saved to diagnostics-inbox/ from ${senderPubKey.slice(0, 8)}…`, 'info');
+        } catch (e) {
+          log(`Failed to forward screenshot to port 9998: ${e.message}`, 'warn');
+        }
+
+        renderScreenshotTicketCard({
+          id: 'ss-' + Date.now().toString(36),
+          senderPubKey,
+          fileName: signal.fileName || 'screenshot.jpg',
+          fileSize: signal.fileSize || 0,
+          imgUrl: imgData,
+          ts: Date.now()
+        });
+      }
+      return;
+    }
+
+    if (type === 'user_comment') {
+      log(`💬 User comment received from ${senderPubKey.slice(0, 8)}: "${signal.text}"`, 'info');
+      try {
+        await fetch(LOCAL_PYTHON_CHAT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderPubKey, text: signal.text }),
+        });
+        log(`✅ User comment saved to diagnostics-inbox/ from ${senderPubKey.slice(0, 8)}…`, 'info');
+      } catch (e) {
+        log(`Failed to forward comment to port 9998: ${e.message}`, 'warn');
+      }
+      return;
+    }
+
     if (type !== 'diagnostic_logpkg') return;
 
     log(`📥 Incoming diagnostic log package received from ${senderPubKey.slice(0, 8)}…`, 'info');

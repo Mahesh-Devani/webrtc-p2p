@@ -164,7 +164,7 @@ class TestArchitecturalInvariants(unittest.TestCase):
         required = [
             'offer', 'answer', 'ice', 'close', 'message',
             'unattended_offer', 'unattended_answer', 'host_ping', 'host_pong',
-            'diagnostic_logpkg'
+            'diagnostic_logpkg', 'diagnostic_screenshot', 'user_comment'
         ]
         for t in required:
             self.assertTrue(
