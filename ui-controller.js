@@ -205,8 +205,6 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnSaveTurn: $('#btn-save-turn'),
     btnTestIce: $('#btn-test-ice'),
     iceTestResults: $('#ice-test-results'),
-    geminiApiKeyInput: $('#gemini-api-key-input'),
-    btnSaveGeminiKey: $('#btn-save-gemini-key'),
     btnExportKey: $('#btn-export-key'),
     importKeyFile: $('#import-key-file'),
     settingsPrivkey: $('#settings-privkey'),
@@ -653,77 +651,37 @@ ${clarification}
   async function respondFromAiSupportAgent(userText) {
     let replyText = null;
 
-    // 1. Direct LLM Intelligence via Google Gemini API if user configured API Key
-    const geminiKey = localStorage.getItem('gemini-api-key')?.trim();
-    if (geminiKey) {
-      try {
-        const connState = session?.getState?.() || 'closed';
-        const isRdLive = !dom.callOverlay?.classList.contains('hidden');
-        const bridgeStr = typeof rdHostBridgeActive === 'boolean' ? (rdHostBridgeActive ? 'Connected 🟢' : 'Disconnected 🔴') : 'Standby / Offline ⚪';
-        const devices = loadRemoteDevices();
-        const devSummary = devices.map(d => `${d.name}: ${d.pubkey.slice(0, 8)}... (${formatConnectionTime(d.lastConnected, d.lastDuration)})`).join('; ') || 'None';
-        const recentLogs = (DiagnosticLogger.getLogs() || []).slice(-5).map(l => `[${l.level}] ${l.message}`).join(' | ');
-
-        const systemPrompt = `You are the expert technical AI Support Agent for P2P Connect (a zero-backend browser-to-browser WebRTC application featuring Remote Desktop, Nostr signaling, and encrypted chunked file transfer).
-Application Telemetry Context:
-• WebRTC Connection: ${connState}
-• Remote Desktop: ${isRdLive ? (rdMode || 'active') : 'Inactive'} (OS Bridge: ${bridgeStr})
-• Configured Remote Desktops: ${devSummary}
-• Recent Logs: ${recentLogs}
-
-Provide a direct, technically accurate, and concise response to the user. Explain any root cause clearly and offer actionable steps. If further information is needed, end with a concise '❓ Clarification Question: <question>'.`;
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              { role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question:\n${userText}` }] }
-            ],
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 600,
-            }
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timer);
-        if (res.ok) {
-          const gemData = await res.json();
-          const cand = gemData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (cand) {
-            replyText = `🤖 [AI Support Agent Response]\nStatus: INFO\n\n${cand.trim()}\n\n(AI Powered via Gemini LLM)`;
-          }
+    // 1. Forward user comment to local AI Diagnostic Support Server on port 9998 (if running)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 900);
+      const res = await fetch('http://127.0.0.1:9998/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderPubKey: nostrIdentity?.pubkey || 'client', text: userText }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          replyText = data.reply;
         }
-      } catch (e) {
-        console.warn('[AI Support Agent] Gemini LLM query failed, falling back to local diagnostics:', e);
       }
-    }
+    } catch {}
 
-    // 2. Query local Python AI diagnostic server if running
-    if (!replyText) {
+    // 2. For remote users: Forward comment telemetry over Nostr relays directly to developer
+    if (nostrIdentity && NostrTransport.isConnected()) {
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 800);
-        const res = await fetch('http://127.0.0.1:9998/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ senderPubKey: nostrIdentity?.pubkey || 'client', text: userText }),
-          signal: controller.signal
-        });
-        clearTimeout(timer);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.reply) {
-            replyText = data.reply;
-          }
-        }
+        NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+          type: 'user_comment',
+          session: 'comment-' + Date.now(),
+          text: userText,
+        }).catch(() => {});
       } catch {}
     }
 
-    // 3. Fallback to client-side rule-based diagnostic engine
+    // 3. Fallback to client-side rule-based diagnostic engine for instant user guidance
     if (!replyText) {
       replyText = analyzeUserSupportComment(userText);
     }
@@ -5401,9 +5359,6 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     renderRelayList();
     renderIceServerList();
     updateStorageInfo();
-    if (dom.geminiApiKeyInput) {
-      dom.geminiApiKeyInput.value = localStorage.getItem('gemini-api-key') || '';
-    }
     if (nostrIdentity && window.QRCode) {
       QRCode.toCanvas(dom.qrPubkey, nostrIdentity.publicKey, { width: 180, margin: 2, color: { dark: '#000', light: '#fff' } }, () => {});
     }
@@ -5476,18 +5431,6 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     saveCustomIceServers([]);
     renderIceServerList();
     toast('Custom servers cleared. Built-in servers active.');
-  });
-
-  // AI Support Agent (Gemini API Key configuration)
-  dom.btnSaveGeminiKey?.addEventListener('click', () => {
-    const key = dom.geminiApiKeyInput?.value?.trim() || '';
-    if (key) {
-      localStorage.setItem('gemini-api-key', key);
-      toast('Gemini API key saved! AI Support Agent upgraded to LLM intelligence. 🧠✓');
-    } else {
-      localStorage.removeItem('gemini-api-key');
-      toast('Gemini API key removed. Using local diagnostic heuristics.');
-    }
   });
 
   // Test ICE Connectivity

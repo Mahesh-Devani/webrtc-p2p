@@ -628,7 +628,20 @@ class DiagnosticServer(BaseHTTPRequestHandler):
 
             reply_data = DiagnosticEngine.analyze_comment(text, client_pk)
 
-            print(f"\n[AI Support Agent] 💬 User comment from {client_pk}: \"{text}\"")
+            INBOX_DIR.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+            comment_payload = {
+                'ts': ts,
+                'clientPubKey': raw_client_pk,
+                'text': text,
+                'reply': reply_data.get('reply'),
+                'developerSuggestions': reply_data.get('developerSuggestions', [])
+            }
+            comment_file = INBOX_DIR / f"comment_{ts}_{client_pk}.json"
+            with open(comment_file, 'w', encoding='utf-8') as f:
+                json.dump(comment_payload, f, indent=2)
+
+            print(f"\n[AI Support Agent] 💬 User comment from {client_pk}: \"{text}\" -> Saved to {comment_file.name}")
             print(f"[AI Support Agent] 🤖 Generated Reply (Advisory Mode):\n{reply_data['reply']}")
             print(f"[AI Support Agent] 💡 Suggestions for Developer:")
             for s in reply_data.get('developerSuggestions', []):
@@ -759,13 +772,62 @@ def analyze_file(filepath: Path):
     print(f"══════════════════════════════════════════════════════════════\n")
 
 
+def print_inbox():
+    if not INBOX_DIR.exists():
+        print("Inbox is empty (no user issues received yet).")
+        return
+    logpkgs = sorted(INBOX_DIR.glob("logpkg_*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
+    comments = sorted(INBOX_DIR.glob("comment_*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
+    screenshots = sorted(INBOX_DIR.glob("screenshot_*.jpg"), key=lambda x: x.stat().st_mtime, reverse=True)
+
+    print("\n══════════════════════════════════════════════════════════════")
+    print(f"📥 AI Support Agent — Developer Triage Inbox ({INBOX_DIR})")
+    print("══════════════════════════════════════════════════════════════")
+    print(f"Total: {len(logpkgs)} log packages, {len(comments)} comments, {len(screenshots)} screenshots\n")
+
+    if comments:
+        print("💬 Recent User Comments:")
+        for c in comments[:5]:
+            try:
+                data = json.loads(c.read_text(encoding='utf-8'))
+                t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(data.get('ts', c.stat().st_mtime)))
+                print(f"  • [{t_str}] User ({data.get('clientPubKey', 'unknown')[:8]}…): \"{data.get('text', '')}\"")
+            except Exception:
+                print(f"  • {c.name}")
+        print()
+
+    if logpkgs:
+        print("📋 Recent Diagnostic Log Packages:")
+        for p in logpkgs[:5]:
+            try:
+                data = json.loads(p.read_text(encoding='utf-8'))
+                t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(p.stat().st_mtime))
+                webrtc_st = data.get('webrtc', {}).get('connectionState', 'unknown')
+                pk = data.get('identity', {}).get('clientPubKey', 'unknown')[:8]
+                print(f"  • [{t_str}] {p.name} (Client: {pk}…, WebRTC: {webrtc_st})")
+            except Exception:
+                print(f"  • {p.name}")
+        print()
+
+    if screenshots:
+        print("📷 Recent Screenshots:")
+        for s in screenshots[:5]:
+            t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(s.stat().st_mtime))
+            print(f"  • [{t_str}] {s.name} ({round(s.stat().st_size / 1024, 1)} KB)")
+        print()
+    print("══════════════════════════════════════════════════════════════\n")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="P2P Connect AI Diagnostic Support Agent")
     parser.add_argument('--analyze', type=str, help="Path to a downloaded diagnostic .json file to analyze offline")
+    parser.add_argument('--inbox', action='store_true', help="List and summarize all ingested packages and comments in diagnostics-inbox/")
     parser.add_argument('--port', type=int, default=DEFAULT_PORT, help=f"Port for HTTP ingestion server (default: {DEFAULT_PORT})")
     args = parser.parse_args()
 
-    if args.analyze:
+    if args.inbox:
+        print_inbox()
+    elif args.analyze:
         analyze_file(Path(args.analyze))
     else:
         run_server(args.port)

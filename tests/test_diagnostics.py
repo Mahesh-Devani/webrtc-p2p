@@ -279,13 +279,20 @@ class TestDiagnosticSystem(unittest.TestCase):
         """DiagnosticEngine and ui-controller.js must recognize 'never connected' and 'standby' queries."""
         ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
         self.assertIn('never connected', ui_content)
-        self.assertIn('gemini-api-key', ui_content)
+        self.assertIn('respondFromAiSupportAgent', ui_content)
         
         # Python DiagnosticEngine check
         res = DiagnosticEngine.analyze_comment("Under my remote desktops, for my computer it wrongly shows as never connected", "aabbcc112233")
         self.assertTrue(res['success'])
         self.assertIn('never connected', res['reply'].lower())
         self.assertIn('standby (no screen)', res['reply'].lower())
+
+    def test_support_agent_inbox_triage(self):
+        """ai-diagnostic-agent.py must provide --inbox triage functionality and record comments."""
+        agent_content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
+        self.assertIn('def print_inbox', agent_content)
+        self.assertIn('--inbox', agent_content)
+        self.assertIn('comment_', agent_content)
 
     def test_diagnostic_bubble_no_duplicate_clarification(self):
         """formatDiagnosticBubbleHtml must not duplicate the clarification question in the advice body."""
