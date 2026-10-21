@@ -112,12 +112,16 @@ webrtc-p2p/
 ├── token-codec.js              # P2P2- token compression & decompression
 ├── chat-store.js               # Persistent encrypted message store (localStorage)
 ├── style.css                   # Responsive layout, dark theme, remote desktop HUD
-└── remote-desktop-host/        # Native OS Input Injection Companion
-    ├── bridge.py               # Zero-dependency native input injector (Python 3)
-    ├── start-host.sh           # Automated background host launcher
-    ├── install-service.sh      # macOS LaunchAgent background service installer
-    ├── uninstall-service.sh    # Background service uninstaller
-    └── README.md               # Detailed Host Bridge guide
+├── remote-desktop-host/        # Native OS Input Injection Companion
+│   ├── bridge.py               # Zero-dependency native input injector (Python 3)
+│   ├── start-host.sh           # Automated background host launcher
+│   ├── install-service.sh      # macOS LaunchAgent background service installer
+│   ├── uninstall-service.sh    # Background service uninstaller
+│   └── README.md               # Detailed Host Bridge guide
+└── support-agent/              # AI Support & Developer Triage System
+    ├── ai-diagnostic-agent.py  # Ingestion server & offline analyzer
+    ├── diagnostics-inbox/      # Archived logpkgs, user comments, screenshots
+    └── README.md               # Support Agent & Antigravity triage guide
 ```
 
 ---

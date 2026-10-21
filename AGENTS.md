@@ -225,4 +225,17 @@ The project features a zero-token, change-aware local regression test suite in `
 - **Custom Skill**: `.agents/skills/regression-testing/SKILL.md` — Teaches agents how to intelligently run regressions, diagnose invariant failures, and add new regression tests. Can also be run via `.agents/skills/regression-testing/scripts/run.sh`.
 - **Custom Subagent**: `regression-verifier` — Defined to run zero-token local regressions, inspect diffs, and report actionable root-cause diagnostics.
 
+---
+
+## 9. AI Support Agent & Developer Triage System
+
+The project features a dual-tier diagnostic and issue reporting system:
+1. **Tier 1 (Client-Side Engine)**: Embedded in `ui-controller.js`. Evaluates live WebRTC state variables, handles screenshots without WebRTC P2P dialing, and provides instant status explanations with zero backend dependencies. It runs 100% in the user's browser, making the agent always active even without a local Python server.
+2. **Tier 2 (Developer Ingestion & Inbox)**: `support-agent/ai-diagnostic-agent.py` listens on `http://127.0.0.1:9998/` and stores log packages, comments, and screenshots in `support-agent/diagnostics-inbox/`.
+3. **Developer + Antigravity Workflow**:
+   - The developer can prompt: `"Check the support inbox and analyze any reported issues."`
+   - Antigravity executes `python3 support-agent/ai-diagnostic-agent.py --inbox`, inspects incoming telemetry, diagnoses the root cause, and proposes a verified code fix for developer review before committing.
+   - For complete documentation, see [`support-agent/README.md`](support-agent/README.md).
+
+
 

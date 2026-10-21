@@ -126,15 +126,15 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1792182221.6618738,
-    "seen": 1792182245.5942268,
-    "ast_hash": "b37f488fe0725fb36b7a686a205bdab4",
+    "mtime": 1792594111.8963945,
+    "seen": 1792594161.1786828,
+    "ast_hash": "bc247f816a3d9340754e80e0544c39ab",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792153137.0950263,
-    "seen": 1792181424.287293,
-    "ast_hash": "4eac3ec04fe5eb5032fd6e980a508075",
+    "mtime": 1792594145.1206853,
+    "seen": 1792594161.178684,
+    "ast_hash": "7f952a25c7edb4f90f2bc976a7a45d94",
     "semantic_hash": ""
   },
   "docs/architecture.md": {
@@ -309,6 +309,12 @@
     "mtime": 1792390245.4023552,
     "seen": 1792390588.916279,
     "ast_hash": "6354f442188466ccada350074fc06d79",
+    "semantic_hash": ""
+  },
+  "support-agent/README.md": {
+    "mtime": 1792594097.7597244,
+    "seen": 1792594161.178689,
+    "ast_hash": "286925e6ee5de50a6112894346cb4db0",
     "semantic_hash": ""
   }
 }
