@@ -5583,7 +5583,8 @@ ${clarification}
           rdMode,
           rdControlGranted,
           hostBridgeActive: typeof rdHostBridgeActive === 'boolean' ? rdHostBridgeActive : null,
-          isHostStreamLive: isHostStreamLive ? isHostStreamLive() : false
+          hasRemoteVideo: !!(dom.remoteVideo?.srcObject),
+          mediaActive: !!mediaActive
         }
       });
 
@@ -5641,16 +5642,18 @@ ${clarification}
           };
 
           const jsonStr = JSON.stringify(prunedPkg);
-          const compressedBytes = pako.deflate(new TextEncoder().encode(jsonStr), { level: 9 });
-          const binary = String.fromCharCode.apply(null, compressedBytes);
-          const b64Compressed = btoa(binary);
+          if (typeof pako !== 'undefined' && typeof pako.deflate === 'function') {
+            const compressedBytes = pako.deflate(new TextEncoder().encode(jsonStr), { level: 9 });
+            const binary = String.fromCharCode.apply(null, compressedBytes);
+            const b64Compressed = btoa(binary);
 
-          await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
-            type: 'diagnostic_logpkg',
-            session: 'diag-' + Date.now(),
-            data: b64Compressed,
-          });
-          DiagnosticLogger.record('info', ['[AI Support Agent] Pruned diagnostics sent over Nostr to', SUPPORT_AGENT_PUBKEY]);
+            await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+              type: 'diagnostic_logpkg',
+              session: 'diag-' + Date.now(),
+              data: b64Compressed,
+            });
+            DiagnosticLogger.record('info', ['[AI Support Agent] Pruned diagnostics sent over Nostr to', SUPPORT_AGENT_PUBKEY]);
+          }
         } catch (nostrErr) {
           console.warn('[AI Support Agent] Nostr relay transmission non-fatal error:', nostrErr);
         }

@@ -255,6 +255,11 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('deliverAiSupportMessage', ui_content)
         self.assertIn('rdHostBridgeActive', ui_content)
 
+    def test_ui_controller_no_undeclared_host_stream_reference(self):
+        """ui-controller.js must not reference undeclared isHostStreamLive, preventing ReferenceError."""
+        ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+        self.assertNotIn('isHostStreamLive', ui_content, "ui-controller.js must not contain isHostStreamLive (host-only function)")
+
 
 if __name__ == '__main__':
     unittest.main()
