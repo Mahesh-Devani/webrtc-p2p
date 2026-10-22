@@ -22,6 +22,7 @@ const LOCAL_PYTHON_SCREENSHOT_URL = 'http://127.0.0.1:9998/api/screenshot';
 export const SupportController = (() => {
   let identity = null;
   const tickets = [];
+  const screenshotBuffers = new Map();
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -164,18 +165,55 @@ export const SupportController = (() => {
     const { type, data, senderPubKey } = signal;
 
     if (type === 'diagnostic_screenshot') {
-      log(`📸 Incoming diagnostic screenshot received from ${senderPubKey.slice(0, 8)}…`, 'info');
-      let imgData = null;
-      try {
-        let b64 = data.replace(/-/g, '+').replace(/_/g, '/');
-        while (b64.length % 4 !== 0) b64 += '=';
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const decompressed = pako.inflate(bytes);
-        imgData = new TextDecoder().decode(decompressed);
-      } catch (err) {
-        imgData = data;
+      const sessionId = signal.session || ('ss-' + senderPubKey);
+      const totalChunks = signal.totalChunks || 1;
+      const chunkIndex = signal.chunkIndex || 0;
+
+      log(`📸 Diagnostic screenshot chunk ${chunkIndex + 1}/${totalChunks} from ${senderPubKey.slice(0, 8)}…`, 'info');
+
+      // Periodic purge of old buffers older than 2 minutes
+      const now = Date.now();
+      for (const [k, v] of screenshotBuffers) {
+        if (now - v.ts > 120000) screenshotBuffers.delete(k);
+      }
+
+      if (!screenshotBuffers.has(sessionId)) {
+        screenshotBuffers.set(sessionId, {
+          chunks: new Array(totalChunks),
+          received: 0,
+          total: totalChunks,
+          fileName: signal.fileName || 'screenshot.jpg',
+          fileSize: signal.fileSize || 0,
+          senderPubKey,
+          ts: now
+        });
+      }
+
+      const buffer = screenshotBuffers.get(sessionId);
+      if (!buffer.chunks[chunkIndex]) {
+        buffer.chunks[chunkIndex] = signal.data;
+        buffer.received++;
+      }
+
+      if (buffer.received < buffer.total) {
+        return; // wait for remaining chunks
+      }
+
+      // All chunks assembled!
+      screenshotBuffers.delete(sessionId);
+      let imgData = buffer.chunks.join('');
+
+      // If data is pako-compressed (legacy clients), inflate it
+      if (imgData.length > 0 && !imgData.startsWith('data:')) {
+        try {
+          let b64 = imgData.replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4 !== 0) b64 += '=';
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const decompressed = pako.inflate(bytes);
+          imgData = new TextDecoder().decode(decompressed);
+        } catch {}
       }
 
       if (imgData) {
@@ -183,21 +221,27 @@ export const SupportController = (() => {
           await fetch(LOCAL_PYTHON_SCREENSHOT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ senderPubKey, data: imgData }),
+            body: JSON.stringify({ senderPubKey: buffer.senderPubKey, data: imgData }),
           });
-          log(`✅ Screenshot saved to diagnostics-inbox/ from ${senderPubKey.slice(0, 8)}…`, 'info');
+          log(`✅ Screenshot saved to diagnostics-inbox/ from ${buffer.senderPubKey.slice(0, 8)}…`, 'info');
         } catch (e) {
           log(`Failed to forward screenshot to port 9998: ${e.message}`, 'warn');
         }
 
         renderScreenshotTicketCard({
           id: 'ss-' + Date.now().toString(36),
-          senderPubKey,
-          fileName: signal.fileName || 'screenshot.jpg',
-          fileSize: signal.fileSize || 0,
+          senderPubKey: buffer.senderPubKey,
+          fileName: buffer.fileName,
+          fileSize: buffer.fileSize,
           imgUrl: imgData,
           ts: Date.now()
         });
+
+        // Send confirmation receipt over Nostr back to remote user
+        NostrTransport.sendMessage(buffer.senderPubKey, {
+          id: 'ack-ss-' + Date.now(),
+          text: `🤖 [AI Support Agent] Screenshot received: "${buffer.fileName}"! Our developer can now inspect it.`,
+        }).catch(() => {});
       }
       return;
     }

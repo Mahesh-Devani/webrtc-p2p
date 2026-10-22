@@ -312,11 +312,14 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn("type: 'diagnostic_screenshot'", ui_content)
         self.assertIn("type: 'user_comment'", ui_content)
         self.assertIn('pako.deflate', ui_content)
+        self.assertIn('CHUNK_SIZE', ui_content)
 
         # 3. support-controller.js ingestion and forwarding to Python endpoints
         support_content = (PROJECT_ROOT / 'support-controller.js').read_text(encoding='utf-8')
         self.assertIn("type === 'diagnostic_screenshot'", support_content)
         self.assertIn("type === 'user_comment'", support_content)
+        self.assertIn('screenshotBuffers', support_content)
+        self.assertIn('totalChunks', support_content)
         self.assertIn('LOCAL_PYTHON_SCREENSHOT_URL', support_content)
         self.assertIn('LOCAL_PYTHON_CHAT_URL', support_content)
 

@@ -2123,7 +2123,7 @@ ${clarification}
         const url = URL.createObjectURL(file);
         img.onload = () => {
           URL.revokeObjectURL(url);
-          const maxDim = 1024;
+          const maxDim = 800; // Balanced resolution for crisp text & compact payload
           let w = img.width;
           let h = img.height;
           if (w > maxDim || h > maxDim) {
@@ -2140,8 +2140,8 @@ ${clarification}
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          base64Data = canvas.toDataURL('image/jpeg', 0.82);
-          canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.82);
+          base64Data = canvas.toDataURL('image/jpeg', 0.70);
+          canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.70);
         };
         img.onerror = reject;
         img.src = url;
@@ -2208,26 +2208,41 @@ ${clarification}
           });
         } catch {}
 
-        // Forward screenshot over Nostr relays directly to developer
+        // Forward screenshot over Nostr relays directly to developer (chunked for NIP-44 limit)
         if (nostrIdentity && NostrTransport.isConnected()) {
           try {
-            if (typeof pako !== 'undefined' && typeof pako.deflate === 'function') {
-              const compressedBytes = pako.deflate(new TextEncoder().encode(base64Data), { level: 9 });
-              const binary = String.fromCharCode.apply(null, compressedBytes);
-              const b64Compressed = btoa(binary);
-              NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
-                type: 'diagnostic_screenshot',
-                session: 'ss-' + Date.now(),
-                fileName,
-                fileSize: optimizedBlob.size,
-                data: b64Compressed
-              }).catch(e => console.warn('[AI Support Agent] Screenshot Nostr relay send error:', e));
-              DiagnosticLogger.record('info', ['[AI Support Agent] Screenshot sent over Nostr to developer']);
-            }
+            const CHUNK_SIZE = 28000; // Strictly fits within NIP-44 v2 65,535-byte plaintext limit
+            const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+            const sessionId = 'ss-' + Date.now();
+            (async () => {
+              for (let i = 0; i < totalChunks; i++) {
+                const chunk = base64Data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                await NostrTransport.sendSignal(SUPPORT_AGENT_PUBKEY, {
+                  type: 'diagnostic_screenshot',
+                  session: sessionId,
+                  chunkIndex: i,
+                  totalChunks,
+                  fileName,
+                  fileSize: optimizedBlob.size,
+                  data: chunk
+                }).catch(e => console.warn('[AI Support Agent] Screenshot chunk Nostr error:', e));
+                if (i < totalChunks - 1) {
+                  await new Promise(r => setTimeout(r, 60));
+                }
+              }
+              DiagnosticLogger.record('info', ['[AI Support Agent] Screenshot (' + totalChunks + ' chunks) sent over Nostr to developer']);
+            })().catch(err => {
+              console.warn('[AI Support Agent] Screenshot Nostr delivery error:', err);
+            });
           } catch (nostrErr) {
             console.warn('[AI Support Agent] Screenshot Nostr send failed:', nostrErr);
           }
         }
+      }
+
+      // Also attempt direct WebRTC DataChannel stream if P2P is live
+      if (session && session.isChannelOpen?.()) {
+        session.sendFile(optimizedBlob, fileName).catch(() => {});
       }
 
       // Deliver AI Support Agent response after a natural review pause
