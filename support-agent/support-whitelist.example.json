@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "clients": [
+    {
+      "pubkey": "531fab8c3f88bf138f8229be02af315ac2110714a17531941ca4bb12d2d14465",
+      "name": "My Primary Device",
+      "addedAt": 1792694244000
+    }
+  ]
+}

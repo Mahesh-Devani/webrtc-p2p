@@ -5770,7 +5770,10 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           signal: controller.signal,
         });
         clearTimeout(probeTimer);
-        if (resp.ok) {
+        if (resp.status === 403) {
+          toast('🔒 Submission rejected: Your Client ID is not whitelisted by developer.');
+          DiagnosticLogger.record('warn', ['[AI Support Agent] Submission blocked by developer whitelist']);
+        } else if (resp.ok) {
           const result = await resp.json();
           analysisResult = result.analysis;
           DiagnosticLogger.record('info', ['[AI Support Agent] Package ingested locally:', JSON.stringify(analysisResult?.rootCauses || [])]);
@@ -5838,9 +5841,10 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       hide(dom.diagnosticsModal);
 
       // Record user's diagnostic submission card in chat
+      const shortId = nostrIdentity?.pubkey ? (nostrIdentity.pubkey.slice(0, 8) + '…' + nostrIdentity.pubkey.slice(-6)) : '';
       const diagMsg = {
         id: 'diag-sub-' + Date.now(),
-        text: `📋 Diagnostic Log Package submitted (Status: ${pkg.webrtc?.connectionState || 'evaluating'}).`,
+        text: `📋 Diagnostic Log Package submitted (Status: ${pkg.webrtc?.connectionState || 'evaluating'}${shortId ? `, Client ID: ${shortId}` : ''}).`,
         sender: 'self',
         ts: Date.now(),
         status: 'delivered',

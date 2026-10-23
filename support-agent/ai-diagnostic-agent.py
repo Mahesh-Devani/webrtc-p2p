@@ -37,6 +37,114 @@ AGENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = AGENT_DIR.parent
 INBOX_DIR = AGENT_DIR / 'diagnostics-inbox'
 DEFAULT_PORT = 9998
+WHITELIST_FILE = AGENT_DIR / 'support-whitelist.json'
+WHITELIST_EXAMPLE_FILE = AGENT_DIR / 'support-whitelist.example.json'
+
+
+# ── Client Authorization Whitelist ──────────────────────────────────────────
+
+def load_whitelist() -> dict:
+    if not WHITELIST_FILE.exists():
+        if WHITELIST_EXAMPLE_FILE.exists():
+            try:
+                with open(WHITELIST_EXAMPLE_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {'enabled': True, 'clients': []}
+    try:
+        with open(WHITELIST_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                return {'enabled': True, 'clients': []}
+            return {
+                'enabled': bool(data.get('enabled', True)),
+                'clients': list(data.get('clients', []))
+            }
+    except Exception:
+        return {'enabled': True, 'clients': []}
+
+
+def save_whitelist(data: dict):
+    WHITELIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(WHITELIST_FILE, 'w', encoding='utf-8') as f:
+        json.dump({
+            'enabled': bool(data.get('enabled', True)),
+            'clients': list(data.get('clients', []))
+        }, f, indent=2)
+
+
+def is_client_authorized(pubkey: str) -> bool:
+    wl = load_whitelist()
+    if not wl.get('enabled', True):
+        return True  # Whitelist is disabled (open access)
+    clients = wl.get('clients', [])
+    if not clients:
+        return False  # Whitelist enabled and empty -> block all submissions!
+    clean_pk = re.sub(r'[^a-fA-F0-9]', '', str(pubkey)).lower()
+    if not clean_pk:
+        return False
+    for c in clients:
+        c_pk = re.sub(r'[^a-fA-F0-9]', '', str(c.get('pubkey', ''))).lower()
+        if c_pk and (c_pk == clean_pk or clean_pk.startswith(c_pk) or c_pk.startswith(clean_pk)):
+            return True
+    return False
+
+
+def add_authorized_client(pubkey: str, name: str = "") -> bool:
+    clean_pk = re.sub(r'[^a-fA-F0-9]', '', str(pubkey)).lower()
+    if len(clean_pk) < 16 or len(clean_pk) > 64:
+        return False
+    wl = load_whitelist()
+    clients = wl.get('clients', [])
+    existing = next((c for c in clients if re.sub(r'[^a-fA-F0-9]', '', str(c.get('pubkey', ''))).lower() == clean_pk), None)
+    if existing:
+        if name:
+            existing['name'] = name
+    else:
+        clients.append({
+            'pubkey': clean_pk,
+            'name': name or f"Client-{clean_pk[:6]}",
+            'addedAt': int(time.time() * 1000)
+        })
+    wl['clients'] = clients
+    save_whitelist(wl)
+    return True
+
+
+def remove_authorized_client(pubkey: str) -> bool:
+    clean_pk = re.sub(r'[^a-fA-F0-9]', '', str(pubkey)).lower()
+    wl = load_whitelist()
+    clients = [c for c in wl.get('clients', []) if re.sub(r'[^a-fA-F0-9]', '', str(c.get('pubkey', ''))).lower() != clean_pk]
+    wl['clients'] = clients
+    save_whitelist(wl)
+    return True
+
+
+def print_whitelist():
+    wl = load_whitelist()
+    enabled = wl.get('enabled', True)
+    clients = wl.get('clients', [])
+    status_str = "ENFORCED (Strict Anti-Flooding Active)" if enabled else "DISABLED (Open Access)"
+    print("\n══════════════════════════════════════════════════════════════")
+    print(f"🛡️  AI Support Agent — Client Authorization Whitelist")
+    print("══════════════════════════════════════════════════════════════")
+    print(f"• Whitelist Status: {status_str}")
+    print(f"• Total Authorized Clients: {len(clients)}\n")
+    if clients:
+        for i, c in enumerate(clients, 1):
+            name = c.get('name') or 'Unnamed Client'
+            pk = c.get('pubkey', '')
+            t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(c.get('addedAt', 0) / 1000)) if c.get('addedAt') else 'N/A'
+            print(f"  {i}. [{name}] {pk[:8]}…{pk[-6:]} (Added: {t_str})")
+            print(f"     Full Key: {pk}")
+    else:
+        if enabled:
+            print("  ⚠️ Whitelist is empty — all incoming telemetry submissions are blocked.")
+            print("  Use: python3 support-agent/ai-diagnostic-agent.py --add-client <pubkey> [--client-name 'My Phone']")
+        else:
+            print("  (Open mode: any client can submit diagnostics)")
+    print("══════════════════════════════════════════════════════════════\n")
 
 
 # ── Diagnostic Rules Engine ──────────────────────────────────────────────────
@@ -516,6 +624,14 @@ class DiagnosticServer(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, indent=2).encode('utf-8'))
             return
 
+        if self.path == '/api/whitelist':
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(load_whitelist(), indent=2).encode('utf-8'))
+            return
+
         # Serve static assets for the Support Desk
         target_path = 'support.html' if self.path in ('/', '/support', '/support.html') else self.path.lstrip('/')
         if '?' in target_path:
@@ -551,6 +667,29 @@ class DiagnosticServer(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if self.path == '/api/whitelist':
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length <= 0:
+                self.send_response(400)
+                self.end_headers()
+                return
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+                save_whitelist(data)
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'whitelist': load_whitelist()}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(400)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+            return
+
         if self.path == '/api/logpkg':
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length <= 0:
@@ -577,11 +716,26 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': f'Invalid JSON: {str(e)}'}).encode('utf-8'))
                 return
 
+            # Client Whitelist Protection: Block unauthorized telemetry submissions
+            raw_client_pk = pkg.get('identity', {}).get('clientPubKey', 'unknown')
+            client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
+
+            if not is_client_authorized(raw_client_pk):
+                print(f"\n[AI Support Agent] 🛑 Blocked unauthorized logpkg from {client_pk} (whitelist active)")
+                self.send_response(403)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'Forbidden: Client is not authorized in developer whitelist',
+                    'clientPubKey': str(raw_client_pk),
+                    'whitelistEnforced': True
+                }).encode('utf-8'))
+                return
+
             # Save to inbox with strictly sanitized filename (hex only, zero path traversal)
             INBOX_DIR.mkdir(parents=True, exist_ok=True)
             ts = int(time.time())
-            raw_client_pk = pkg.get('identity', {}).get('clientPubKey', 'unknown')
-            client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
             filename = f"logpkg_{ts}_{client_pk}.json"
             filepath = INBOX_DIR / filename
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -630,6 +784,19 @@ class DiagnosticServer(BaseHTTPRequestHandler):
             client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
             text = str(data.get('text', '')).strip()
 
+            if not is_client_authorized(raw_client_pk):
+                print(f"\n[AI Support Agent] 🛑 Blocked unauthorized comment from {client_pk} (whitelist active)")
+                self.send_response(403)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'Forbidden: Client is not authorized in developer whitelist',
+                    'clientPubKey': str(raw_client_pk),
+                    'whitelistEnforced': True
+                }).encode('utf-8'))
+                return
+
             reply_data = DiagnosticEngine.analyze_comment(text, client_pk)
 
             INBOX_DIR.mkdir(parents=True, exist_ok=True)
@@ -677,6 +844,20 @@ class DiagnosticServer(BaseHTTPRequestHandler):
 
             raw_client_pk = data.get('senderPubKey', 'unknown')
             client_pk = re.sub(r'[^a-fA-F0-9]', '', str(raw_client_pk))[:16] or 'unknown'
+
+            if not is_client_authorized(raw_client_pk):
+                print(f"\n[AI Support Agent] 🛑 Blocked unauthorized screenshot from {client_pk} (whitelist active)")
+                self.send_response(403)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'Forbidden: Client is not authorized in developer whitelist',
+                    'clientPubKey': str(raw_client_pk),
+                    'whitelistEnforced': True
+                }).encode('utf-8'))
+                return
+
             img_b64 = data.get('data', '')
             if ',' in img_b64:
                 img_b64 = img_b64.split(',', 1)[1]
@@ -935,9 +1116,39 @@ if __name__ == '__main__':
     parser.add_argument('--inbox', action='store_true', help="List and summarize all ingested packages and comments in diagnostics-inbox/")
     parser.add_argument('--port', type=int, default=DEFAULT_PORT, help=f"Port for HTTP ingestion server (default: {DEFAULT_PORT})")
     parser.add_argument('--no-headless', action='store_true', help="Do not spawn headless Chrome Nostr bridge automatically")
+    parser.add_argument('--add-client', type=str, help="Authorize a client public key in the support whitelist")
+    parser.add_argument('--client-name', type=str, default="", help="Optional nickname for authorized client")
+    parser.add_argument('--remove-client', type=str, help="Remove a client public key from the support whitelist")
+    parser.add_argument('--list-clients', action='store_true', help="List all clients authorized in support whitelist")
+    parser.add_argument('--whitelist', choices=['on', 'off', 'status'], help="Enable or disable client whitelist enforcement")
     args = parser.parse_args()
 
-    if args.inbox:
+    if args.list_clients or args.whitelist == 'status':
+        print_whitelist()
+    elif args.whitelist == 'on':
+        wl = load_whitelist()
+        wl['enabled'] = True
+        save_whitelist(wl)
+        print("\n[AI Support Agent] 🛡️ Client whitelist enforcement ENABLED.")
+        print_whitelist()
+    elif args.whitelist == 'off':
+        wl = load_whitelist()
+        wl['enabled'] = False
+        save_whitelist(wl)
+        print("\n[AI Support Agent] 🛡️ Client whitelist enforcement DISABLED (open access).")
+        print_whitelist()
+    elif args.add_client:
+        ok = add_authorized_client(args.add_client, args.client_name)
+        if ok:
+            print(f"\n[AI Support Agent] ✅ Client authorized: {args.add_client} ({args.client_name or 'unnamed'})")
+            print_whitelist()
+        else:
+            print(f"\n[AI Support Agent] ❌ Invalid public key: {args.add_client} (must be hex string)")
+    elif args.remove_client:
+        remove_authorized_client(args.remove_client)
+        print(f"\n[AI Support Agent] 🗑️ Client removed from whitelist: {args.remove_client}")
+        print_whitelist()
+    elif args.inbox:
         print_inbox()
     elif args.analyze:
         analyze_file(Path(args.analyze))

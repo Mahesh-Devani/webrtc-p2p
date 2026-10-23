@@ -110,3 +110,39 @@ Runs the full 5-point root-cause analysis engine:
 3. Nostr signaling relay reachability and partition detection.
 4. Glare, collision, and handshake timeout detection.
 5. Mobile OS backgrounding & consent freshness timeouts (RFC 7675).
+
+---
+
+## 5. Client Authorization Whitelist & Anti-Flooding Shield
+
+To prevent malicious third parties from flooding developer storage or relay bandwidth with spam diagnostic packages, screenshots, or comments, the Support Agent features a dual-layer client authorization whitelist.
+
+### Dual-Layer Defense Architecture
+1. **Relay Pre-Decryption Gate (`nostr-transport.js` + `support-controller.js`)**:
+   Incoming Nostr events from unwhitelisted sender pubkeys are filtered and discarded **before** NIP-44 decryption (`_eventFilter`). This expends zero CPU on decryption and zero disk space for unauthorized signals.
+2. **Local HTTP Ingestion Gate (`ai-diagnostic-agent.py`)**:
+   `/api/logpkg`, `/api/chat`, and `/api/screenshot` reject requests from unwhitelisted clients with `403 Forbidden`.
+
+### Storage & Privacy
+- **`support-agent/support-whitelist.json`**: Developer's active authorized clients list. Strictly gitignored to keep test keys private.
+- **`support-agent/support-whitelist.example.json`**: Checked-in template for initial setup.
+
+### CLI Whitelist Commands
+```bash
+# View whitelist status and authorized clients
+python3 support-agent/ai-diagnostic-agent.py --list-clients
+
+# Add an authorized client by hex pubkey
+python3 support-agent/ai-diagnostic-agent.py --add-client <64-char-hex-pubkey> --client-name "My Test Phone"
+
+# Remove an authorized client
+python3 support-agent/ai-diagnostic-agent.py --remove-client <64-char-hex-pubkey>
+
+# Enable or disable the whitelist shield
+python3 support-agent/ai-diagnostic-agent.py --whitelist on
+python3 support-agent/ai-diagnostic-agent.py --whitelist off
+```
+
+### Visual Management via Support Desk UI
+Open `http://127.0.0.1:9998/support.html` to toggle the shield, view all whitelisted clients with their short IDs, and add/remove clients with a single click. Changes synchronize automatically between the browser UI and `support-whitelist.json`.
+

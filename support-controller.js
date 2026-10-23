@@ -15,9 +15,12 @@ import { NostrSignaling } from './nostr-signaling.js';
 
 const STORAGE_KEY_SUPPORT_PRIV = 'p2p-support-privkey';
 const STORAGE_KEY_SUPPORT_PUB = 'p2p-support-pubkey';
+const STORAGE_KEY_SUPPORT_WHITELIST_ENABLED = 'p2p-support-whitelist-enabled';
+const STORAGE_KEY_SUPPORT_WHITELIST = 'p2p-support-authorized-clients';
 const LOCAL_PYTHON_INGEST_URL = 'http://127.0.0.1:9998/api/logpkg';
 const LOCAL_PYTHON_CHAT_URL = 'http://127.0.0.1:9998/api/chat';
 const LOCAL_PYTHON_SCREENSHOT_URL = 'http://127.0.0.1:9998/api/screenshot';
+const LOCAL_PYTHON_WHITELIST_URL = 'http://127.0.0.1:9998/api/whitelist';
 
 export const SupportController = (() => {
   let identity = null;
@@ -39,6 +42,12 @@ export const SupportController = (() => {
     pubkeyDisplay: document.getElementById('support-pubkey-display'),
     btnCopyPubkey: document.getElementById('btn-copy-support-pubkey'),
     relayList: document.getElementById('relay-status-list'),
+    whitelistToggle: document.getElementById('support-whitelist-toggle'),
+    whitelistBadge: document.getElementById('support-whitelist-badge'),
+    newClientPubkey: document.getElementById('new-support-client-pubkey'),
+    newClientName: document.getElementById('new-support-client-name'),
+    btnAddClient: document.getElementById('btn-add-support-client'),
+    clientsList: document.getElementById('support-authorized-clients-list'),
     ticketsContainer: document.getElementById('tickets-container'),
     ticketCount: document.getElementById('ticket-count'),
     terminal: document.getElementById('support-terminal'),
@@ -112,6 +121,157 @@ export const SupportController = (() => {
     }
   }
 
+  // ── Whitelist & Flooding Protection ────────────────────────────────
+  function loadAuthorizedClients() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_SUPPORT_WHITELIST)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function isWhitelistEnforced() {
+    const val = localStorage.getItem(STORAGE_KEY_SUPPORT_WHITELIST_ENABLED);
+    if (val === null) return true;
+    return val === 'true';
+  }
+
+  function isClientAuthorized(pubkey) {
+    if (!isWhitelistEnforced()) return true;
+    const clean = (pubkey || '').trim().toLowerCase();
+    if (!clean) return false;
+    const clients = loadAuthorizedClients();
+    if (clients.length === 0) return false;
+    return clients.some(c => {
+      const cpk = (c.pubkey || '').toLowerCase();
+      return cpk === clean || clean.startsWith(cpk) || cpk.startsWith(clean);
+    });
+  }
+
+  function updateEventFilter() {
+    if (isWhitelistEnforced()) {
+      NostrTransport.setEventFilter((senderPubKey) => isClientAuthorized(senderPubKey));
+      log(`🛡️ Whitelist active: ${loadAuthorizedClients().length} authorized client(s)`, 'info');
+    } else {
+      NostrTransport.setEventFilter(null);
+      log('🛡️ Whitelist disabled: open access mode', 'warn');
+    }
+  }
+
+  async function syncWhitelistWithBackend() {
+    try {
+      const resp = await fetch(LOCAL_PYTHON_WHITELIST_URL);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (typeof data.enabled === 'boolean') {
+          localStorage.setItem(STORAGE_KEY_SUPPORT_WHITELIST_ENABLED, data.enabled ? 'true' : 'false');
+        }
+        if (Array.isArray(data.clients)) {
+          localStorage.setItem(STORAGE_KEY_SUPPORT_WHITELIST, JSON.stringify(data.clients));
+        }
+      }
+    } catch {}
+    updateEventFilter();
+    renderWhitelistUI();
+  }
+
+  async function setWhitelistEnforced(enabled) {
+    localStorage.setItem(STORAGE_KEY_SUPPORT_WHITELIST_ENABLED, enabled ? 'true' : 'false');
+    try {
+      await fetch(LOCAL_PYTHON_WHITELIST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, clients: loadAuthorizedClients() })
+      });
+    } catch {}
+    updateEventFilter();
+    renderWhitelistUI();
+  }
+
+  async function addAuthorizedClient(pubkey, name = '') {
+    let clean = (pubkey || '').trim().toLowerCase();
+    if (!/^[0-9a-f]{16,64}$/.test(clean)) {
+      alert('Invalid client public key. Must be hexadecimal characters (16-64 chars).');
+      return false;
+    }
+    const clients = loadAuthorizedClients();
+    const existing = clients.find(c => c.pubkey === clean);
+    if (existing) {
+      if (name) existing.name = name;
+    } else {
+      clients.push({
+        pubkey: clean,
+        name: name || `Client-${clean.slice(0, 6)}`,
+        addedAt: Date.now()
+      });
+    }
+    localStorage.setItem(STORAGE_KEY_SUPPORT_WHITELIST, JSON.stringify(clients));
+    try {
+      await fetch(LOCAL_PYTHON_WHITELIST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: isWhitelistEnforced(), clients })
+      });
+    } catch {}
+    updateEventFilter();
+    renderWhitelistUI();
+    return true;
+  }
+
+  async function removeAuthorizedClient(pubkey) {
+    const clients = loadAuthorizedClients().filter(c => c.pubkey !== pubkey.toLowerCase());
+    localStorage.setItem(STORAGE_KEY_SUPPORT_WHITELIST, JSON.stringify(clients));
+    try {
+      await fetch(LOCAL_PYTHON_WHITELIST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: isWhitelistEnforced(), clients })
+      });
+    } catch {}
+    updateEventFilter();
+    renderWhitelistUI();
+  }
+
+  function renderWhitelistUI() {
+    if (!dom.clientsList) return;
+    const enforced = isWhitelistEnforced();
+    const clients = loadAuthorizedClients();
+
+    if (dom.whitelistToggle) {
+      dom.whitelistToggle.checked = enforced;
+    }
+    if (dom.whitelistBadge) {
+      if (enforced) {
+        dom.whitelistBadge.textContent = `${clients.length} Authorized Client${clients.length !== 1 ? 's' : ''}`;
+        dom.whitelistBadge.className = 'support-badge';
+      } else {
+        dom.whitelistBadge.textContent = 'Open Access (Disabled)';
+        dom.whitelistBadge.className = 'support-badge support-badge--offline';
+      }
+    }
+
+    if (clients.length === 0) {
+      dom.clientsList.innerHTML = `<div style="padding: 10px; text-align: center; color: var(--c-text-dim); font-size: 0.75rem; border: 1px dashed var(--c-border); border-radius: var(--radius);">
+        ${enforced ? '⚠️ Whitelist is empty — all incoming telemetry blocked.' : 'No clients explicitly whitelisted (open access active).'}
+      </div>`;
+      return;
+    }
+
+    dom.clientsList.innerHTML = clients.map(c => `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.15); border: 1px solid var(--c-border); border-radius: var(--radius); font-size: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+          <span style="font-weight: 600; color: var(--c-primary);">${escapeHtml(c.name)}</span>
+          <code style="font-family: var(--mono); color: var(--c-text-dim); font-size: 0.7rem;">${c.pubkey.slice(0, 8)}…${c.pubkey.slice(-6)}</code>
+        </div>
+        <button type="button" class="btn btn--small btn--outline" style="color: var(--c-danger); border-color: rgba(241,92,107,0.3); padding: 2px 8px; font-size: 0.7rem;" data-pubkey="${c.pubkey}">Remove</button>
+      </div>
+    `).join('');
+
+    dom.clientsList.querySelectorAll('button[data-pubkey]').forEach(btn => {
+      btn.onclick = () => removeAuthorizedClient(btn.dataset.pubkey);
+    });
+  }
+
   function renderTicketCard(ticket) {
     const { id, senderPubKey, analysis, ts } = ticket;
     const card = document.createElement('div');
@@ -163,6 +323,11 @@ export const SupportController = (() => {
    */
   async function handleDiagnosticSignal(signal) {
     const { type, data, senderPubKey } = signal;
+
+    if (!isClientAuthorized(senderPubKey)) {
+      log(`🛡️ Dropped diagnostic signal from unauthorized sender ${senderPubKey.slice(0, 8)}…`, 'warn');
+      return;
+    }
 
     if (type === 'diagnostic_screenshot') {
       const sessionId = signal.session || ('ss-' + senderPubKey);
@@ -435,6 +600,10 @@ export const SupportController = (() => {
   }
 
   function handleReceivedP2pFile(blob, fileName, meta, senderPubKey) {
+    if (!isClientAuthorized(senderPubKey)) {
+      log(`🛡️ Dropped P2P file from unauthorized sender ${senderPubKey.slice(0, 8)}…`, 'warn');
+      return;
+    }
     const name = fileName || 'screenshot.jpg';
     log(`📥 P2P File received: ${name} (${(blob.size / 1024).toFixed(1)} KB) from ${senderPubKey.slice(0, 8)}…`, 'info');
 
@@ -482,6 +651,10 @@ export const SupportController = (() => {
     const { id, text, senderPubKey } = incoming;
     if (!text || !senderPubKey) return;
     if (identity && senderPubKey === identity.publicKey) return; // Ignore own reflection
+    if (!isClientAuthorized(senderPubKey)) {
+      log(`🛡️ Dropped chat message from unauthorized sender ${senderPubKey.slice(0, 8)}…`, 'warn');
+      return;
+    }
 
     log(`💬 User message from ${senderPubKey.slice(0, 8)}: "${text}"`, 'info');
 
@@ -549,17 +722,40 @@ export const SupportController = (() => {
       onRelayStatus: () => renderRelayStates(),
     });
 
-    // 3. Connect to Nostr relays
+    // 3. Sync and enforce client whitelist pre-decryption gate
+    await syncWhitelistWithBackend();
+
+    if (dom.whitelistToggle) {
+      dom.whitelistToggle.onchange = () => {
+        setWhitelistEnforced(dom.whitelistToggle.checked);
+      };
+    }
+    if (dom.btnAddClient) {
+      dom.btnAddClient.onclick = () => {
+        const pk = dom.newClientPubkey?.value?.trim();
+        const name = dom.newClientName?.value?.trim() || '';
+        if (pk) {
+          addAuthorizedClient(pk, name).then(ok => {
+            if (ok) {
+              if (dom.newClientPubkey) dom.newClientPubkey.value = '';
+              if (dom.newClientName) dom.newClientName.value = '';
+            }
+          });
+        }
+      };
+    }
+
+    // 4. Connect to Nostr relays
     await NostrTransport.connect();
     renderRelayStates();
 
-    // 4. Subscribe to diagnostic signals
+    // 5. Subscribe to diagnostic signals
     NostrTransport.subscribeSignals(handleDiagnosticSignal);
 
-    // 5. Subscribe to incoming chat messages
+    // 6. Subscribe to incoming chat messages
     NostrTransport.subscribeMessages(handleIncomingMessage);
 
-    // 6. Initialize P2P Signaling to accept incoming P2P screenshot & data transfers
+    // 7. Initialize P2P Signaling to accept incoming P2P screenshot & data transfers
     NostrSignaling.init({
       onSessionCreated: (sessionId, session, remotePubKey, role) => {
         log(`[P2P] WebRTC session created with ${remotePubKey.slice(0, 8)}… (${role})`);
@@ -592,7 +788,15 @@ export const SupportController = (() => {
     log('🚀 AI Support Agent active and listening on Nostr relays.', 'info');
   }
 
-  return { init };
+  return {
+    init,
+    isClientAuthorized,
+    isWhitelistEnforced,
+    addAuthorizedClient,
+    removeAuthorizedClient,
+    loadAuthorizedClients,
+    setWhitelistEnforced,
+  };
 })();
 
 // Auto-run on page load

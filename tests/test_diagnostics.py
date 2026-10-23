@@ -331,6 +331,42 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('--no-headless', agent_content)
         self.assertIn('--headless=new', agent_content)
 
+    def test_support_client_whitelist_enforcement(self):
+        """ai-diagnostic-agent.py must enforce client authorization whitelist against flood attacks."""
+        test_pk = "aabbcc11223344556677889900aabbcc11223344556677889900aabbcc112233"
+        unknown_pk = "1122334455667788990011223344556677889900112233445566778899001122"
+
+        # Check Python agent whitelist functions
+        self.assertTrue(hasattr(ai_agent, 'is_client_authorized'))
+        self.assertTrue(hasattr(ai_agent, 'add_authorized_client'))
+        self.assertTrue(hasattr(ai_agent, 'remove_authorized_client'))
+
+        # Add test client
+        ai_agent.add_authorized_client(test_pk, "Test Device")
+        self.assertTrue(ai_agent.is_client_authorized(test_pk))
+        self.assertFalse(ai_agent.is_client_authorized(unknown_pk))
+
+        # Cleanup
+        ai_agent.remove_authorized_client(test_pk)
+
+    def test_support_html_and_controller_whitelist_ui(self):
+        """support.html and support-controller.js must contain whitelist UI and pre-decryption event filter."""
+        support_html = (PROJECT_ROOT / 'support.html').read_text(encoding='utf-8')
+        self.assertIn('id="support-whitelist-toggle"', support_html)
+        self.assertIn('id="support-whitelist-badge"', support_html)
+        self.assertIn('id="support-authorized-clients-list"', support_html)
+
+        controller_content = (PROJECT_ROOT / 'support-controller.js').read_text(encoding='utf-8')
+        self.assertIn('function isClientAuthorized', controller_content)
+        self.assertIn('NostrTransport.setEventFilter', controller_content)
+        self.assertIn('LOCAL_PYTHON_WHITELIST_URL', controller_content)
+
+    def test_support_whitelist_files_and_gitignore(self):
+        """.gitignore must exclude support-whitelist.json while example is tracked."""
+        gitignore = (PROJECT_ROOT / '.gitignore').read_text(encoding='utf-8')
+        self.assertIn('support-agent/support-whitelist.json', gitignore)
+        self.assertTrue((PROJECT_ROOT / 'support-agent' / 'support-whitelist.example.json').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

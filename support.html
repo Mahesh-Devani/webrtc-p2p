@@ -137,6 +137,31 @@
       </div>
     </div>
 
+    <!-- Authorized Clients Whitelist & Anti-Flooding Shield -->
+    <div style="background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 16px; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h2 style="font-size: 0.95rem; font-weight: 600; margin: 0; color: var(--c-text);">🛡️ Client Whitelist & Flooding Shield</h2>
+          <span id="support-whitelist-badge" class="support-badge">Loading…</span>
+        </div>
+        <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; cursor: pointer; color: var(--c-text);">
+          <input type="checkbox" id="support-whitelist-toggle" style="cursor: pointer;" checked>
+          <span>Enforce Client Whitelist</span>
+        </label>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--c-text-dim); margin-bottom: 12px; line-height: 1.4;">
+        Prevents Nostr relay flooding and unauthorized diagnostic spam. When active, events from unknown senders are dropped <strong>before decryption</strong> without touching memory or disk.
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+        <input type="text" id="new-support-client-pubkey" placeholder="Client Nostr Public Key (hex)…" style="flex: 2; min-width: 220px; padding: 6px 10px; font-size: 0.78rem; background: var(--c-bg); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius); font-family: var(--mono);" />
+        <input type="text" id="new-support-client-name" placeholder="Client Name (e.g. My Phone)" style="flex: 1; min-width: 140px; padding: 6px 10px; font-size: 0.78rem; background: var(--c-bg); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius);" />
+        <button type="button" id="btn-add-support-client" class="btn btn--small btn--primary" style="padding: 6px 14px; font-size: 0.78rem;">Authorize Client</button>
+      </div>
+      <div id="support-authorized-clients-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
+        <!-- Dynamically rendered authorized clients -->
+      </div>
+    </div>
+
     <!-- Active Tickets Feed -->
     <div style="margin-bottom: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -162,7 +187,7 @@
   <!-- Scripts -->
   <script src="nostr.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-  <script type="module" src="support-controller.js?v=3"></script>
+  <script type="module" src="support-controller.js?v=4"></script>
 </body>
 
 </html>
