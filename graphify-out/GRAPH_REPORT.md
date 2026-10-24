@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-10-24)
 
 ## Corpus Check
-- 53 files · ~124,547 words
+- 53 files · ~124,614 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b803a23f`
+- Built from commit: `137cf050`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -78,25 +78,25 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `toast()` - 37 edges
-2. `TestDiagnosticSystem` - 29 edges
-3. `hide()` - 29 edges
+2. `hide()` - 29 edges
+3. `TestDiagnosticSystem` - 29 edges
 4. `initNostr()` - 28 edges
 5. `show()` - 26 edges
 6. `buildNostrSessionConfig()` - 24 edges
 7. `weierstrass()` - 21 edges
 8. `MockNostrRelay` - 20 edges
-9. `update()` - 18 edges
-10. `encode()` - 18 edges
+9. `showCreateSession()` - 18 edges
+10. `showJoinSession()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
   docs/concepts-guide.md → nostr-relay.js
+- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
+  AGENTS.md → ui-controller.js
 - `Connection State Badge` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
 - `Session Cleanup` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
-- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
-  AGENTS.md → ui-controller.js
 - `Verifying Changes` --references--> `connected()`  [INFERRED]
   AGENTS.md → nostr.bundle.js
 
@@ -290,7 +290,7 @@ Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encryp
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `README.md`, `P2P Connect — System Design`?**
-  _High betweenness centrality (0.070) - this node is a cross-community bridge._
+  _High betweenness centrality (0.080) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
@@ -298,8 +298,8 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.051299060254284136 - nodes in this community are weakly interconnected._
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
-  _High betweenness centrality (0.063) - this node is a cross-community bridge._
+  _High betweenness centrality (0.069) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
-- **Why does `NostrTransport` connect `NostrRelay` to `ui-controller.js`, `host-controller.js`, `decode`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
+- **Should `update` be split into smaller, more focused modules?**
+  _Cohesion score 0.11576354679802955 - nodes in this community are weakly interconnected._
