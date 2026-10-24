@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792541225.39398,
-    "seen": 1792541528.787256,
-    "ast_hash": "7caa8fdf549b7b4a8c392a09238ec0c1",
+    "mtime": 1792854200.631394,
+    "seen": 1792854276.1359649,
+    "ast_hash": "acfa82917e88a4934209c6b970214d15",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1792517692.1886134,
-    "seen": 1792517737.314844,
-    "ast_hash": "ee9192912822331df58a2a9c1319358a",
+    "mtime": 1792853690.8245044,
+    "seen": 1792854276.135969,
+    "ast_hash": "1dc166573bfc8e52366a1fd86d68a3c2",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792775032.6121397,
-    "seen": 1792775176.626136,
-    "ast_hash": "6924cb27f1bed226d74c0a15eec0d979",
+    "mtime": 1792854122.667251,
+    "seen": 1792854276.1359842,
+    "ast_hash": "dbf5eb97af794fac2af0aaecb5d15931",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792309724.3200145,
-    "seen": 1792309814.4898932,
-    "ast_hash": "c0666b44026299ff896823b26c9b2aec",
+    "mtime": 1792854072.8692484,
+    "seen": 1792854276.13599,
+    "ast_hash": "cc439ca07bab93e14620ecdbb45e0dc5",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792775045.018965,
-    "seen": 1792775176.626143,
-    "ast_hash": "456e12e0126a2e55adf2ae833e6bf6ae",
+    "mtime": 1792854133.504033,
+    "seen": 1792854276.135991,
+    "ast_hash": "65b39689f24359869a861054c46e5198",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -198,9 +198,9 @@
     "semantic_hash": ""
   },
   "run-regressions.py": {
-    "mtime": 1792390543.184758,
-    "seen": 1792390588.9162738,
-    "ast_hash": "028f1f9a4d23a9f3fc75dbb6c55b87bd",
+    "mtime": 1792854263.112811,
+    "seen": 1792854276.1359732,
+    "ast_hash": "70dc7d7bcbb0477f0f2f32728663bc9a",
     "semantic_hash": ""
   },
   "tests/test_host_security.py": {
@@ -333,6 +333,12 @@
     "mtime": 1792774604.94503,
     "seen": 1792775176.626129,
     "ast_hash": "58e8f66eaa50c2b3b4d0242396cf4a0a",
+    "semantic_hash": ""
+  },
+  "tests/test_on_demand_capture.py": {
+    "mtime": 1792854231.8194351,
+    "seen": 1792854276.135982,
+    "ast_hash": "34384c9b0a585cd0bce2d2af0ecd12f8",
     "semantic_hash": ""
   }
 }

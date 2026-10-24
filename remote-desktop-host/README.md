@@ -24,15 +24,18 @@ This directory provides the companion agent that turns **P2P Connect** into a fu
 4. **Zero-Dependency Native Bridge (`bridge.py`)**: Built entirely on standard Python 3 (`asyncio`, `struct`, `ctypes`, `hashlib`). **Zero external pip packages needed!** Features sub-millisecond CoreGraphics Quartz injection (macOS) and Win32 acceleration.
 
 > [!IMPORTANT]
-> ### ⚠️ Browser Tab Requirement Notice
-> **`host.html` must remain open in your browser (Chrome, Edge, or Brave).**
-> Minimized or in a background tab is completely fine!
+> ### 🖥️ Dual-Mode Architecture: Native On-Demand vs. View-Only Fallback
 > 
-> **Why?**
-> - **WebRTC Video Capture (`getDisplayMedia`) & Hardware Encoding**: Modern browsers run the 60 FPS hardware VP8/VP9 video encoder.
-> - **Nostr Signaling Handshake**: Handles decentralized peer discovery and encrypted session establishment.
-> - **`bridge.py`'s Role**: Focuses strictly on injecting native OS mouse clicks, movements, and keystrokes.
-> - **Keep both running**: `host.html` (in browser) + `bridge.py` (via terminal or background service).
+> **Mode 1: Enhanced Native Mode (`bridge.py` is running)**:
+> - **On-Demand Display Wake**: Screen sleeps and locks naturally when idle (zero wasted power). When you connect from your phone or laptop, `bridge.py` wakes the display automatically.
+> - **Lock-Screen Remote Login**: Captures macOS/Windows lock screen, allowing you to type your password remotely and log in.
+> - **Dynamic Target Selection**: Switch between physical monitors or individual application windows (e.g. VS Code, Terminal) from the remote client on the fly.
+> - **Full Remote Control**: Sub-millisecond mouse, keyboard, and clipboard injection.
+> 
+> **Mode 2: Standalone View-Only Fallback (`bridge.py` is NOT running)**:
+> - If you only run `host.html` in your browser without `bridge.py`, you can manually click *"Start Desktop Capture"*.
+> - Remote clients can view the real-time screen in **View-Only** mode without input injection.
+> - Screen Wake Lock (`navigator.wakeLock`) prevents premature display sleep during manual sharing sessions.
 
 ---
 

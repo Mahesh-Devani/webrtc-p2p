@@ -469,6 +469,299 @@ async def mouse_worker():
 # ── 4. RFC 6455 WebSocket Implementation (Standard Library) ──────────────────
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+# ── 5. Display Wake & Sleep Assertion Manager ────────────────────────────────
+class DisplayWakeManager:
+    """
+    Manages transient display wake and OS sleep assertions.
+    Keeps the display awake STRICTLY while an active remote desktop session
+    is running, and releases the assertion as soon as the session ends so
+    the host computer's display can sleep and lock naturally.
+    """
+    def __init__(self):
+        self.ref_count = 0
+        self.assertion_id = None
+        self.cf_assertion_type = None
+        self.cf_assertion_name = None
+
+    def wake(self, reason="P2P Connect Remote Desktop Session Active"):
+        self.ref_count += 1
+        if self.ref_count > 1:
+            return True
+
+        print(f"[Power] Remote session started: Waking display & activating sleep assertion")
+        if PLATFORM == 'darwin':
+            # 1. Wake the display immediately
+            try:
+                subprocess.Popen(['caffeinate', '-u', '-t', '5'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
+            # 2. Simulate subtle mouse movement to wake macOS WindowServer
+            try:
+                if 'cg' in globals() and 'kCGEventMouseMoved' in globals():
+                    ox, oy, sw, sh = get_screen_bounds()
+                    pt = CGPoint(ox + sw // 2, oy + sh // 2)
+                    ev = cg.CGEventCreateMouseEvent(None, kCGEventMouseMoved, pt, 0)
+                    if ev:
+                        cg.CGEventPost(kCGHIDEventTap, ev)
+                        cg.CFRelease(ev)
+            except Exception:
+                pass
+
+            # 3. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
+            try:
+                iokit_path = ctypes.util.find_library('IOKit')
+                cf_path = ctypes.util.find_library('CoreFoundation')
+                if iokit_path and cf_path:
+                    iokit = ctypes.cdll.LoadLibrary(iokit_path)
+                    cf = ctypes.cdll.LoadLibrary(cf_path)
+                    kCFStringEncodingUTF8 = 0x08000100
+                    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+                    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+                    cf.CFRelease.argtypes = [ctypes.c_void_p]
+
+                    self.cf_assertion_type = cf.CFStringCreateWithCString(None, b"PreventUserIdleDisplaySleep", kCFStringEncodingUTF8)
+                    self.cf_assertion_name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
+                    aid = ctypes.c_uint32(0)
+                    iokit.IOPMAssertionCreateWithName.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+                    iokit.IOPMAssertionCreateWithName.restype = ctypes.c_int
+
+                    ret = iokit.IOPMAssertionCreateWithName(self.cf_assertion_type, 255, self.cf_assertion_name, ctypes.byref(aid))
+                    if ret == 0:
+                        self.assertion_id = aid.value
+                        print(f"[Power] Acquired IOKit display sleep assertion (ID: {self.assertion_id})")
+            except Exception as e:
+                print(f"[Power] Could not acquire IOKit assertion: {e}")
+
+        elif PLATFORM == 'win32':
+            try:
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+                print("[Power] Acquired Windows display sleep assertion")
+            except Exception as e:
+                print(f"[Power] Could not acquire Win32 assertion: {e}")
+
+        return True
+
+    def release(self):
+        if self.ref_count <= 0:
+            return
+        self.ref_count -= 1
+        if self.ref_count > 0:
+            return
+
+        print("[Power] Remote session ended: Releasing display sleep assertion (display can now sleep/lock naturally)")
+        if PLATFORM == 'darwin':
+            if self.assertion_id is not None:
+                try:
+                    iokit_path = ctypes.util.find_library('IOKit')
+                    if iokit_path:
+                        iokit = ctypes.cdll.LoadLibrary(iokit_path)
+                        iokit.IOPMAssertionRelease.argtypes = [ctypes.c_uint32]
+                        iokit.IOPMAssertionRelease.restype = ctypes.c_int
+                        iokit.IOPMAssertionRelease(self.assertion_id)
+                except Exception:
+                    pass
+                self.assertion_id = None
+            if self.cf_assertion_type or self.cf_assertion_name:
+                try:
+                    cf_path = ctypes.util.find_library('CoreFoundation')
+                    if cf_path:
+                        cf = ctypes.cdll.LoadLibrary(cf_path)
+                        if self.cf_assertion_type:
+                            cf.CFRelease(self.cf_assertion_type)
+                            self.cf_assertion_type = None
+                        if self.cf_assertion_name:
+                            cf.CFRelease(self.cf_assertion_name)
+                            self.cf_assertion_name = None
+                except Exception:
+                    pass
+
+        elif PLATFORM == 'win32':
+            try:
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+            except Exception:
+                pass
+
+
+# ── 6. Native Frame Capture Engine (Display, Window & Hardware JPEG) ─────────
+class NativeFrameCapturer:
+    """
+    High-performance native frame capture engine with hardware JPEG compression.
+    Supports physical display capture (including macOS Lock Screen) and individual
+    application window capture with ZERO external pip dependencies.
+    """
+    def __init__(self):
+        self._init_platform()
+
+    def _init_platform(self):
+        if PLATFORM == 'darwin':
+            self.cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))
+            self.cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))
+            self.imageio = ctypes.cdll.LoadLibrary(ctypes.util.find_library('ImageIO'))
+
+            # Setup prototypes
+            self.cg.CGDisplayCreateImage.argtypes = [ctypes.c_uint32]
+            self.cg.CGDisplayCreateImage.restype = ctypes.c_void_p
+            self.cg.CGWindowListCreateImage.argtypes = [CGRect, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
+            self.cg.CGWindowListCreateImage.restype = ctypes.c_void_p
+            self.cg.CGImageGetWidth.argtypes = [ctypes.c_void_p]
+            self.cg.CGImageGetWidth.restype = ctypes.c_size_t
+            self.cg.CGImageGetHeight.argtypes = [ctypes.c_void_p]
+            self.cg.CGImageGetHeight.restype = ctypes.c_size_t
+            self.cg.CGImageRelease.argtypes = [ctypes.c_void_p]
+
+            self.imageio.CGImageDestinationCreateWithData.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
+            self.imageio.CGImageDestinationCreateWithData.restype = ctypes.c_void_p
+            self.imageio.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+            self.imageio.CGImageDestinationAddImage.restype = None
+            self.imageio.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]
+            self.imageio.CGImageDestinationFinalize.restype = ctypes.c_bool
+
+            self.cf.CFDataCreateMutable.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            self.cf.CFDataCreateMutable.restype = ctypes.c_void_p
+            self.cf.CFDataGetLength.argtypes = [ctypes.c_void_p]
+            self.cf.CFDataGetLength.restype = ctypes.c_size_t
+            self.cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
+            self.cf.CFDataGetBytePtr.restype = ctypes.c_void_p
+            self.cf.CFRelease.argtypes = [ctypes.c_void_p]
+
+            kCFStringEncodingUTF8 = 0x08000100
+            self.cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+            self.cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+            self.jpeg_type = self.cf.CFStringCreateWithCString(None, b'public.jpeg', kCFStringEncodingUTF8)
+            self.null_rect = CGRect(CGPoint(float('inf'), float('inf')), CGSize(0, 0))
+
+    def capture_display(self, display_id=None):
+        if PLATFORM == 'darwin':
+            d_id = int(display_id) if (display_id and int(display_id) > 0) else self.cg.CGMainDisplayID()
+            img = self.cg.CGDisplayCreateImage(d_id)
+            return self._compress_cg_image(img)
+        return None, 0, 0
+
+    def capture_window(self, window_id):
+        if PLATFORM == 'darwin':
+            # 8 = kCGWindowListOptionIncludingWindow, 0 = kCGWindowImageDefault
+            img = self.cg.CGWindowListCreateImage(self.null_rect, 8, int(window_id), 0)
+            return self._compress_cg_image(img)
+        return None, 0, 0
+
+    def _compress_cg_image(self, img):
+        if not img:
+            return None, 0, 0
+        try:
+            w = self.cg.CGImageGetWidth(img)
+            h = self.cg.CGImageGetHeight(img)
+            data_buf = self.cf.CFDataCreateMutable(None, 0)
+            dest = self.imageio.CGImageDestinationCreateWithData(data_buf, self.jpeg_type, 1, None)
+            self.imageio.CGImageDestinationAddImage(dest, img, None)
+            self.imageio.CGImageDestinationFinalize(dest)
+            self.cg.CGImageRelease(img)
+            self.cf.CFRelease(dest)
+
+            length = self.cf.CFDataGetLength(data_buf)
+            ptr = self.cf.CFDataGetBytePtr(data_buf)
+            py_bytes = ctypes.string_at(ptr, length)
+            self.cf.CFRelease(data_buf)
+            return py_bytes, w, h
+        except Exception:
+            if img:
+                try: self.cg.CGImageRelease(img)
+                except Exception: pass
+            return None, 0, 0
+
+    def enumerate_targets(self):
+        displays = []
+        windows = []
+        if PLATFORM == 'darwin':
+            # 1. Displays
+            try:
+                max_displays = 16
+                active_displays = (ctypes.c_uint32 * max_displays)()
+                display_count = ctypes.c_uint32()
+                if self.cg.CGGetActiveDisplayList(max_displays, active_displays, ctypes.byref(display_count)) == 0:
+                    for i in range(display_count.value):
+                        d_id = active_displays[i]
+                        w = int(self.cg.CGDisplayPixelsWide(d_id))
+                        h = int(self.cg.CGDisplayPixelsHigh(d_id))
+                        displays.append({
+                            'id': int(d_id),
+                            'index': i + 1,
+                            'name': f"Display {i + 1} ({w}x{h})",
+                            'width': w,
+                            'height': h,
+                            'is_main': (d_id == self.cg.CGMainDisplayID())
+                        })
+            except Exception:
+                pass
+
+            # 2. Windows
+            try:
+                kCGWindowListOptionOnScreenOnly = 1
+                kCGWindowListExcludeDesktopElements = 16
+                arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
+                if arr:
+                    count = self.cf.CFArrayGetCount(arr)
+                    k_owner = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerName', 0x08000100)
+                    k_name = self.cf.CFStringCreateWithCString(None, b'kCGWindowName', 0x08000100)
+                    k_num = self.cf.CFStringCreateWithCString(None, b'kCGWindowNumber', 0x08000100)
+                    k_layer = self.cf.CFStringCreateWithCString(None, b'kCGWindowLayer', 0x08000100)
+
+                    buf = ctypes.create_string_buffer(256)
+                    for i in range(count):
+                        d = self.cf.CFArrayGetValueAtIndex(arr, i)
+                        layer = ctypes.c_int32(0)
+                        l_ref = self.cf.CFDictionaryGetValue(d, k_layer)
+                        if l_ref:
+                            self.cf.CFNumberGetValue(l_ref, 3, ctypes.byref(layer))
+                        if layer.value != 0:
+                            continue
+                        num_ref = self.cf.CFDictionaryGetValue(d, k_num)
+                        wid = ctypes.c_uint32(0)
+                        if num_ref:
+                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid))
+                        
+                        owner_ref = self.cf.CFDictionaryGetValue(d, k_owner)
+                        owner = ''
+                        if owner_ref and self.cf.CFStringGetCString(owner_ref, buf, 256, 0x08000100):
+                            owner = buf.value.decode('utf-8', errors='ignore')
+
+                        name_ref = self.cf.CFDictionaryGetValue(d, k_name)
+                        name = ''
+                        if name_ref and self.cf.CFStringGetCString(name_ref, buf, 256, 0x08000100):
+                            name = buf.value.decode('utf-8', errors='ignore')
+
+                        if owner and owner not in ('Window Server', 'Dock', 'ControlCenter', 'Notification Centre'):
+                            title = f"{owner} - {name}" if name else owner
+                            windows.append({
+                                'id': int(wid.value),
+                                'owner': owner,
+                                'name': name,
+                                'title': title
+                            })
+                    self.cf.CFRelease(arr)
+                    self.cf.CFRelease(k_owner)
+                    self.cf.CFRelease(k_name)
+                    self.cf.CFRelease(k_num)
+                    self.cf.CFRelease(k_layer)
+            except Exception:
+                pass
+
+        if not displays:
+            displays.append({
+                'id': 1,
+                'index': 1,
+                'name': f"Main Display ({SCREEN_WIDTH}x{SCREEN_HEIGHT})",
+                'width': SCREEN_WIDTH,
+                'height': SCREEN_HEIGHT,
+                'is_main': True
+            })
+
+        return {'displays': displays, 'windows': windows}
+
+_global_wake_manager = DisplayWakeManager()
+_global_frame_capturer = NativeFrameCapturer()
+
+
 def make_ws_frame(payload, opcode=0x01):
     data = payload.encode('utf-8') if isinstance(payload, str) else payload
     length = len(data)
@@ -558,6 +851,39 @@ async def handle_client(reader, writer):
         await writer.drain()
 
         print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin}, Screen: {sw}x{sh} at ({ox},{oy}))")
+
+        # ── Native On-Demand Frame Capture & Streaming Engine ──
+        capture_active = False
+        capture_target_type = 'display'
+        capture_target_id = 0
+        capture_fps = 30
+        capture_task = None
+
+        async def stream_frames_loop():
+            nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
+            target_delay = 1.0 / max(1, min(60, capture_fps))
+            while capture_active:
+                t0 = time.time()
+                try:
+                    if capture_target_type == 'window' and capture_target_id > 0:
+                        jpeg_bytes, w, h = _global_frame_capturer.capture_window(capture_target_id)
+                        t_code = 2
+                    else:
+                        jpeg_bytes, w, h = _global_frame_capturer.capture_display(capture_target_id)
+                        t_code = 1
+
+                    if jpeg_bytes and len(jpeg_bytes) > 0:
+                        header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
+                        writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
+                        await writer.drain()
+                except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError):
+                    break
+                except Exception:
+                    pass
+
+                elapsed = time.time() - t0
+                sleep_time = max(0.005, target_delay - elapsed)
+                await asyncio.sleep(sleep_time)
 
         # ── Process incoming WebRTC input events ──
         while True:
@@ -690,6 +1016,43 @@ async def handle_client(reader, writer):
                 writer.write(make_ws_frame(json.dumps({'t': 'monitors', 'monitors': monitors})))
                 await writer.drain()
 
+            elif evt_type in ('start_capture', 'action') and (data.get('action') == 'start_capture' or evt_type == 'start_capture'):
+                capture_target_type = data.get('target', 'display')
+                capture_target_id = int(data.get('id', 0))
+                capture_fps = int(data.get('fps', 30))
+                _global_wake_manager.wake()
+                capture_active = True
+                if capture_task and not capture_task.done():
+                    capture_task.cancel()
+                capture_task = asyncio.create_task(stream_frames_loop())
+                writer.write(make_ws_frame(json.dumps({'t': 'capture_started', 'target': capture_target_type, 'id': capture_target_id})))
+                await writer.drain()
+
+            elif evt_type in ('stop_capture', 'action') and (data.get('action') == 'stop_capture' or evt_type == 'stop_capture'):
+                capture_active = False
+                if capture_task and not capture_task.done():
+                    capture_task.cancel()
+                    capture_task = None
+                _global_wake_manager.release()
+                writer.write(make_ws_frame(json.dumps({'t': 'capture_stopped'})))
+                await writer.drain()
+
+            elif evt_type in ('get_targets', 'get_monitors'):
+                targets = _global_frame_capturer.enumerate_targets()
+                writer.write(make_ws_frame(json.dumps({
+                    't': 'targets',
+                    'displays': targets['displays'],
+                    'windows': targets['windows'],
+                    'monitors': targets['displays']  # backward compatibility
+                })))
+                await writer.drain()
+
+            elif evt_type == 'select_target':
+                capture_target_type = data.get('target', 'display')
+                capture_target_id = int(data.get('id', 0))
+                writer.write(make_ws_frame(json.dumps({'t': 'target_selected', 'target': capture_target_type, 'id': capture_target_id})))
+                await writer.drain()
+
             elif evt_type == 'ping':
                 writer.write(make_ws_frame(json.dumps({'t': 'pong'})))
                 await writer.drain()
@@ -699,6 +1062,11 @@ async def handle_client(reader, writer):
     except Exception as err:
         print(f"[!] Error: {err}")
     finally:
+        if capture_active:
+            capture_active = False
+        if capture_task and not capture_task.done():
+            capture_task.cancel()
+        _global_wake_manager.release()
         try:
             writer.close()
             await writer.wait_closed()
@@ -745,6 +1113,8 @@ async def main(host, port, token, extra_origins, allow_all, bounds_ttl=None):
     else:
         print(f"    ✓ Origin Filtering: ENFORCED (allowed domains & LAN IPs)")
     print("    ✓ Emergency Stop: Available via Host UI & Disconnect button")
+    print("    ✓ On-Demand Capture: READY (Display & Window hardware capture)")
+    print("    ✓ Display Wake on Demand: ENABLED (Screen sleeps naturally when idle)")
     print("=" * 68)
     print("Ready! Waiting for authenticated browser remote control session...\n")
 

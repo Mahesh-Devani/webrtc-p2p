@@ -48,18 +48,22 @@ FILE_TO_TESTS_MAP = {
     'host-controller.js': [
         'tests.test_host_security',
         'tests.test_invariants',
+        'tests.test_on_demand_capture',
     ],
     'host.html': [
         'tests.test_host_security',
         'tests.test_invariants',
+        'tests.test_on_demand_capture',
     ],
     'remote-desktop-host': [
         'tests.test_host_security',
+        'tests.test_on_demand_capture',
     ],
     'ui-controller.js': [
         'tests.test_invariants',
         'tests.test_mobile_lifecycle',
         'tests.test_webrtc_contracts',
+        'tests.test_on_demand_capture',
     ],
     'index.html': [
         'tests.test_invariants',
@@ -113,6 +117,7 @@ ALL_TEST_MODULES = [
     'tests.test_mobile_lifecycle',
     'tests.test_diagnostics',
     'tests.test_mock_relay',
+    'tests.test_on_demand_capture',
 ]
 
 

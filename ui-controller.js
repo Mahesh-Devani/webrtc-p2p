@@ -2781,19 +2781,26 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       return;
     }
 
-    if (evt.t === 'monitors') {
-      const monitors = Array.isArray(evt.monitors) ? evt.monitors : [];
+    if (evt.t === 'targets' || evt.t === 'monitors') {
+      const displays = Array.isArray(evt.displays) ? evt.displays : (Array.isArray(evt.monitors) ? evt.monitors : []);
+      const windows = Array.isArray(evt.windows) ? evt.windows : [];
       if (dom.rdDisplaysMenu) {
         let html = '';
-        if (monitors.length > 0) {
-          html = monitors.map(m => `
-            <button class="rd-key-item" data-display="${escapeHtml(String(m.id))}">🖥️ ${escapeHtml(m.name)}</button>
+        if (displays.length > 0) {
+          html += `<div style="font-size:0.68rem;font-weight:700;color:var(--c-text-dim);padding:4px 8px;text-transform:uppercase;">Physical Displays</div>`;
+          html += displays.map(d => `
+            <button class="rd-key-item" data-target="display" data-id="${escapeHtml(String(d.id || d.index))}">🖥️ ${escapeHtml(d.name)}</button>
           `).join('');
-        } else {
-          html = `<button class="rd-key-item active" data-display="all">🖥️ Main Display</button>`;
         }
-        html += `<div style="border-top:1px solid var(--c-border);margin:3px 0;"></div>
-                 <button class="rd-key-item" data-display="reselect">🔄 Change Screen on Host</button>`;
+        if (windows.length > 0) {
+          html += `<div style="font-size:0.68rem;font-weight:700;color:var(--c-text-dim);padding:6px 8px 4px;text-transform:uppercase;border-top:1px solid var(--c-border);margin-top:4px;">Application Windows</div>`;
+          html += windows.map(w => `
+            <button class="rd-key-item" data-target="window" data-id="${escapeHtml(String(w.id))}">🪟 ${escapeHtml(w.title || w.name || w.owner)}</button>
+          `).join('');
+        }
+        html += `<div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
+                 <button class="rd-key-item" data-action="refresh_targets">🔄 Refresh Displays & Windows</button>
+                 <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>`;
         dom.rdDisplaysMenu.innerHTML = html;
         attachDisplaysMenuListeners();
       }
@@ -2865,15 +2872,35 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         hide(dom.rdDisplaysMenu);
-        const action = btn.dataset.display;
-        if (action === 'reselect') {
+        const action = btn.dataset.action;
+        const targetType = btn.dataset.target;
+        const targetId = btn.dataset.id;
+        const legacyDisplay = btn.dataset.display;
+
+        if (action === 'reselect' || legacyDisplay === 'reselect') {
           sendRdInput({ t: 'reselect_screen' });
           toast('Requested host to re-select screen / window.');
-        } else {
+        } else if (action === 'refresh_targets') {
+          sendRdInput({ t: 'get_targets' });
+          toast('Refreshing displays and windows from host…');
+        } else if (targetType === 'window' && targetId) {
           dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          if (dom.rdDisplaysLabel) dom.rdDisplaysLabel.textContent = `Disp ${action} ▾`;
-          sendRdInput({ t: 'switch_display', displayId: action });
+          if (dom.rdDisplaysLabel) dom.rdDisplaysLabel.textContent = `Window ▾`;
+          sendRdInput({ t: 'select_target', target: 'window', id: Number(targetId) });
+          toast(`Switched capture to window.`);
+        } else if (targetType === 'display' && targetId) {
+          dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if (dom.rdDisplaysLabel) dom.rdDisplaysLabel.textContent = `Disp ${targetId} ▾`;
+          sendRdInput({ t: 'select_target', target: 'display', id: Number(targetId) });
+          sendRdInput({ t: 'switch_display', displayId: targetId });
+          toast(`Switched display view.`);
+        } else if (legacyDisplay) {
+          dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if (dom.rdDisplaysLabel) dom.rdDisplaysLabel.textContent = `Disp ${legacyDisplay} ▾`;
+          sendRdInput({ t: 'switch_display', displayId: legacyDisplay });
           toast(`Switched display view.`);
         }
       });
@@ -5237,6 +5264,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
     dom.rdDisplaysMenu?.classList.toggle('hidden');
+    sendRdInput({ t: 'get_targets' });
     sendRdInput({ t: 'get_monitors' });
   });
   attachDisplaysMenuListeners();

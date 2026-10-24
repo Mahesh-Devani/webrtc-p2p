@@ -555,6 +555,7 @@ function connectBridge(force = false) {
     try {
       console.log(`[Host Bridge] Attempting connection to: ${currentUrl}`);
       const ws = new WebSocket(currentUrl);
+      ws.binaryType = 'arraybuffer';
 
       // Fast connection timeout: loopback connections succeed in < 5ms.
       // If still connecting after 1200ms, abort and try next candidate.
@@ -585,10 +586,24 @@ function connectBridge(force = false) {
         }
         document.getElementById('bridge-setup-details')?.removeAttribute('open');
         broadcastBridgeStatus(true);
+        updateCaptureUI(isHostStreamLive());
       };
 
       ws.onmessage = (evt) => {
         if (currentGen !== bridgeConnectGeneration) return;
+
+        // Native binary video frame from bridge.py
+        if (evt.data instanceof ArrayBuffer) {
+          if (evt.data.byteLength > 14) {
+            const view = new DataView(evt.data);
+            const w = view.getUint32(6);
+            const h = view.getUint32(10);
+            const jpegBlob = new Blob([new Uint8Array(evt.data, 14)], { type: 'image/jpeg' });
+            renderNativeFrameToCanvas(jpegBlob, w, h);
+          }
+          return;
+        }
+
         try {
           const msg = JSON.parse(evt.data);
           if (msg.t === 'connected' || msg.t === 'auth_ok') {
@@ -601,8 +616,9 @@ function connectBridge(force = false) {
             }
             document.getElementById('bridge-setup-details')?.removeAttribute('open');
             broadcastBridgeStatus(true);
+            updateCaptureUI(isHostStreamLive());
           }
-          if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors')) {
+          if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors' || msg.t === 'targets' || msg.t === 'target_selected')) {
             try { activeSession.sendInput(msg); } catch {}
           }
         } catch {}
@@ -616,6 +632,7 @@ function connectBridge(force = false) {
           bridgeConnected = false;
           bridgeWs = null;
           broadcastBridgeStatus(false);
+          updateCaptureUI(isHostStreamLive());
           if (dom.hostBridgePill) {
             dom.hostBridgePill.className = 'badge badge--idle';
             dom.hostBridgePill.textContent = 'Disconnected (auto-reconnecting...)';
@@ -638,15 +655,132 @@ function connectBridge(force = false) {
   tryNext();
 }
 
-// ── 3. Desktop Screen Capture ───────────────────────────────────────
+// ── 3. Desktop Screen Capture & Native On-Demand Engine ─────────────
+let nativeCanvas = null;
+let nativeCanvasCtx = null;
+let nativeCanvasStream = null;
+let nativeCanvasTrack = null;
+let nativeStreamActive = false;
+let currentCaptureTarget = { type: 'display', id: 0 };
+let screenWakeLock = null;
+
+async function acquireScreenWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      screenWakeLock = await navigator.wakeLock.request('screen');
+      screenWakeLock.addEventListener('release', () => {
+        screenWakeLock = null;
+      });
+      console.log('[Host Power] Screen Wake Lock acquired (display sleep prevented)');
+    } catch (err) {
+      console.warn('[Host Power] Screen Wake Lock request failed:', err);
+    }
+  }
+}
+
+async function releaseScreenWakeLock() {
+  if (screenWakeLock) {
+    try {
+      await screenWakeLock.release();
+    } catch {}
+    screenWakeLock = null;
+    console.log('[Host Power] Screen Wake Lock released');
+  }
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && isHostStreamLive() && !screenWakeLock && !bridgeConnected) {
+    await acquireScreenWakeLock();
+  }
+});
+
+function initNativeCanvas() {
+  if (!nativeCanvas) {
+    nativeCanvas = document.createElement('canvas');
+    nativeCanvas.width = 1920;
+    nativeCanvas.height = 1080;
+    nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
+    nativeCanvasCtx.fillStyle = '#000000';
+    nativeCanvasCtx.fillRect(0, 0, 1920, 1080);
+  }
+  if (!nativeCanvasStream) {
+    nativeCanvasStream = nativeCanvas.captureStream(30);
+    nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
+    if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
+      nativeCanvasTrack.contentHint = 'detail';
+    }
+  }
+  return nativeCanvasStream;
+}
+
+function ensureNativeOnDemandCapture() {
+  const stream = initNativeCanvas();
+  nativeStreamActive = true;
+  if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    try {
+      bridgeWs.send(JSON.stringify({
+        action: 'start_capture',
+        target: currentCaptureTarget.type,
+        id: currentCaptureTarget.id,
+        fps: 30
+      }));
+    } catch (e) {
+      console.warn('[Host] Error requesting native capture start:', e);
+    }
+  }
+  return stream;
+}
+
+function stopNativeOnDemandCapture() {
+  nativeStreamActive = false;
+  if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    try {
+      bridgeWs.send(JSON.stringify({ action: 'stop_capture' }));
+    } catch {}
+  }
+}
+
+async function renderNativeFrameToCanvas(blob, w, h) {
+  if (!nativeCanvas) initNativeCanvas();
+  if (w > 0 && h > 0 && (nativeCanvas.width !== w || nativeCanvas.height !== h)) {
+    nativeCanvas.width = w;
+    nativeCanvas.height = h;
+  }
+  try {
+    const bitmap = await createImageBitmap(blob);
+    nativeCanvasCtx.drawImage(bitmap, 0, 0, nativeCanvas.width, nativeCanvas.height);
+    bitmap.close();
+    nativeStreamActive = true;
+    updateCaptureUI(true, nativeCanvas.width, nativeCanvas.height, false);
+    if (dom.hostScreenVideo && dom.hostScreenVideo.srcObject !== nativeCanvasStream) {
+      dom.hostScreenVideo.srcObject = nativeCanvasStream;
+      dom.hostScreenVideo.style.display = 'block';
+    }
+  } catch (e) {
+    console.warn('[Host Canvas] Error rendering frame bitmap:', e);
+  }
+}
+
 function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
   if (dom.captureStatusBadge) {
-    dom.captureStatusBadge.className = 'badge ' + (active ? 'badge--connected' : 'badge--idle');
-    dom.captureStatusBadge.textContent = active ? '🟢 Active (Ready for Unattended Access)' : '🔴 Inactive (Click Start)';
+    if (bridgeConnected && !active) {
+      dom.captureStatusBadge.className = 'badge badge--connected';
+      dom.captureStatusBadge.textContent = '⚡ Ready (Native On-Demand Sleep & Wake)';
+    } else {
+      dom.captureStatusBadge.className = 'badge ' + (active ? 'badge--connected' : 'badge--idle');
+      dom.captureStatusBadge.textContent = active
+        ? (bridgeConnected ? '🟢 Streaming (Native 60 FPS Capture)' : '🟢 Active (Manual View-Only Capture)')
+        : '🔴 Inactive (Click Start for View-Only)';
+    }
   }
   if (dom.btnToggleCapture) {
-    dom.btnToggleCapture.textContent = active ? 'Stop Capture' : 'Start Desktop Capture';
-    dom.btnToggleCapture.className = 'btn btn--small ' + (active ? 'btn--outline' : 'btn--primary');
+    if (bridgeConnected && !active) {
+      dom.btnToggleCapture.textContent = 'Manual Capture Fallback';
+      dom.btnToggleCapture.className = 'btn btn--small btn--outline';
+    } else {
+      dom.btnToggleCapture.textContent = active ? 'Stop Capture' : 'Start Desktop Capture';
+      dom.btnToggleCapture.className = 'btn btn--small ' + (active ? 'btn--outline' : 'btn--primary');
+    }
   }
   if (dom.hostScreenPlaceholder) {
     dom.hostScreenPlaceholder.classList.toggle('hidden', active);
@@ -665,6 +799,10 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
 }
 
 function isHostStreamLive() {
+  if (bridgeConnected && nativeCanvasStream && nativeCanvasStream.active) {
+    const tracks = nativeCanvasStream.getVideoTracks();
+    if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
+  }
   if (!hostStream || !hostStream.active) return false;
   const tracks = hostStream.getVideoTracks();
   return tracks.length > 0 && tracks[0].readyState === 'live';
@@ -698,6 +836,8 @@ async function stopDesktopCapture() {
   setTimeout(() => { captureActionLock = false; }, 600);
 
   console.log('[Host] Stopping desktop capture');
+  await releaseScreenWakeLock();
+  stopNativeOnDemandCapture();
   if (hostStream) {
     try {
       for (const t of hostStream.getTracks()) {
@@ -805,6 +945,7 @@ async function ensureDesktopCapture() {
     updateCaptureUI(true, settings.width || 1920, settings.height || 1080, hasAudio);
     dom.btnToggleCapture?.classList.remove('pulse-highlight');
     hideStartCaptureModal();
+    acquireScreenWakeLock();
 
     // If a remote session is already connected, push the stream immediately!
     if (activeSession) {
@@ -898,7 +1039,7 @@ async function initSignaling() {
       }
 
       const currentPin = localStorage.getItem(STORAGE_HOST_PIN) || dom.hostPinInput?.value?.trim() || '';
-      const streamActive = isHostStreamLive();
+      const streamActive = isHostStreamLive() || bridgeConnected;
       const hostDeviceName = dom.hostNameInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_NAME) || 'Host Device';
 
       try {
@@ -959,6 +1100,13 @@ async function initSignaling() {
           return;
         }
 
+        // In Native Bridge mode, activate on-demand native capture if not already live
+        if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+          if (!isHostStreamLive()) {
+            ensureNativeOnDemandCapture();
+          }
+        }
+
         // Reject if host desktop capture is not active
         if (!isHostStreamLive()) {
           const reason = 'Host desktop capture is inactive. Click "Start Desktop Capture" on the host computer.';
@@ -973,7 +1121,7 @@ async function initSignaling() {
           return;
         }
 
-        const stream = hostStream;
+        const stream = hostStream || nativeCanvasStream;
 
         // Create PeerSession joiner (keep persistent hostStream alive across sessions)
         if (activeSession) {
@@ -989,6 +1137,9 @@ async function initSignaling() {
               dom.hostConnectedPeer.textContent = 'None';
               dom.hostStatusBadge.className = 'host-status-badge badge--connected';
               dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+              if (nativeStreamActive) {
+                stopNativeOnDemandCapture();
+              }
               if (activeSession) {
                 try { activeSession.close({ stopTracks: false }); } catch {}
                 activeSession = null;
@@ -1050,6 +1201,21 @@ async function initSignaling() {
               }
               return;
             }
+            if (evt.t === 'get_targets') {
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify({ t: 'get_targets' })); } catch {}
+              } else {
+                peerSession.sendInput({ t: 'targets', displays: [{ id: 1, name: 'Main Display' }], windows: [] });
+              }
+              return;
+            }
+            if (evt.t === 'select_target') {
+              currentCaptureTarget = { type: evt.target || 'display', id: evt.id || 0 };
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify(evt)); } catch {}
+              }
+              return;
+            }
             if (evt.t === 'reselect_screen') {
               if (dom.btnToggleCapture) {
                 startDesktopCapture(true);
@@ -1081,6 +1247,9 @@ async function initSignaling() {
             dom.hostConnectedPeer.textContent = 'None';
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';
             dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+            if (nativeStreamActive) {
+              stopNativeOnDemandCapture();
+            }
             if (activeSession) {
               try { activeSession.close({ stopTracks: false }); } catch {}
               activeSession = null;
@@ -1102,6 +1271,11 @@ async function initSignaling() {
               hasVideo: isHostStreamLive(),
               bridgeActive: bridgeConnected
             });
+
+            // If in native bridge mode, query targets immediately so client gets displays & windows
+            if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+              try { bridgeWs.send(JSON.stringify({ t: 'get_targets' })); } catch {}
+            }
 
             // If screen capture is not active, alert the controller
             if (!isHostStreamLive()) {
@@ -1150,6 +1324,9 @@ async function initSignaling() {
             dom.hostConnectedPeer.textContent = 'None';
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';
             dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+            if (nativeStreamActive) {
+              stopNativeOnDemandCapture();
+            }
           }
         });
 
