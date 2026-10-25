@@ -5263,7 +5263,20 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdKeysMenu);
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
+    hide(dom.rdAudioMenu);
     dom.rdDisplaysMenu?.classList.toggle('hidden');
+    if (!dom.rdDisplaysMenu?.classList.contains('hidden')) {
+      if (!dom.rdDisplaysMenu.querySelector('[data-target]')) {
+        dom.rdDisplaysMenu.innerHTML = `
+          <div style="font-size:0.75rem; color:var(--c-text-dim); padding:8px 12px; text-align:center;">
+            ⏳ Fetching displays & windows…
+          </div>
+          <div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
+          <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>
+        `;
+        attachDisplaysMenuListeners();
+      }
+    }
     sendRdInput({ t: 'get_targets' });
     sendRdInput({ t: 'get_monitors' });
   });
@@ -5309,13 +5322,25 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   initRemoteAudioControls();
   initMobileTouchAndSoftKeys();
 
-  document.addEventListener('click', () => {
+  const dismissAllRdMenus = () => {
     hide(dom.rdKeysMenu);
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
     hide(dom.rdDisplaysMenu);
     hide(dom.rdAudioMenu);
-  });
+  };
+
+  document.addEventListener('click', dismissAllRdMenus);
+  document.addEventListener('touchstart', (e) => {
+    const anyOpen = (!dom.rdDisplaysMenu?.classList.contains('hidden')) ||
+                    (!dom.rdKeysMenu?.classList.contains('hidden')) ||
+                    (!dom.rdQualityMenu?.classList.contains('hidden')) ||
+                    (!dom.rdClipboardMenu?.classList.contains('hidden')) ||
+                    (!dom.rdAudioMenu?.classList.contains('hidden'));
+    if (anyOpen && !e.target.closest('.rd-dropdown-container') && !e.target.closest('.rd-keys-menu')) {
+      dismissAllRdMenus();
+    }
+  }, { passive: true });
 
   dom.rdKeysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
     btn.addEventListener('click', (e) => {

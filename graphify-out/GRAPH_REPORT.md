@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-25)
 
 ## Corpus Check
-- 53 files · ~124,749 words
+- 53 files · ~124,802 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1242 nodes · 2374 edges · 75 communities (38 shown, 37 thin omitted)
+- 1242 nodes · 2374 edges · 73 communities (37 shown, 36 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 90 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4357e71d`
+- Built from commit: `0e3ae6d8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -22,7 +22,7 @@
 - bridge.py
 - host-controller.js
 - nostr.bundle.js
-- format_remediation_box
+- check-invariants.py
 - decode
 - NostrRelay
 - package.json
@@ -68,11 +68,8 @@
 - TestMobileLifecycle
 - P2P Connect — Roadmap
 - P2P Connect — Native OS Remote Desktop Host Agent
-- cdp_client.py
 - 🚀 1. Recommended Triage Prompts
 - createCipher
-- check-invariants.py
-- DevHandler
 - run.sh
 
 ## God Nodes (most connected - your core abstractions)
@@ -84,25 +81,25 @@
 6. `buildNostrSessionConfig()` - 24 edges
 7. `weierstrass()` - 21 edges
 8. `MockNostrRelay` - 20 edges
-9. `showCreateSession()` - 18 edges
-10. `showJoinSession()` - 18 edges
+9. `update()` - 18 edges
+10. `encode()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
   docs/concepts-guide.md → nostr-relay.js
-- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
-  AGENTS.md → ui-controller.js
 - `Connection State Badge` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
 - `Session Cleanup` --references--> `connected()`  [INFERRED]
   docs/system-design.md → nostr.bundle.js
+- `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
+  AGENTS.md → ui-controller.js
 - `Verifying Changes` --references--> `connected()`  [INFERRED]
   AGENTS.md → nostr.bundle.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (75 total, 37 thin omitted)
+## Communities (73 total, 36 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
@@ -128,9 +125,9 @@ Nodes (43): DiagnosticLogger, acquireScreenWakeLock(), addAuthorizedClient(), br
 Cohesion: 0.04
 Nodes (41): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve(), extract(), FpSqrt(), getConversationKey() (+33 more)
 
-### Community 6 - "format_remediation_box"
-Cohesion: 0.12
-Nodes (4): 1. `test_no_query_params_on_internal_imports` Failed, format_remediation_box(), read_project_file(), TestArchitecturalInvariants
+### Community 6 - "check-invariants.py"
+Cohesion: 0.07
+Nodes (16): 1. `test_no_query_params_on_internal_imports` Failed, check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist() (+8 more)
 
 ### Community 7 - "decode"
 Cohesion: 0.15
@@ -165,8 +162,8 @@ Cohesion: 0.17
 Nodes (18): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+10 more)
 
 ### Community 16 - "serve-https.py"
-Cohesion: 0.18
-Nodes (6): get_modified_files(), main(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main()
+Cohesion: 0.17
+Nodes (4): DevHandler, ensure_certificate(), get_local_ip_addresses(), main()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
@@ -185,8 +182,12 @@ Cohesion: 0.08
 Nodes (26): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview & Philosophy, 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 2. Technology Stack & External Dependencies, 2. Zero-Build Philosophy, 3. Custom Antigravity Skill & Subagent, 3. Media Track Replacement vs Renegotiation (+18 more)
 
 ### Community 25 - "ai-diagnostic-agent.py"
-Cohesion: 0.26
-Nodes (8): add_authorized_client(), analyze_file(), is_client_authorized(), load_whitelist(), print_inbox(), print_whitelist(), remove_authorized_client(), save_whitelist()
+Cohesion: 0.18
+Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
+
+### Community 26 - "pathlib"
+Cohesion: 0.13
+Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
 
 ### Community 28 - "HeadlessChromeSession"
 Cohesion: 0.09
@@ -240,10 +241,6 @@ Nodes (8): 💡 Backlog / Ideas, P2P Connect — Roadmap, ✅ Phase 0: Foundatio
 Cohesion: 0.07
 Nodes (28): 1. Install & Start Service, 1. Install & Start Service, 1. Install via Batch Script (Recommended), 2. Manage the Service, 2. Manual Setup via PowerShell / Command Prompt, 2. Useful systemd Commands, 3. Manage & Check Status, 3. Uninstall (+20 more)
 
-### Community 53 - "cdp_client.py"
-Cohesion: 0.18
-Nodes (4): find_chrome_binary(), launch_headless_bridge(), cleanup(), run_server()
-
 ### Community 54 - "🚀 1. Recommended Triage Prompts"
 Cohesion: 0.25
 Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Operates, 📋 Developer Triage Prompt Guide, Full Autonomous Diagnosis & Fix Proposal, Inspect Screenshots & Visual Errors, Quick Triage & Summary (Everyday Check), Specific Client Investigation
@@ -252,20 +249,16 @@ Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Op
 Cohesion: 0.40
 Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
 
-### Community 56 - "check-invariants.py"
-Cohesion: 0.19
-Nodes (12): check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist(), check_storage_key_isolation() (+4 more)
-
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 452 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **37 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **36 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
-  _High betweenness centrality (0.081) - this node is a cross-community bridge._
+  _High betweenness centrality (0.072) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
@@ -273,8 +266,8 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.051299060254284136 - nodes in this community are weakly interconnected._
 - **Why does `connected()` connect `P2P Connect — System Design` to `nostr.bundle.js`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
+  _High betweenness centrality (0.062) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
-- **Why does `7. Local Development & Verification` connect `P2P Connect — System Design` to `AGENTS.md — Developer & AI Agent Guide for P2P Connect`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **Why does `NostrTransport` connect `NostrRelay` to `ui-controller.js`, `host-controller.js`, `decode`?**
+  _High betweenness centrality (0.049) - this node is a cross-community bridge._

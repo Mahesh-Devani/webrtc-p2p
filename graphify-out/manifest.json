@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1792854200.631394,
-    "seen": 1792854276.1359649,
-    "ast_hash": "acfa82917e88a4934209c6b970214d15",
+    "mtime": 1792895225.5916693,
+    "seen": 1792895256.211065,
+    "ast_hash": "fd7cb171d5e906a55e5f8dffa0be9611",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1792854122.667251,
-    "seen": 1792854276.1359842,
-    "ast_hash": "dbf5eb97af794fac2af0aaecb5d15931",
+    "mtime": 1792899907.104748,
+    "seen": 1792899935.37227,
+    "ast_hash": "1c88f3c4947ef0efb830e2138def843d",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792854072.8692484,
-    "seen": 1792854276.13599,
-    "ast_hash": "cc439ca07bab93e14620ecdbb45e0dc5",
+    "mtime": 1792895237.070735,
+    "seen": 1792895256.211092,
+    "ast_hash": "7868a3222552e324778f8c8e133ffb32",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792854133.504033,
-    "seen": 1792854276.135991,
-    "ast_hash": "65b39689f24359869a861054c46e5198",
+    "mtime": 1792899918.1340206,
+    "seen": 1792899935.372278,
+    "ast_hash": "ef90777a0a52e6484195a9574c6562b4",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
