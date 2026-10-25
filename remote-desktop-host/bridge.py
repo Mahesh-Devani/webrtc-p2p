@@ -786,6 +786,64 @@ class NativeFrameCapturer:
 
         return {'displays': displays, 'windows': windows}
 
+    def get_window_bounds(self, window_id):
+        if PLATFORM == 'darwin' and window_id > 0:
+            try:
+                kCGWindowListOptionOnScreenOnly = 1
+                kCGWindowListExcludeDesktopElements = 16
+                arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
+                if arr:
+                    count = self.cf.CFArrayGetCount(arr)
+                    k_num = self.cf.CFStringCreateWithCString(None, b'kCGWindowNumber', 0x08000100)
+                    k_bounds = self.cf.CFStringCreateWithCString(None, b'kCGWindowBounds', 0x08000100)
+                    k_x = self.cf.CFStringCreateWithCString(None, b'X', 0x08000100)
+                    k_y = self.cf.CFStringCreateWithCString(None, b'Y', 0x08000100)
+                    k_w = self.cf.CFStringCreateWithCString(None, b'Width', 0x08000100)
+                    k_h = self.cf.CFStringCreateWithCString(None, b'Height', 0x08000100)
+
+                    target_bounds = None
+                    for i in range(count):
+                        d = self.cf.CFArrayGetValueAtIndex(arr, i)
+                        num_ref = self.cf.CFDictionaryGetValue(d, k_num)
+                        wid = ctypes.c_uint32(0)
+                        if num_ref:
+                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid))
+                        if wid.value == int(window_id):
+                            bounds_ref = self.cf.CFDictionaryGetValue(d, k_bounds)
+                            if bounds_ref:
+                                def _get_val(k):
+                                    ref = self.cf.CFDictionaryGetValue(bounds_ref, k)
+                                    if not ref: return 0.0
+                                    val = ctypes.c_double(0)
+                                    self.cf.CFNumberGetValue(ref, 13, ctypes.byref(val))
+                                    return val.value
+                                x = int(_get_val(k_x))
+                                y = int(_get_val(k_y))
+                                w = int(_get_val(k_w))
+                                h = int(_get_val(k_h))
+                                target_bounds = (x, y, w, h)
+                            break
+                    self.cf.CFRelease(arr)
+                    self.cf.CFRelease(k_num)
+                    self.cf.CFRelease(k_bounds)
+                    self.cf.CFRelease(k_x)
+                    self.cf.CFRelease(k_y)
+                    self.cf.CFRelease(k_w)
+                    self.cf.CFRelease(k_h)
+                    if target_bounds:
+                        return target_bounds
+            except Exception:
+                pass
+        elif PLATFORM == 'win32' and window_id > 0:
+            try:
+                import ctypes.wintypes
+                rect = ctypes.wintypes.RECT()
+                if ctypes.windll.user32.GetWindowRect(int(window_id), ctypes.byref(rect)):
+                    return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+            except Exception:
+                pass
+        return None
+
 _global_wake_manager = DisplayWakeManager()
 _global_frame_capturer = NativeFrameCapturer()
 
@@ -914,6 +972,29 @@ async def handle_client(reader, writer):
                 await asyncio.sleep(sleep_time)
 
         # ── Process incoming WebRTC input events ──
+        _cached_win_bounds = None
+        _cached_win_time = 0.0
+
+        def map_client_coords(nx, ny):
+            nonlocal _cached_win_bounds, _cached_win_time
+            if capture_target_type == 'window' and capture_target_id > 0:
+                now = time.monotonic()
+                if not _cached_win_bounds or (now - _cached_win_time > 0.5):
+                    b = _global_frame_capturer.get_window_bounds(capture_target_id)
+                    if b:
+                        _cached_win_bounds = b
+                        _cached_win_time = now
+                if _cached_win_bounds:
+                    wx, wy, ww, wh = _cached_win_bounds
+                    tx = max(wx, min(wx + ww - 1, int(wx + nx * ww)))
+                    ty = max(wy, min(wy + wh - 1, int(wy + ny * wh)))
+                    return tx, ty
+
+            ox, oy, sw, sh = get_screen_bounds(capture_target_id if capture_target_type == 'display' else None)
+            tx = max(ox, min(ox + sw - 1, int(ox + nx * sw)))
+            ty = max(oy, min(oy + sh - 1, int(oy + ny * sh)))
+            return tx, ty
+
         while True:
             opcode, payload = await read_ws_frame(reader)
             if opcode == 0x08:  # Close frame
@@ -936,10 +1017,7 @@ async def handle_client(reader, writer):
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
                 ny = float(data.get('y', 0))
-                ox, oy, sw, sh = get_screen_bounds()
-                target_x = max(ox, min(ox + sw - 1, int(ox + nx * sw)))
-                target_y = max(oy, min(oy + sh - 1, int(oy + ny * sh)))
-
+                target_x, target_y = map_client_coords(nx, ny)
                 latest_mouse_coord = (target_x, target_y)
                 latest_mouse_updated = True
 
@@ -948,8 +1026,8 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    ox, oy, sw, sh = get_screen_bounds()
-                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
+                    target_x, target_y = map_client_coords(nx, ny)
+                    execute_mouse_move(target_x, target_y)
                 native_mouse_down(btn, current_x, current_y)
 
             elif evt_type == 'mouse_up':
@@ -957,8 +1035,8 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    ox, oy, sw, sh = get_screen_bounds()
-                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
+                    target_x, target_y = map_client_coords(nx, ny)
+                    execute_mouse_move(target_x, target_y)
                 native_mouse_up(btn, current_x, current_y)
 
             elif evt_type == 'mouse_click':
@@ -967,17 +1045,23 @@ async def handle_client(reader, writer):
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
-                    ox, oy, sw, sh = get_screen_bounds()
-                    execute_mouse_move(int(ox + nx * sw), int(oy + ny * sh))
+                    target_x, target_y = map_client_coords(nx, ny)
+                    execute_mouse_move(target_x, target_y)
                 native_mouse_click(btn, clicks, current_x, current_y)
 
             elif evt_type == 'select_display':
                 selected_display_id = data.get('id')
+                _cached_win_bounds = None
                 ox, oy, sw, sh = get_screen_bounds(force=True)
                 writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
                 await writer.drain()
 
             elif evt_type == 'wheel':
+                if 'x' in data and 'y' in data:
+                    nx = float(data.get('x', 0))
+                    ny = float(data.get('y', 0))
+                    target_x, target_y = map_client_coords(nx, ny)
+                    execute_mouse_move(target_x, target_y)
                 dy = data.get('dy', 0)
                 scroll_units = -int(dy / 20) if dy != 0 else 0
                 if scroll_units != 0:
@@ -1023,6 +1107,8 @@ async def handle_client(reader, writer):
                 capture_target_type = data.get('target', 'display')
                 capture_target_id = int(data.get('id', 0))
                 capture_fps = int(data.get('fps', 30))
+                _cached_win_bounds = None
+                _cached_win_time = 0.0
                 _global_wake_manager.wake()
                 capture_active = True
                 if capture_task and not capture_task.done():
@@ -1034,6 +1120,7 @@ async def handle_client(reader, writer):
 
             elif evt_type in ('stop_capture', 'action') or data.get('action') == 'stop_capture':
                 capture_active = False
+                _cached_win_bounds = None
                 if capture_task and not capture_task.done():
                     capture_task.cancel()
                     capture_task = None
@@ -1055,6 +1142,8 @@ async def handle_client(reader, writer):
             elif evt_type == 'select_target':
                 capture_target_type = data.get('target', 'display')
                 capture_target_id = int(data.get('id', 0))
+                _cached_win_bounds = None
+                _cached_win_time = 0.0
                 if not capture_active:
                     _global_wake_manager.wake()
                     capture_active = True

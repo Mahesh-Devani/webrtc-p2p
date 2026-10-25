@@ -709,6 +709,12 @@ function initNativeCanvas() {
 function ensureNativeOnDemandCapture() {
   const stream = initNativeCanvas();
   nativeStreamActive = true;
+  if (hostStream) {
+    for (const t of hostStream.getTracks()) {
+      try { t.stop(); } catch {}
+    }
+    hostStream = null;
+  }
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
       bridgeWs.send(JSON.stringify({
@@ -721,6 +727,14 @@ function ensureNativeOnDemandCapture() {
       console.log(`[Host] Requested native capture start: ${currentCaptureTarget.type}:${currentCaptureTarget.id}`);
     } catch (e) {
       console.warn('[Host] Error requesting native capture start:', e);
+    }
+  }
+  if (activeSession && stream) {
+    try {
+      activeSession.addLocalStream(stream);
+      console.log('[Host] Attached native canvas stream to active remote session');
+    } catch (e) {
+      console.warn('[Host] Error attaching native stream to active session:', e);
     }
   }
   return stream;
@@ -753,10 +767,34 @@ async function renderNativeFrameToCanvas(blob, w, h) {
   if (targetW % 2 !== 0) targetW -= 1;
   if (targetH % 2 !== 0) targetH -= 1;
 
-  if (targetW > 0 && targetH > 0 && (nativeCanvas.width !== targetW || nativeCanvas.height !== targetH)) {
+  const dimsChanged = targetW > 0 && targetH > 0 && (Math.abs(nativeCanvas.width - targetW) > 2 || Math.abs(nativeCanvas.height - targetH) > 2);
+
+  if (dimsChanged) {
+    console.log(`[Host Canvas] Resizing canvas from ${nativeCanvas.width}x${nativeCanvas.height} to ${targetW}x${targetH}`);
     nativeCanvas.width = targetW;
     nativeCanvas.height = targetH;
     nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
+
+    // Generate new captureStream track matching the new canvas dimensions
+    nativeCanvasStream = nativeCanvas.captureStream(30);
+    nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
+    if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
+      nativeCanvasTrack.contentHint = 'detail';
+    }
+
+    if (dom.hostScreenVideo) {
+      dom.hostScreenVideo.srcObject = nativeCanvasStream;
+    }
+
+    // Switch active WebRTC sender to the new stream so encoder reconfigures!
+    if (activeSession) {
+      try {
+        activeSession.addLocalStream(nativeCanvasStream);
+        console.log('[Host Canvas] Pushed resized canvas stream to active WebRTC session');
+      } catch (e) {
+        console.warn('[Host Canvas] Error pushing resized stream:', e);
+      }
+    }
   }
 
   try {
@@ -768,6 +806,12 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     if (dom.hostScreenVideo && dom.hostScreenVideo.srcObject !== nativeCanvasStream) {
       dom.hostScreenVideo.srcObject = nativeCanvasStream;
       dom.hostScreenVideo.style.display = 'block';
+    }
+
+    // Also ensure activeSession is streaming nativeCanvasStream (not old hostStream)
+    if (activeSession && nativeCanvasStream && activeSession.getLocalStream && activeSession.getLocalStream() !== nativeCanvasStream) {
+      activeSession.addLocalStream(nativeCanvasStream);
+      console.log('[Host Canvas] Switched active WebRTC session from hostStream to nativeCanvasStream');
     }
   } catch (e) {
     console.warn('[Host Canvas] Error rendering frame bitmap:', e);
