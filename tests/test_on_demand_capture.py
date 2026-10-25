@@ -48,7 +48,27 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('def enumerate_targets(', self.bridge_content)
         self.assertIn('CGDisplayCreateImage', self.bridge_content)
         self.assertIn('CGWindowListCreateImage', self.bridge_content)
+        self.assertIn('CGWindowListCopyWindowInfo', self.bridge_content)
+        self.assertIn('CFArrayGetCount', self.bridge_content)
+        self.assertIn('CFDictionaryGetValue', self.bridge_content)
         self.assertIn('ImageIO', self.bridge_content)
+
+    def test_bridge_native_frame_capturer_execution(self):
+        """NativeFrameCapturer must initialize and execute enumerate_targets() without crashing."""
+        sys.path.insert(0, str(PROJECT_ROOT / 'remote-desktop-host'))
+        import bridge
+        capturer = bridge.NativeFrameCapturer()
+        targets = capturer.enumerate_targets()
+        self.assertIn('displays', targets)
+        self.assertIn('windows', targets)
+        self.assertGreaterEqual(len(targets['displays']), 1)
+        if sys.platform == 'darwin':
+            # Verify hardware display capture produces valid JPEG bytes
+            img_bytes, w, h = capturer.capture_display()
+            self.assertIsNotNone(img_bytes)
+            self.assertGreater(len(img_bytes), 1000)
+            self.assertGreater(w, 0)
+            self.assertGreater(h, 0)
 
     def test_bridge_on_demand_websocket_protocol(self):
         """bridge.py must process start_capture, stop_capture, get_targets, and select_target."""

@@ -599,17 +599,30 @@ class NativeFrameCapturer:
             self.cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))
             self.imageio = ctypes.cdll.LoadLibrary(ctypes.util.find_library('ImageIO'))
 
-            # Setup prototypes
+            # CoreGraphics prototypes
+            self.cg.CGMainDisplayID.argtypes = []
+            self.cg.CGMainDisplayID.restype = ctypes.c_uint32
+            self.cg.CGDisplayPixelsWide.argtypes = [ctypes.c_uint32]
+            self.cg.CGDisplayPixelsWide.restype = ctypes.c_size_t
+            self.cg.CGDisplayPixelsHigh.argtypes = [ctypes.c_uint32]
+            self.cg.CGDisplayPixelsHigh.restype = ctypes.c_size_t
+            self.cg.CGGetActiveDisplayList.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+            self.cg.CGGetActiveDisplayList.restype = ctypes.c_int32
+
             self.cg.CGDisplayCreateImage.argtypes = [ctypes.c_uint32]
             self.cg.CGDisplayCreateImage.restype = ctypes.c_void_p
             self.cg.CGWindowListCreateImage.argtypes = [CGRect, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
             self.cg.CGWindowListCreateImage.restype = ctypes.c_void_p
+            self.cg.CGWindowListCopyWindowInfo.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+            self.cg.CGWindowListCopyWindowInfo.restype = ctypes.c_void_p
+
             self.cg.CGImageGetWidth.argtypes = [ctypes.c_void_p]
             self.cg.CGImageGetWidth.restype = ctypes.c_size_t
             self.cg.CGImageGetHeight.argtypes = [ctypes.c_void_p]
             self.cg.CGImageGetHeight.restype = ctypes.c_size_t
             self.cg.CGImageRelease.argtypes = [ctypes.c_void_p]
 
+            # ImageIO prototypes
             self.imageio.CGImageDestinationCreateWithData.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
             self.imageio.CGImageDestinationCreateWithData.restype = ctypes.c_void_p
             self.imageio.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
@@ -617,6 +630,7 @@ class NativeFrameCapturer:
             self.imageio.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]
             self.imageio.CGImageDestinationFinalize.restype = ctypes.c_bool
 
+            # CoreFoundation prototypes
             self.cf.CFDataCreateMutable.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
             self.cf.CFDataCreateMutable.restype = ctypes.c_void_p
             self.cf.CFDataGetLength.argtypes = [ctypes.c_void_p]
@@ -624,6 +638,20 @@ class NativeFrameCapturer:
             self.cf.CFDataGetBytePtr.argtypes = [ctypes.c_void_p]
             self.cf.CFDataGetBytePtr.restype = ctypes.c_void_p
             self.cf.CFRelease.argtypes = [ctypes.c_void_p]
+
+            self.cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
+            self.cf.CFArrayGetCount.restype = ctypes.c_size_t
+            self.cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            self.cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+
+            self.cf.CFDictionaryGetValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.cf.CFDictionaryGetValue.restype = ctypes.c_void_p
+
+            self.cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+            self.cf.CFNumberGetValue.restype = ctypes.c_bool
+
+            self.cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_uint32]
+            self.cf.CFStringGetCString.restype = ctypes.c_bool
 
             kCFStringEncodingUTF8 = 0x08000100
             self.cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
