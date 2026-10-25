@@ -1146,11 +1146,6 @@ async function initSignaling() {
               }
               return;
             }
-            if (evt.t === 'control_request') {
-              // Immediately grant control to authorized client
-              peerSession.sendInput({ t: 'control_granted' });
-              return;
-            }
             if (evt.t === 'set_quality') {
               const preset = evt.preset;
               let bitrate = 8_000_000;
