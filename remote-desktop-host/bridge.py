@@ -931,7 +931,7 @@ async def handle_client(reader, writer):
 
             text = payload.decode('utf-8', errors='replace')
             data = json.loads(text)
-            evt_type = data.get('t')
+            evt_type = data.get('t') or data.get('action')
 
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
@@ -1019,32 +1019,7 @@ async def handle_client(reader, writer):
                 writer.write(make_ws_frame(json.dumps({'t': 'clipboard', 'text': curr_clip})))
                 await writer.drain()
 
-            elif evt_type == 'get_monitors':
-                monitors = []
-                if PLATFORM == 'darwin':
-                    try:
-                        max_displays = 16
-                        active_displays = (ctypes.c_uint32 * max_displays)()
-                        display_count = ctypes.c_uint32()
-                        if cg.CGGetActiveDisplayList(max_displays, active_displays, ctypes.byref(display_count)) == 0:
-                            for i in range(display_count.value):
-                                d_id = active_displays[i]
-                                w = int(cg.CGDisplayPixelsWide(d_id))
-                                h = int(cg.CGDisplayPixelsHigh(d_id))
-                                monitors.append({
-                                    'id': i + 1,
-                                    'name': f"Display {i + 1} ({w}x{h})",
-                                    'width': w,
-                                    'height': h,
-                                })
-                    except Exception:
-                        pass
-                if not monitors:
-                    monitors = [{'id': 1, 'name': f"Main Display ({SCREEN_WIDTH}x{SCREEN_HEIGHT})", 'width': SCREEN_WIDTH, 'height': SCREEN_HEIGHT}]
-                writer.write(make_ws_frame(json.dumps({'t': 'monitors', 'monitors': monitors})))
-                await writer.drain()
-
-            elif evt_type in ('start_capture', 'action') and (data.get('action') == 'start_capture' or evt_type == 'start_capture'):
+            elif evt_type in ('start_capture', 'action') or data.get('action') == 'start_capture':
                 capture_target_type = data.get('target', 'display')
                 capture_target_id = int(data.get('id', 0))
                 capture_fps = int(data.get('fps', 30))
@@ -1053,15 +1028,17 @@ async def handle_client(reader, writer):
                 if capture_task and not capture_task.done():
                     capture_task.cancel()
                 capture_task = asyncio.create_task(stream_frames_loop())
+                print(f"[+] Started native capture: target={capture_target_type}, id={capture_target_id}, fps={capture_fps}")
                 writer.write(make_ws_frame(json.dumps({'t': 'capture_started', 'target': capture_target_type, 'id': capture_target_id})))
                 await writer.drain()
 
-            elif evt_type in ('stop_capture', 'action') and (data.get('action') == 'stop_capture' or evt_type == 'stop_capture'):
+            elif evt_type in ('stop_capture', 'action') or data.get('action') == 'stop_capture':
                 capture_active = False
                 if capture_task and not capture_task.done():
                     capture_task.cancel()
                     capture_task = None
                 _global_wake_manager.release()
+                print("[+] Stopped native capture")
                 writer.write(make_ws_frame(json.dumps({'t': 'capture_stopped'})))
                 await writer.drain()
 
@@ -1078,6 +1055,13 @@ async def handle_client(reader, writer):
             elif evt_type == 'select_target':
                 capture_target_type = data.get('target', 'display')
                 capture_target_id = int(data.get('id', 0))
+                if not capture_active:
+                    _global_wake_manager.wake()
+                    capture_active = True
+                    capture_task = asyncio.create_task(stream_frames_loop())
+                    print(f"[+] Auto-started capture loop on select_target: {capture_target_type}:{capture_target_id}")
+                else:
+                    print(f"[+] Switched capture target to: {capture_target_type}:{capture_target_id}")
                 writer.write(make_ws_frame(json.dumps({'t': 'target_selected', 'target': capture_target_type, 'id': capture_target_id})))
                 await writer.drain()
 

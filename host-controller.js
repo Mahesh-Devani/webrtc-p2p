@@ -712,11 +712,13 @@ function ensureNativeOnDemandCapture() {
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
       bridgeWs.send(JSON.stringify({
+        t: 'start_capture',
         action: 'start_capture',
         target: currentCaptureTarget.type,
         id: currentCaptureTarget.id,
         fps: 30
       }));
+      console.log(`[Host] Requested native capture start: ${currentCaptureTarget.type}:${currentCaptureTarget.id}`);
     } catch (e) {
       console.warn('[Host] Error requesting native capture start:', e);
     }
@@ -728,17 +730,35 @@ function stopNativeOnDemandCapture() {
   nativeStreamActive = false;
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
-      bridgeWs.send(JSON.stringify({ action: 'stop_capture' }));
+      bridgeWs.send(JSON.stringify({ t: 'stop_capture', action: 'stop_capture' }));
+      console.log('[Host] Requested native capture stop');
     } catch {}
   }
 }
 
 async function renderNativeFrameToCanvas(blob, w, h) {
   if (!nativeCanvas) initNativeCanvas();
-  if (w > 0 && h > 0 && (nativeCanvas.width !== w || nativeCanvas.height !== h)) {
-    nativeCanvas.width = w;
-    nativeCanvas.height = h;
+
+  // Scale down dimensions to fit mobile WebRTC limits (max 2560x1440, even dimensions)
+  const MAX_STREAM_WIDTH = 2560;
+  const MAX_STREAM_HEIGHT = 1440;
+  let targetW = w;
+  let targetH = h;
+  if (targetW > MAX_STREAM_WIDTH || targetH > MAX_STREAM_HEIGHT) {
+    const scale = Math.min(MAX_STREAM_WIDTH / targetW, MAX_STREAM_HEIGHT / targetH);
+    targetW = Math.round(targetW * scale);
+    targetH = Math.round(targetH * scale);
   }
+  // Even dimensions required for YUV420 encoding
+  if (targetW % 2 !== 0) targetW -= 1;
+  if (targetH % 2 !== 0) targetH -= 1;
+
+  if (targetW > 0 && targetH > 0 && (nativeCanvas.width !== targetW || nativeCanvas.height !== targetH)) {
+    nativeCanvas.width = targetW;
+    nativeCanvas.height = targetH;
+    nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
+  }
+
   try {
     const bitmap = await createImageBitmap(blob);
     nativeCanvasCtx.drawImage(bitmap, 0, 0, nativeCanvas.width, nativeCanvas.height);
@@ -1228,9 +1248,7 @@ async function initSignaling() {
             }
             if (evt.t === 'select_target') {
               currentCaptureTarget = { type: evt.target || 'display', id: evt.id || 0 };
-              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
-                try { bridgeWs.send(JSON.stringify(evt)); } catch {}
-              }
+              ensureNativeOnDemandCapture();
               return;
             }
             if (evt.t === 'reselect_screen') {

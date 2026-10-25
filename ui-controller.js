@@ -2879,11 +2879,28 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     dom.rdDisplaysMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        hide(dom.rdDisplaysMenu);
         const action = btn.dataset.action;
         const targetType = btn.dataset.target;
         const targetId = btn.dataset.id;
         const legacyDisplay = btn.dataset.display;
+
+        if (action === 'refresh_targets') {
+          btn.textContent = '⏳ Refreshing…';
+          btn.style.opacity = '0.7';
+          btn.style.pointerEvents = 'none';
+          sendRdInput({ t: 'get_targets' });
+          toast('Refreshing displays and windows from host…');
+          setTimeout(() => {
+            if (btn) {
+              btn.textContent = '🔄 Refresh Displays & Windows';
+              btn.style.opacity = '1';
+              btn.style.pointerEvents = 'auto';
+            }
+          }, 2500);
+          return;
+        }
+
+        hide(dom.rdDisplaysMenu);
 
         if (action === 'reselect' || legacyDisplay === 'reselect') {
           sendRdInput({ t: 'reselect_screen' });
@@ -5308,7 +5325,6 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       attachDisplaysMenuListeners();
     }
     sendRdInput({ t: 'get_targets' });
-    sendRdInput({ t: 'get_monitors' });
   });
   attachDisplaysMenuListeners();
 
