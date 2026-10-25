@@ -472,16 +472,9 @@ function getCandidateBridgeUrls() {
   urls.push('ws://127.0.0.1:9999');
   urls.push('ws://localhost:9999');
 
-  // 2. Secure WSS if running in HTTPS context and certs exist
-  if (isHttps) {
-    urls.push('wss://127.0.0.1:9998');
-    urls.push('wss://localhost:9998');
-  }
-
-  // 3. LAN IP if running on local network dev server
+  // 2. LAN IP if running on local network dev server
   if (isPrivateIp && h !== '127.0.0.1' && h !== 'localhost') {
     urls.push(`ws://${h}:9999`);
-    if (isHttps) urls.push(`wss://${h}:9998`);
   }
 
   return [...new Set(urls)];
@@ -799,7 +792,7 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
 }
 
 function isHostStreamLive() {
-  if (bridgeConnected && nativeCanvasStream && nativeCanvasStream.active) {
+  if (bridgeConnected && nativeStreamActive && nativeCanvasStream && nativeCanvasStream.active) {
     const tracks = nativeCanvasStream.getVideoTracks();
     if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
   }
@@ -1100,11 +1093,9 @@ async function initSignaling() {
           return;
         }
 
-        // In Native Bridge mode, activate on-demand native capture if not already live
+        // In Native Bridge mode, ensure native on-demand capture is active
         if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
-          if (!isHostStreamLive()) {
-            ensureNativeOnDemandCapture();
-          }
+          ensureNativeOnDemandCapture();
         }
 
         // Reject if host desktop capture is not active
@@ -1128,9 +1119,40 @@ async function initSignaling() {
           try { activeSession.close({ stopTracks: false }); } catch {}
         }
 
+        let initialAnswerSent = false;
+        let queuedIceCandidates = [];
+        let iceDebounceTimer = null;
+
         const peerSession = PeerSession.create({
           dontStopTracksOnClose: true,
           onLog: (m) => console.log('[Host P2P]', m),
+          onIceCandidate: (candidate) => {
+            if (!candidate || !candidate.candidate) return;
+            if (initialAnswerSent) {
+              queuedIceCandidates.push({
+                candidate: candidate.candidate,
+                sdpMid: candidate.sdpMid,
+                sdpMLineIndex: candidate.sdpMLineIndex
+              });
+              if (iceDebounceTimer) clearTimeout(iceDebounceTimer);
+              iceDebounceTimer = setTimeout(async () => {
+                const batch = [...queuedIceCandidates];
+                queuedIceCandidates = [];
+                if (!batch.length) return;
+                try {
+                  const data = compressSignal({ candidates: batch });
+                  await NostrTransport.sendSignal(senderPubKey, {
+                    type: 'ice',
+                    session: sessionId,
+                    data
+                  });
+                  console.log(`[Host] Sent ${batch.length} trickle ICE candidate(s) to client`);
+                } catch (e) {
+                  console.warn('[Host] Error sending trickle ICE candidate:', e);
+                }
+              }, 200);
+            }
+          },
           onInputEvent: (evt) => {
             if (evt.t === 'session_ended') {
               console.log('[Host] Remote controller finished session');
@@ -1352,11 +1374,27 @@ async function initSignaling() {
           session: sessionId,
           data: answerData
         });
+        initialAnswerSent = true;
 
         console.log('[Host] Sent auto-accept answer to controller');
       } catch (err) {
         console.error('[Host] Failed to auto-accept session:', err);
       }
+    }
+
+    if (type === 'ice') {
+      if (activeSession && data) {
+        try {
+          const decompressed = decompressSignal(data);
+          if (decompressed && decompressed.candidates && decompressed.candidates.length) {
+            await activeSession.addIceCandidates(decompressed.candidates);
+            console.log(`[Host] Added ${decompressed.candidates.length} remote trickle ICE candidate(s)`);
+          }
+        } catch (e) {
+          console.warn('[Host] Error adding remote trickle ICE:', e);
+        }
+      }
+      return;
     }
   });
 

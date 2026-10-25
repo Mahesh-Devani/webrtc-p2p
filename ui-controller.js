@@ -2803,6 +2803,14 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
                  <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>`;
         dom.rdDisplaysMenu.innerHTML = html;
         attachDisplaysMenuListeners();
+        if (window.innerWidth <= 768 && !dom.rdDisplaysMenu.classList.contains('hidden')) {
+          dom.rdDisplaysMenu.style.position = 'fixed';
+          dom.rdDisplaysMenu.style.top = '52px';
+          dom.rdDisplaysMenu.style.left = '50%';
+          dom.rdDisplaysMenu.style.transform = 'translateX(-50%)';
+          dom.rdDisplaysMenu.style.zIndex = '99999';
+          dom.rdDisplaysMenu.style.display = 'flex';
+        }
       }
       return;
     }
@@ -5264,18 +5272,40 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdClipboardMenu);
     hide(dom.rdQualityMenu);
     hide(dom.rdAudioMenu);
-    dom.rdDisplaysMenu?.classList.toggle('hidden');
-    if (!dom.rdDisplaysMenu?.classList.contains('hidden')) {
-      if (!dom.rdDisplaysMenu.querySelector('[data-target]')) {
-        dom.rdDisplaysMenu.innerHTML = `
-          <div style="font-size:0.75rem; color:var(--c-text-dim); padding:8px 12px; text-align:center;">
-            ⏳ Fetching displays & windows…
-          </div>
-          <div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
-          <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>
-        `;
-        attachDisplaysMenuListeners();
-      }
+    const wasHidden = dom.rdDisplaysMenu?.classList.contains('hidden');
+    if (!wasHidden) {
+      hide(dom.rdDisplaysMenu);
+      return;
+    }
+    show(dom.rdDisplaysMenu);
+    if (window.innerWidth <= 768 && dom.rdDisplaysMenu) {
+      dom.rdDisplaysMenu.style.position = 'fixed';
+      dom.rdDisplaysMenu.style.top = '52px';
+      dom.rdDisplaysMenu.style.left = '50%';
+      dom.rdDisplaysMenu.style.transform = 'translateX(-50%)';
+      dom.rdDisplaysMenu.style.zIndex = '99999';
+      dom.rdDisplaysMenu.style.maxWidth = '92vw';
+      dom.rdDisplaysMenu.style.minWidth = '250px';
+      dom.rdDisplaysMenu.style.maxHeight = '65vh';
+      dom.rdDisplaysMenu.style.overflowY = 'auto';
+      dom.rdDisplaysMenu.style.webkitOverflowScrolling = 'touch';
+      dom.rdDisplaysMenu.style.background = 'rgba(18, 26, 36, 0.98)';
+      dom.rdDisplaysMenu.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+      dom.rdDisplaysMenu.style.boxShadow = '0 16px 40px rgba(0, 0, 0, 0.9)';
+      dom.rdDisplaysMenu.style.borderRadius = '14px';
+      dom.rdDisplaysMenu.style.padding = '8px';
+      dom.rdDisplaysMenu.style.display = 'flex';
+      dom.rdDisplaysMenu.style.flexDirection = 'column';
+    }
+    if (!dom.rdDisplaysMenu?.querySelector('[data-target]')) {
+      dom.rdDisplaysMenu.innerHTML = `
+        <div style="font-size:0.75rem; color:var(--c-text-dim); padding:8px 12px; text-align:center;">
+          ⏳ Fetching displays & windows…
+        </div>
+        <div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
+        <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>
+      `;
+      attachDisplaysMenuListeners();
     }
     sendRdInput({ t: 'get_targets' });
     sendRdInput({ t: 'get_monitors' });
@@ -5660,53 +5690,69 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     }
 
     // 2. WebRTC P2P Direct
-    const isConn = session && session.isChannelOpen && session.isChannelOpen();
-    const pc = session && session.getRawPC ? session.getRawPC() : null;
-    if (dom.diagWebrtcStatus) {
-      if (isConn) {
-        dom.diagWebrtcStatus.textContent = '🟢 Connected (Active)';
+    if (activeContactPubkey === SUPPORT_AGENT_PUBKEY) {
+      if (dom.diagWebrtcStatus) {
+        dom.diagWebrtcStatus.textContent = '🟢 Autonomous Relay (Active)';
         dom.diagWebrtcStatus.style.color = 'var(--c-primary)';
-      } else if (session && session.getState && session.getState() === 'connecting') {
-        dom.diagWebrtcStatus.textContent = '🟡 Connecting…';
-        dom.diagWebrtcStatus.style.color = '#e3b341';
-      } else {
-        dom.diagWebrtcStatus.textContent = '⚪ Offline (Relay Only)';
-        dom.diagWebrtcStatus.style.color = 'var(--c-text-dim)';
       }
-    }
-    if (dom.diagWebrtcDetail) {
-      if (isConn) {
-        dom.diagWebrtcDetail.textContent = `Peer: ${getContactDisplayName(activeContactPubkey || sessionRemotePubKey || 'Direct Peer')}`;
-      } else {
-        dom.diagWebrtcDetail.textContent = activeContactPubkey ? `Awaiting P2P with ${getContactDisplayName(activeContactPubkey)}` : 'Select a contact to connect';
+      if (dom.diagWebrtcDetail) {
+        dom.diagWebrtcDetail.textContent = 'NIP-44 encrypted diagnostic channel via Nostr relays & local agent';
       }
-    }
-
-    // 3. Candidate Pair & Stats
-    if (pc && typeof pc.getStats === 'function') {
-      try {
-        const stats = await pc.getStats();
-        let foundPair = false;
-        stats.forEach(report => {
-          if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
-            foundPair = true;
-            const rtt = report.currentRoundTripTime ? Math.round(report.currentRoundTripTime * 1000) : null;
-            if (dom.diagCandidatePair) {
-              dom.diagCandidatePair.textContent = `Pair: ${report.state || 'succeeded'}`;
-            }
-            if (dom.diagCandidateDetail) {
-              dom.diagCandidateDetail.textContent = rtt !== null ? `Round-trip latency: ${rtt}ms` : `Bytes Sent: ${report.bytesSent || 0}`;
-            }
-          }
-        });
-        if (!foundPair && dom.diagCandidatePair) {
-          dom.diagCandidatePair.textContent = 'None active';
-          dom.diagCandidateDetail.textContent = 'No selected candidate pair yet';
-        }
-      } catch { }
+      if (dom.diagCandidatePair) {
+        dom.diagCandidatePair.textContent = 'Transport: Nostr Relays & Local Ingestion';
+      }
+      if (dom.diagCandidateDetail) {
+        dom.diagCandidateDetail.textContent = 'Direct WebRTC dialing bypassed for AI Support Agent';
+      }
     } else {
-      if (dom.diagCandidatePair) dom.diagCandidatePair.textContent = 'None active';
-      if (dom.diagCandidateDetail) dom.diagCandidateDetail.textContent = 'No active RTCPeerConnection';
+      const isConn = session && session.isChannelOpen && session.isChannelOpen();
+      const pc = session && session.getRawPC ? session.getRawPC() : null;
+      if (dom.diagWebrtcStatus) {
+        if (isConn) {
+          dom.diagWebrtcStatus.textContent = '🟢 Connected (Active)';
+          dom.diagWebrtcStatus.style.color = 'var(--c-primary)';
+        } else if (session && session.getState && session.getState() === 'connecting') {
+          dom.diagWebrtcStatus.textContent = '🟡 Connecting…';
+          dom.diagWebrtcStatus.style.color = '#e3b341';
+        } else {
+          dom.diagWebrtcStatus.textContent = '⚪ Offline (Relay Only)';
+          dom.diagWebrtcStatus.style.color = 'var(--c-text-dim)';
+        }
+      }
+      if (dom.diagWebrtcDetail) {
+        if (isConn) {
+          dom.diagWebrtcDetail.textContent = `Peer: ${getContactDisplayName(activeContactPubkey || sessionRemotePubKey || 'Direct Peer')}`;
+        } else {
+          dom.diagWebrtcDetail.textContent = activeContactPubkey ? `Awaiting P2P with ${getContactDisplayName(activeContactPubkey)}` : 'Select a contact to connect';
+        }
+      }
+
+      // 3. Candidate Pair & Stats
+      if (pc && typeof pc.getStats === 'function') {
+        try {
+          const stats = await pc.getStats();
+          let foundPair = false;
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+              foundPair = true;
+              const rtt = report.currentRoundTripTime ? Math.round(report.currentRoundTripTime * 1000) : null;
+              if (dom.diagCandidatePair) {
+                dom.diagCandidatePair.textContent = `Pair: ${report.state || 'succeeded'}`;
+              }
+              if (dom.diagCandidateDetail) {
+                dom.diagCandidateDetail.textContent = rtt !== null ? `Round-trip latency: ${rtt}ms` : `Bytes Sent: ${report.bytesSent || 0}`;
+              }
+            }
+          });
+          if (!foundPair && dom.diagCandidatePair) {
+            dom.diagCandidatePair.textContent = 'None active';
+            dom.diagCandidateDetail.textContent = 'No selected candidate pair yet';
+          }
+        } catch { }
+      } else {
+        if (dom.diagCandidatePair) dom.diagCandidatePair.textContent = 'None active';
+        if (dom.diagCandidateDetail) dom.diagCandidateDetail.textContent = 'No active RTCPeerConnection';
+      }
     }
 
     // 4. Render Terminal Logs

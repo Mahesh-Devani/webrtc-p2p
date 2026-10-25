@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=57">
 </head>
 
 <body>
@@ -288,6 +288,18 @@
           <div class="rd-toolbar__divider"></div>
 
           <div class="rd-toolbar__group">
+            <!-- Displays / Multi-Monitor Switcher Menu -->
+            <div class="rd-dropdown-container">
+              <button id="rd-btn-displays" class="rd-icon-btn" title="Displays / Monitors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <span id="rd-displays-label">Screen ▾</span>
+              </button>
+              <div id="rd-displays-menu" class="rd-keys-menu hidden">
+                <button class="rd-key-item active" data-display="current">🖥️ Current Screen</button>
+                <button class="rd-key-item" data-display="reselect">🔄 Change Screen on Host</button>
+              </div>
+            </div>
+
             <button id="rd-btn-pointer-lock" class="rd-icon-btn" title="Lock Mouse inside remote window">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <span>Lock Mouse</span>
@@ -360,18 +372,6 @@
                 <button class="rd-key-item" data-quality="crisp">⚡ Crisp Text (15M / 30fps)</button>
                 <button class="rd-key-item active" data-quality="balanced">⚖️ Balanced (8M / 60fps)</button>
                 <button class="rd-key-item" data-quality="low">📱 Data Saver (2M / 30fps)</button>
-              </div>
-            </div>
-
-            <!-- Displays / Multi-Monitor Switcher Menu -->
-            <div class="rd-dropdown-container">
-              <button id="rd-btn-displays" class="rd-icon-btn" title="Displays / Monitors">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <span id="rd-displays-label">Screen ▾</span>
-              </button>
-              <div id="rd-displays-menu" class="rd-keys-menu hidden">
-                <button class="rd-key-item active" data-display="current">🖥️ Current Screen</button>
-                <button class="rd-key-item" data-display="reselect">🔄 Change Screen on Host</button>
               </div>
             </div>
 
@@ -1148,7 +1148,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=56"></script>
+  <script type="module" src="ui-controller.js?v=57"></script>
 </body>
 
 </html>
