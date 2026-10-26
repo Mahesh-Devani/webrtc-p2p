@@ -67,6 +67,9 @@ if PLATFORM == 'darwin':
     cg.CGEventKeyboardSetUnicodeString.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_wchar_p]
     cg.CGEventKeyboardSetUnicodeString.restype = None
 
+    cg.CGEventSetFlags.argtypes = [ctypes.c_void_p, ctypes.c_uint64]
+    cg.CGEventSetFlags.restype = None
+
     cg.CGEventCreateScrollWheelEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_int32]
     cg.CGEventCreateScrollWheelEvent.restype = ctypes.c_void_p
 
@@ -89,22 +92,42 @@ if PLATFORM == 'darwin':
     kCGMouseEventClickState = 1
     kCGHIDEventTap = 0
 
-    # macOS Virtual Keycodes
+    # CGEventFlags (modifier masks)
+    kCGEventFlagMaskShift = 0x00020000
+    kCGEventFlagMaskControl = 0x00040000
+    kCGEventFlagMaskAlternate = 0x00080000
+    kCGEventFlagMaskCommand = 0x00100000
+
+    # macOS Virtual Keycodes (US Layout)
     VK_MAP = {
         'return': 36, 'enter': 36, 'tab': 48, 'space': 49, ' ': 49,
         'delete': 51, 'backspace': 51, 'escape': 53, 'esc': 53,
         'command': 55, 'cmd': 55, 'win': 55, 'meta': 55,
         'shift': 56, 'capslock': 57, 'alt': 58, 'option': 58, 'control': 59, 'ctrl': 59,
+        'rightshift': 60, 'rightoption': 61, 'rightcontrol': 62,
         'left': 123, 'arrowleft': 123, 'right': 124, 'arrowright': 124,
         'down': 125, 'arrowdown': 125, 'up': 126, 'arrowup': 126,
         'f1': 122, 'f2': 120, 'f3': 99, 'f4': 118, 'f5': 96,
         'f6': 97, 'f7': 98, 'f8': 100, 'f9': 101, 'f10': 109, 'f11': 103, 'f12': 111,
         'home': 115, 'pageup': 116, 'end': 119, 'pagedown': 121,
+        # Alphabet
         'a': 0, 'b': 11, 'c': 8, 'd': 2, 'e': 14, 'f': 3, 'g': 5, 'h': 4,
         'i': 34, 'j': 38, 'k': 40, 'l': 37, 'm': 46, 'n': 45, 'o': 31, 'p': 35,
         'q': 12, 'r': 15, 's': 1, 't': 17, 'u': 32, 'v': 9, 'w': 13, 'x': 7,
         'y': 16, 'z': 6,
-        '1': 18, '2': 19, '3': 20, '4': 21, '5': 23, '6': 22, '7': 26, '8': 28, '9': 25, '0': 29
+        # Numbers
+        '1': 18, '2': 19, '3': 20, '4': 21, '5': 23, '6': 22, '7': 26, '8': 28, '9': 25, '0': 29,
+        # Unshifted symbols & punctuation
+        '-': 27, '=': 24, '[': 33, ']': 30, '\\': 42, ';': 41, "'": 39, ',': 43, '.': 47, '/': 44, '`': 50
+    }
+
+    # Shifted symbols mapping to base virtual keycode
+    SHIFT_MAP = {
+        '!': 18, '@': 19, '#': 20, '$': 21, '%': 23,
+        '^': 22, '&': 26, '*': 28, '(': 25, ')': 29,
+        '_': 27, '+': 24, '{': 33, '}': 30, '|': 42,
+        ':': 41, '"': 39, '<': 43, '>': 47, '?': 44,
+        '~': 50
     }
 
     _mouse_down_state = {0: False, 1: False, 2: False}
@@ -174,15 +197,50 @@ if PLATFORM == 'darwin':
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
 
-    def native_key(key, is_down):
-        k = key.lower()
-        if k in VK_MAP:
-            code = VK_MAP[k]
+    def native_key(key, is_down, modifiers=None):
+        mods = modifiers or {}
+        shift_pressed = bool(mods.get('shift', False))
+        ctrl_pressed = bool(mods.get('ctrl', False))
+        alt_pressed = bool(mods.get('alt', False))
+        meta_pressed = bool(mods.get('meta', False) or mods.get('command', False) or mods.get('win', False))
+
+        code = None
+        needs_shift = False
+
+        # 1. Check if key is a shifted symbol (e.g. '!', '@', '#')
+        if key in SHIFT_MAP:
+            code = SHIFT_MAP[key]
+            needs_shift = True
+        # 2. Check if key is an uppercase letter (e.g. 'A' - 'Z')
+        elif len(key) == 1 and key.isupper():
+            code = VK_MAP.get(key.lower())
+            needs_shift = True
+        # 3. Check regular VK_MAP (lowercase, numbers, punctuation, control keys)
+        elif key.lower() in VK_MAP:
+            code = VK_MAP[key.lower()]
+        elif key in VK_MAP:
+            code = VK_MAP[key]
+
+        if code is not None:
             evt = cg.CGEventCreateKeyboardEvent(None, code, is_down)
             if evt:
+                flags = 0
+                if shift_pressed or needs_shift:
+                    flags |= kCGEventFlagMaskShift
+                if ctrl_pressed:
+                    flags |= kCGEventFlagMaskControl
+                if alt_pressed:
+                    flags |= kCGEventFlagMaskAlternate
+                if meta_pressed:
+                    flags |= kCGEventFlagMaskCommand
+
+                if flags:
+                    cg.CGEventSetFlags(evt, flags)
+
                 cg.CGEventPost(kCGHIDEventTap, evt)
                 cg.CFRelease(evt)
         elif len(key) == 1:
+            # Fallback for unicode characters outside US layout
             evt = cg.CGEventCreateKeyboardEvent(None, 0, is_down)
             if evt:
                 cg.CGEventKeyboardSetUnicodeString(evt, 1, key)
@@ -191,16 +249,8 @@ if PLATFORM == 'darwin':
 
     def native_type_text(text):
         for char in text:
-            evt_d = cg.CGEventCreateKeyboardEvent(None, 0, True)
-            if evt_d:
-                cg.CGEventKeyboardSetUnicodeString(evt_d, len(char), char)
-                cg.CGEventPost(kCGHIDEventTap, evt_d)
-                cg.CFRelease(evt_d)
-            evt_u = cg.CGEventCreateKeyboardEvent(None, 0, False)
-            if evt_u:
-                cg.CGEventKeyboardSetUnicodeString(evt_u, len(char), char)
-                cg.CGEventPost(kCGHIDEventTap, evt_u)
-                cg.CFRelease(evt_u)
+            native_key(char, True)
+            native_key(char, False)
 
 else:
     # Windows / Linux fallback via PyAutoGUI if available
@@ -228,9 +278,10 @@ else:
         def native_scroll(units):
             pyautogui.scroll(units)
 
-        def native_key(key, is_down):
-            if is_down: pyautogui.keyDown(key.lower())
-            else: pyautogui.keyUp(key.lower())
+        def native_key(key, is_down, modifiers=None):
+            k = key.lower() if len(key) > 1 else key
+            if is_down: pyautogui.keyDown(k)
+            else: pyautogui.keyUp(k)
 
         def native_type_text(text):
             pyautogui.write(text, interval=0.01)
@@ -242,7 +293,7 @@ else:
         def native_mouse_up(btn, x, y): pass
         def native_mouse_click(btn, clicks, x, y): pass
         def native_scroll(units): pass
-        def native_key(key, is_down): pass
+        def native_key(key, is_down, modifiers=None): pass
         def native_type_text(text): pass
 
 
@@ -1091,11 +1142,23 @@ async def handle_client(reader, writer):
 
             elif evt_type == 'key_down':
                 raw_key = data.get('key', '')
-                if raw_key: native_key(raw_key, True)
+                mods = {
+                    'shift': bool(data.get('shift', False)),
+                    'ctrl': bool(data.get('ctrl', False)),
+                    'alt': bool(data.get('alt', False)),
+                    'meta': bool(data.get('meta', False))
+                }
+                if raw_key: native_key(raw_key, True, mods)
 
             elif evt_type == 'key_up':
                 raw_key = data.get('key', '')
-                if raw_key: native_key(raw_key, False)
+                mods = {
+                    'shift': bool(data.get('shift', False)),
+                    'ctrl': bool(data.get('ctrl', False)),
+                    'alt': bool(data.get('alt', False)),
+                    'meta': bool(data.get('meta', False))
+                }
+                if raw_key: native_key(raw_key, False, mods)
 
             elif evt_type == 'special_key':
                 action = data.get('key')

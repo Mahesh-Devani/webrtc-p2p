@@ -157,6 +157,50 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn("from ctypes import wintypes", self.bridge_content)
         self.assertNotIn("import ctypes.wintypes\n", self.bridge_content)
 
+    def test_bridge_virtual_keycodes_and_shift_mapping(self):
+        """bridge.py must map shifted symbols, modifier flags, and handle lock-screen passwords."""
+        self.assertIn('SHIFT_MAP', self.bridge_content)
+        self.assertIn('kCGEventFlagMaskShift', self.bridge_content)
+        self.assertIn('CGEventSetFlags', self.bridge_content)
+        self.assertIn('native_type_text', self.bridge_content)
+
+        # Check virtual keycodes and shift mapping on darwin
+        if sys.platform == 'darwin':
+            import bridge
+            self.assertIn('!', bridge.SHIFT_MAP)
+            self.assertIn('@', bridge.SHIFT_MAP)
+            self.assertIn('#', bridge.SHIFT_MAP)
+            self.assertIn('$', bridge.SHIFT_MAP)
+            self.assertIn('%', bridge.SHIFT_MAP)
+            self.assertIn('a', bridge.VK_MAP)
+            self.assertIn('-', bridge.VK_MAP)
+            self.assertIn('=', bridge.VK_MAP)
+            self.assertIn('return', bridge.VK_MAP)
+
+    def test_mobile_virtual_keyboard_and_text_bar(self):
+        """Mobile client must have dedicated on-screen text bar and keyboard toggle for lock screen."""
+        html_content = (PROJECT_ROOT / 'index.html').read_text(encoding='utf-8')
+        css_content = (PROJECT_ROOT / 'style.css').read_text(encoding='utf-8')
+
+        self.assertIn('id="rd-text-bar"', html_content)
+        self.assertIn('id="rd-text-input"', html_content)
+        self.assertIn('id="rd-btn-keyboard"', html_content)
+        self.assertIn('id="rd-btn-send-text"', html_content)
+
+        self.assertIn('.rd-text-bar', css_content)
+        self.assertIn('.rd-text-input', css_content)
+        # Ensure hidden input is not positioned offscreen at -9999px with pointer-events: none
+        self.assertNotIn('top: -9999px', css_content)
+
+        self.assertIn('toggleRdTextBar', self.ui_content)
+        self.assertIn('sendRdTextInputValue', self.ui_content)
+
+    def test_host_pin_input_precedence_and_error_handling(self):
+        """Host must prioritize live PIN input, and client must clear stale PIN on auth rejection."""
+        self.assertIn('dom.hostPinInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_PIN)', self.host_content)
+        self.assertIn('/password|pin/i.test(errMsg)', self.ui_content)
+        self.assertIn('delete activeRemoteDesktopDevice.pin', self.ui_content)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -392,9 +392,9 @@
               </div>
             </div>
 
-            <button id="rd-btn-keyboard" class="rd-icon-btn" title="Type text to remote machine">
+            <button id="rd-btn-keyboard" class="rd-icon-btn" title="Open Virtual Keyboard / Type Password">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="10" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="14" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="8" y1="16" x2="16" y2="16"/></svg>
-              <span>Type</span>
+              <span>Keyboard</span>
             </button>
             <button id="rd-btn-fit" class="rd-icon-btn" title="Display Scaling: Fit / 1:1 Native / Stretch / Zoom">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
@@ -519,6 +519,16 @@
               <button type="button" class="rd-soft-key rd-soft-key--kb" id="rd-soft-btn-keyboard" title="Summon Virtual Keyboard">⌨️</button>
             </div>
             <input id="rd-hidden-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" class="rd-hidden-input" />
+          </div>
+
+          <!-- Mobile Virtual Keyboard & Password Input Bar -->
+          <div id="rd-text-bar" class="rd-text-bar hidden">
+            <div class="rd-text-bar__inner">
+              <input type="text" id="rd-text-input" class="rd-text-input" placeholder="Type password or text to send…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+              <button type="button" id="rd-btn-text-mask" class="rd-text-bar__btn" title="Show / Mask Password">👁️</button>
+              <button type="button" id="rd-btn-send-text" class="rd-text-bar__btn rd-text-bar__btn--primary" title="Send text to remote host">Send ↵</button>
+              <button type="button" id="rd-btn-close-text-bar" class="rd-text-bar__btn" title="Close input bar">✕</button>
+            </div>
           </div>
         </div>
         <div class="call-overlay__local">

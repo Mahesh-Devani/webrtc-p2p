@@ -155,6 +155,11 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdSoftKeysBar: $('#rd-soft-keys-bar'),
     rdSoftBtnKeyboard: $('#rd-soft-btn-keyboard'),
     rdHiddenInput: $('#rd-hidden-input'),
+    rdTextBar: $('#rd-text-bar'),
+    rdTextInput: $('#rd-text-input'),
+    rdBtnTextMask: $('#rd-btn-text-mask'),
+    rdBtnSendText: $('#rd-btn-send-text'),
+    rdBtnCloseTextBar: $('#rd-btn-close-text-bar'),
     rdBtnDisplays: $('#rd-btn-displays'),
     rdDisplaysLabel: $('#rd-displays-label'),
     rdDisplaysMenu: $('#rd-displays-menu'),
@@ -3343,10 +3348,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
     dom.rdSoftBtnKeyboard?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (dom.rdHiddenInput) {
-        dom.rdHiddenInput.focus();
-        toast('Virtual keyboard summoned — type to send keystrokes', 'info');
-      }
+      toggleRdTextBar();
     });
 
     if (dom.rdHiddenInput) {
@@ -4136,6 +4138,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     dom.callOverlay?.classList.remove('call-overlay--rd');
     hide(dom.callOverlay);
     hide(dom.connectBanner);
+    hide(dom.rdTextBar);
     toast('Remote Desktop session disconnected.');
   }
 
@@ -5448,15 +5451,69 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     resetRdZoom(true);
   });
 
-  dom.rdBtnKeyboard?.addEventListener('click', () => {
-    const text = prompt('Enter text to type on the remote desktop:');
-    if (text) {
-      sendRdInput({ t: 'type_text', text });
-      for (const ch of text) {
-        sendRdInput({ t: 'key_down', key: ch });
-        sendRdInput({ t: 'key_up', key: ch });
+  function toggleRdTextBar(forceOpen) {
+    if (!dom.rdTextBar) return;
+    const isHidden = dom.rdTextBar.classList.contains('hidden');
+    const shouldOpen = forceOpen !== undefined ? forceOpen : isHidden;
+    if (shouldOpen) {
+      show(dom.rdTextBar);
+      if (dom.rdTextInput) {
+        dom.rdTextInput.focus();
       }
-      toast('Text sent to remote host.');
+      if (dom.rdHiddenInput) {
+        try { dom.rdHiddenInput.focus(); } catch {}
+      }
+    } else {
+      hide(dom.rdTextBar);
+    }
+  }
+
+  function sendRdTextInputValue() {
+    if (!dom.rdTextInput) return;
+    const text = dom.rdTextInput.value;
+    if (!text) return;
+    sendRdInput({ t: 'type_text', text });
+    setTimeout(() => {
+      sendRdInput({ t: 'special_key', key: 'enter' });
+    }, 40);
+    toast('Text / password sent to remote desktop');
+    dom.rdTextInput.value = '';
+    hide(dom.rdTextBar);
+  }
+
+  dom.rdBtnKeyboard?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleRdTextBar();
+  });
+
+  dom.rdBtnSendText?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sendRdTextInputValue();
+  });
+
+  dom.rdBtnCloseTextBar?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleRdTextBar(false);
+  });
+
+  dom.rdBtnTextMask?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dom.rdTextInput) {
+      const isPass = dom.rdTextInput.type === 'password';
+      dom.rdTextInput.type = isPass ? 'text' : 'password';
+      dom.rdBtnTextMask.textContent = isPass ? '👁️' : '🔒';
+    }
+  });
+
+  dom.rdTextInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      sendRdTextInputValue();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleRdTextBar(false);
     }
   });
 
@@ -6170,8 +6227,18 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         onError: (sessionId, errMsg) => {
           if (sessionId !== nostrActiveSessionId) return;
           hide(dom.connectBanner);
+          hide(dom.rdTextBar);
           if (activeRemoteDesktopDevice) {
             toast(`Remote Desktop: ${errMsg}`);
+            if (/password|pin/i.test(errMsg)) {
+              delete activeRemoteDesktopDevice.pin;
+              const devs = loadRemoteDevices();
+              const idx = devs.findIndex(d => d.pubkey === activeRemoteDesktopDevice.pubkey);
+              if (idx !== -1) {
+                delete devs[idx].pin;
+                saveRemoteDevices(devs);
+              }
+            }
             activeRemoteDesktopDevice = null;
             isWaitingForRemoteDesktop = false;
             hide(dom.callOverlay);

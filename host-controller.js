@@ -1102,7 +1102,7 @@ async function initSignaling() {
         return;
       }
 
-      const currentPin = localStorage.getItem(STORAGE_HOST_PIN) || dom.hostPinInput?.value?.trim() || '';
+      const currentPin = dom.hostPinInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_PIN) || '';
       const streamActive = isHostStreamLive() || bridgeConnected;
       const hostDeviceName = dom.hostNameInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_NAME) || 'Host Device';
 
@@ -1151,7 +1151,7 @@ async function initSignaling() {
         const { sdp, candidates, pin } = decompressed;
 
         // Verify Password / PIN dynamically
-        const currentPin = localStorage.getItem(STORAGE_HOST_PIN) || dom.hostPinInput?.value?.trim() || '';
+        const currentPin = dom.hostPinInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_PIN) || '';
         if (currentPin && pin !== currentPin) {
           console.warn('[Host] Rejected connection: Invalid Password / PIN');
           try {
@@ -1538,7 +1538,7 @@ dom.btnCopyPairingToken?.addEventListener('click', () => {
 document.getElementById('btn-copy-connect-link')?.addEventListener('click', () => {
   const token = hostIdentity?.publicKey || '';
   if (!token) return;
-  const pin = localStorage.getItem(STORAGE_HOST_PIN) || dom.hostPinInput?.value?.trim() || '';
+  const pin = dom.hostPinInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_PIN) || '';
   const clientUrl = window.location.href.replace(/host\.html.*$/, 'index.html');
   const link = `${clientUrl}?remoteHost=${token}${pin ? '#pin=' + encodeURIComponent(pin) : ''}`;
   navigator.clipboard.writeText(link).then(() => {
