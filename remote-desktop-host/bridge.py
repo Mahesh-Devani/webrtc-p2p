@@ -666,6 +666,7 @@ class NativeFrameCapturer:
     application window capture with ZERO external pip dependencies.
     """
     def __init__(self):
+        self._bounds_cache = (0, None, 0.0)
         self._init_platform()
 
     def _init_platform(self):
@@ -755,9 +756,19 @@ class NativeFrameCapturer:
 
     def capture_window(self, window_id):
         if PLATFORM == 'darwin':
-            # 8 = kCGWindowListOptionIncludingWindow
+            b = self.get_window_bounds(window_id)
+            if b:
+                wx, wy, ww, wh = b
+                win_rect = CGRect(CGPoint(float(wx), float(wy)), CGSize(float(ww), float(wh)))
+            else:
+                win_rect = self.null_rect
+            # 10 = kCGWindowListOptionOnScreenAboveWindow (2) | kCGWindowListOptionIncludingWindow (8)
+            # Captures the window AND all attached popup menus, dropdowns, combo boxes, context menus & dialogs!
             # 1 = kCGWindowImageBoundsIgnoreFraming (omits drop shadow / framing, eliminating white borders and aligning mouse coordinates)
-            img = self.cg.CGWindowListCreateImage(self.null_rect, 8, int(window_id), 1)
+            img = self.cg.CGWindowListCreateImage(win_rect, 10, int(window_id), 1)
+            if not img and b:
+                # Fallback to single-window capture if above-window capture returns None
+                img = self.cg.CGWindowListCreateImage(win_rect, 8, int(window_id), 1)
             return self._compress_cg_image(img)
         return None, 0, 0
 
@@ -865,7 +876,13 @@ class NativeFrameCapturer:
 
         return {'displays': displays, 'windows': windows}
 
-    def get_window_bounds(self, window_id):
+    def get_window_bounds(self, window_id, force=False):
+        now = time.monotonic()
+        if not force and hasattr(self, '_bounds_cache'):
+            cached_wid, cached_b, cached_t = self._bounds_cache
+            if cached_wid == int(window_id) and cached_b and (now - cached_t < 0.5):
+                return cached_b
+
         if PLATFORM == 'darwin' and window_id > 0:
             try:
                 kCGWindowListOptionOnScreenOnly = 1
@@ -899,6 +916,7 @@ class NativeFrameCapturer:
                                 break
                     self.cf.CFRelease(arr)
                     if target_bounds:
+                        self._bounds_cache = (int(window_id), target_bounds, now)
                         return target_bounds
             except Exception:
                 pass
@@ -907,7 +925,9 @@ class NativeFrameCapturer:
                 from ctypes import wintypes
                 rect = wintypes.RECT()
                 if ctypes.windll.user32.GetWindowRect(int(window_id), ctypes.byref(rect)):
-                    return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+                    res = (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+                    self._bounds_cache = (int(window_id), res, now)
+                    return res
             except Exception:
                 pass
         return None
