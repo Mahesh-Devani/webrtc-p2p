@@ -6,12 +6,12 @@
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1308 nodes · 2487 edges · 74 communities (36 shown, 38 thin omitted)
+- 1308 nodes · 2487 edges · 77 communities (36 shown, 41 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 97 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8658e0de`
+- Built from commit: `263c4e3c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -37,12 +37,12 @@
 - assertNumber
 - test_token_codec.py
 - HeadlessChromeSession
-- mock_relay.py
+- test_remote_desktop_capture_e2e.py
 - TestOnDemandScreenCapture
 - TestMockNostrRelay
 - AGENTS.md — Developer & AI Agent Guide for P2P Connect
 - ThreadedMockBridge
-- pathlib
+- NativeFrameCapturer
 - validateEvent2
 - test_remote_desktop_capture_e2e.py
 - check-invariants.py
@@ -67,8 +67,11 @@
 - P2P Connect — Roadmap
 - P2P Connect — Native OS Remote Desktop Host Agent
 - 🚀 1. Recommended Triage Prompts
+- DevHandler
+- QuietHTTPHandler
 - run.sh
 - cdp_client.py
+- QuietHTTPHandler
 - ._process_nostr_message
 - ColoredTextTestResult
 
@@ -81,25 +84,25 @@
 6. `buildNostrSessionConfig()` - 24 edges
 7. `MockNostrRelay` - 23 edges
 8. `weierstrass()` - 21 edges
-9. `update()` - 18 edges
-10. `encode()` - 18 edges
+9. `showCreateSession()` - 18 edges
+10. `showJoinSession()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
   docs/concepts-guide.md → nostr-relay.js
-- `Connection State Badge` --references--> `connected()`  [INFERRED]
-  docs/system-design.md → nostr.bundle.js
-- `Session Cleanup` --references--> `connected()`  [INFERRED]
-  docs/system-design.md → nostr.bundle.js
 - `7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`)` --references--> `map_client_coords()`  [INFERRED]
   AGENTS.md → remote-desktop-host/bridge.py
 - `5. Mobile Background Suspensions & Auto-Reconnection` --references--> `sendSelectedFiles()`  [INFERRED]
   AGENTS.md → ui-controller.js
+- `Connection State Badge` --references--> `connected()`  [INFERRED]
+  docs/system-design.md → nostr.bundle.js
+- `Session Cleanup` --references--> `connected()`  [INFERRED]
+  docs/system-design.md → nostr.bundle.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (74 total, 38 thin omitted)
+## Communities (77 total, 41 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
@@ -114,8 +117,8 @@ Cohesion: 0.11
 Nodes (30): computeTag(), computeTag2(), constructor(), digest(), digestInto(), exists(), exists3(), extract() (+22 more)
 
 ### Community 3 - "bridge.py"
-Cohesion: 0.10
-Nodes (21): CGPoint, DisplayWakeManager, execute_mouse_move(), get_screen_bounds(), handle_client(), stream_frames_loop(), is_origin_allowed(), load_or_create_token() (+13 more)
+Cohesion: 0.12
+Nodes (22): 7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`), CGPoint, execute_mouse_move(), get_screen_bounds(), handle_client(), map_client_coords(), stream_frames_loop(), is_origin_allowed() (+14 more)
 
 ### Community 4 - "host-controller.js"
 Cohesion: 0.10
@@ -162,40 +165,40 @@ Cohesion: 0.11
 Nodes (27): apply0123(), applySbox(), bool2(), bytes3(), checkOpts(), createCipher(), ctr32(), ctrCounter() (+19 more)
 
 ### Community 16 - "serve-https.py"
-Cohesion: 0.17
-Nodes (4): DevHandler, ensure_certificate(), get_local_ip_addresses(), main()
+Cohesion: 0.16
+Nodes (7): get_modified_files(), main(), run_tests(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
 Nodes (13): alphabet(), assertNumber(), bech32Polymod(), bechChecksum(), convertRadix(), convertRadix2(), genBech32(), decode2() (+5 more)
 
 ### Community 19 - "test_token_codec.py"
-Cohesion: 0.18
+Cohesion: 0.17
 Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
-### Community 21 - "mock_relay.py"
-Cohesion: 0.16
-Nodes (5): make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
+### Community 21 - "test_remote_desktop_capture_e2e.py"
+Cohesion: 0.08
+Nodes (6): make_ws_frame(), make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
 
 ### Community 24 - "AGENTS.md — Developer & AI Agent Guide for P2P Connect"
-Cohesion: 0.05
-Nodes (32): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview & Philosophy, 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 2. Technology Stack & External Dependencies, 2. Zero-Build Philosophy, 3. Custom Antigravity Skill & Subagent, 3. Media Track Replacement vs Renegotiation (+24 more)
+Cohesion: 0.07
+Nodes (27): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview & Philosophy, 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 2. Technology Stack & External Dependencies, 2. Zero-Build Philosophy, 3. Custom Antigravity Skill & Subagent, 3. Media Track Replacement vs Renegotiation (+19 more)
 
 ### Community 25 - "ThreadedMockBridge"
 Cohesion: 0.11
 Nodes (3): MockHostBridge, ThreadedMockBridge, _run()
 
-### Community 26 - "pathlib"
+### Community 26 - "NativeFrameCapturer"
 Cohesion: 0.12
-Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
+Nodes (4): CGRect, CGSize, DisplayWakeManager, NativeFrameCapturer
 
 ### Community 27 - "validateEvent2"
 Cohesion: 0.29
 Nodes (7): unpackEventFromToken(), validateEvent2(), validateEventKind(), validateEventMethodTag(), validateEventTimestamp(), validateEventUrlTag(), validateToken()
 
 ### Community 28 - "test_remote_desktop_capture_e2e.py"
-Cohesion: 0.07
-Nodes (8): find_chrome_binary(), HeadlessChromeSession, QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, QuietHTTPHandler, ReusableTCPServer, TestTwoPeerHandshakeE2E
+Cohesion: 0.11
+Nodes (6): find_chrome_binary(), HeadlessChromeSession, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
 
 ### Community 29 - "check-invariants.py"
 Cohesion: 0.07
@@ -242,28 +245,28 @@ Cohesion: 0.25
 Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Operates, 📋 Developer Triage Prompt Guide, Full Autonomous Diagnosis & Fix Proposal, Inspect Screenshots & Visual Errors, Quick Triage & Summary (Everyday Check), Specific Client Investigation
 
 ### Community 61 - "cdp_client.py"
-Cohesion: 0.18
-Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
+Cohesion: 0.16
+Nodes (12): add_authorized_client(), analyze_file(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 479 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **38 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **41 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
-  _High betweenness centrality (0.325) - this node is a cross-community bridge._
+- **Why does `6. Critical Invariants for AI Agents (MUST FOLLOW)` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `bridge.py`?**
+  _High betweenness centrality (0.472) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.05077286389008158 - nodes in this community are weakly interconnected._
+- **Why does `7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`)` connect `bridge.py` to `AGENTS.md — Developer & AI Agent Guide for P2P Connect`, `NativeFrameCapturer`?**
+  _High betweenness centrality (0.440) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.08078431372549019 - nodes in this community are weakly interconnected._
-- **Should `update` be split into smaller, more focused modules?**
-  _Cohesion score 0.1103448275862069 - nodes in this community are weakly interconnected._
-- **Should `bridge.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.09841269841269841 - nodes in this community are weakly interconnected._
+- **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
+  _High betweenness centrality (0.311) - this node is a cross-community bridge._
