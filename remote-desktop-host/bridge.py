@@ -476,77 +476,100 @@ class DisplayWakeManager:
     Keeps the display awake STRICTLY while an active remote desktop session
     is running, and releases the assertion as soon as the session ends so
     the host computer's display can sleep and lock naturally.
+    Uses token-based tracking to ensure idempotency across multiple target switches.
     """
     def __init__(self):
-        self.ref_count = 0
+        self._active_tokens = set()
         self.assertion_id = None
         self.cf_assertion_type = None
         self.cf_assertion_name = None
+        self.last_wake_time = 0.0
 
-    def wake(self, reason="P2P Connect Remote Desktop Session Active"):
-        self.ref_count += 1
-        if self.ref_count > 1:
+    @property
+    def ref_count(self):
+        """Backward-compatible property for test suites and external checkers."""
+        return len(self._active_tokens)
+
+    @ref_count.setter
+    def ref_count(self, val):
+        if val <= 0:
+            self._active_tokens.clear()
+        else:
+            self._active_tokens = {f"token-{i}" for i in range(val)}
+
+    def wake(self, token="default", reason="P2P Connect Remote Desktop Session Active"):
+        """Acquire display assertion idempotently for a given session token."""
+        is_first = len(self._active_tokens) == 0
+        self._active_tokens.add(token)
+        self.last_wake_time = time.monotonic()
+
+        if not is_first and self.assertion_id is not None:
             return True
 
-        print(f"[Power] Remote session started: Waking display & activating sleep assertion")
-        if PLATFORM == 'darwin':
-            # 1. Wake the display immediately
-            try:
-                subprocess.Popen(['caffeinate', '-u', '-t', '5'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
+        if is_first:
+            print(f"[Power] Remote session started: Waking display & activating sleep assertion")
+            if PLATFORM == 'darwin':
+                # 1. Wake the display immediately
+                try:
+                    subprocess.Popen(['caffeinate', '-u', '-t', '5'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
 
-            # 2. Simulate subtle mouse movement to wake macOS WindowServer
-            try:
-                if 'cg' in globals() and 'kCGEventMouseMoved' in globals():
-                    ox, oy, sw, sh = get_screen_bounds()
-                    pt = CGPoint(ox + sw // 2, oy + sh // 2)
-                    ev = cg.CGEventCreateMouseEvent(None, kCGEventMouseMoved, pt, 0)
-                    if ev:
-                        cg.CGEventPost(kCGHIDEventTap, ev)
-                        cg.CFRelease(ev)
-            except Exception:
-                pass
+                # 2. Simulate subtle mouse movement to wake macOS WindowServer
+                try:
+                    if 'cg' in globals() and 'kCGEventMouseMoved' in globals():
+                        ox, oy, sw, sh = get_screen_bounds()
+                        pt = CGPoint(ox + sw // 2, oy + sh // 2)
+                        ev = cg.CGEventCreateMouseEvent(None, kCGEventMouseMoved, pt, 0)
+                        if ev:
+                            cg.CGEventPost(kCGHIDEventTap, ev)
+                            cg.CFRelease(ev)
+                except Exception:
+                    pass
 
-            # 3. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
-            try:
-                iokit_path = ctypes.util.find_library('IOKit')
-                cf_path = ctypes.util.find_library('CoreFoundation')
-                if iokit_path and cf_path:
-                    iokit = ctypes.cdll.LoadLibrary(iokit_path)
-                    cf = ctypes.cdll.LoadLibrary(cf_path)
-                    kCFStringEncodingUTF8 = 0x08000100
-                    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
-                    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
-                    cf.CFRelease.argtypes = [ctypes.c_void_p]
+                # 3. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
+                try:
+                    iokit_path = ctypes.util.find_library('IOKit')
+                    cf_path = ctypes.util.find_library('CoreFoundation')
+                    if iokit_path and cf_path:
+                        iokit = ctypes.cdll.LoadLibrary(iokit_path)
+                        cf = ctypes.cdll.LoadLibrary(cf_path)
+                        kCFStringEncodingUTF8 = 0x08000100
+                        cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+                        cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+                        cf.CFRelease.argtypes = [ctypes.c_void_p]
+                        cf.CFRelease.restype = None
 
-                    self.cf_assertion_type = cf.CFStringCreateWithCString(None, b"PreventUserIdleDisplaySleep", kCFStringEncodingUTF8)
-                    self.cf_assertion_name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
-                    aid = ctypes.c_uint32(0)
-                    iokit.IOPMAssertionCreateWithName.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
-                    iokit.IOPMAssertionCreateWithName.restype = ctypes.c_int
+                        self.cf_assertion_type = cf.CFStringCreateWithCString(None, b"PreventUserIdleDisplaySleep", kCFStringEncodingUTF8)
+                        self.cf_assertion_name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
+                        aid = ctypes.c_uint32(0)
+                        iokit.IOPMAssertionCreateWithName.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+                        iokit.IOPMAssertionCreateWithName.restype = ctypes.c_int
 
-                    ret = iokit.IOPMAssertionCreateWithName(self.cf_assertion_type, 255, self.cf_assertion_name, ctypes.byref(aid))
-                    if ret == 0:
-                        self.assertion_id = aid.value
-                        print(f"[Power] Acquired IOKit display sleep assertion (ID: {self.assertion_id})")
-            except Exception as e:
-                print(f"[Power] Could not acquire IOKit assertion: {e}")
+                        ret = iokit.IOPMAssertionCreateWithName(self.cf_assertion_type, 255, self.cf_assertion_name, ctypes.byref(aid))
+                        if ret == 0:
+                            self.assertion_id = aid.value
+                            print(f"[Power] Acquired IOKit display sleep assertion (ID: {self.assertion_id})")
+                except Exception as e:
+                    print(f"[Power] Could not acquire IOKit assertion: {e}")
 
-        elif PLATFORM == 'win32':
-            try:
-                ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
-                print("[Power] Acquired Windows display sleep assertion")
-            except Exception as e:
-                print(f"[Power] Could not acquire Win32 assertion: {e}")
+            elif PLATFORM == 'win32':
+                try:
+                    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+                    print("[Power] Acquired Windows display sleep assertion")
+                except Exception as e:
+                    print(f"[Power] Could not acquire Win32 assertion: {e}")
 
         return True
 
-    def release(self):
-        if self.ref_count <= 0:
-            return
-        self.ref_count -= 1
-        if self.ref_count > 0:
+    def release(self, token=None, force=False):
+        """Release display assertion for a token or unconditionally if force=True or token is None."""
+        if force or token is None:
+            self._active_tokens.clear()
+        else:
+            self._active_tokens.discard(token)
+
+        if len(self._active_tokens) > 0:
             return
 
         print("[Power] Remote session ended: Releasing display sleep assertion (display can now sleep/lock naturally)")
@@ -567,6 +590,8 @@ class DisplayWakeManager:
                     cf_path = ctypes.util.find_library('CoreFoundation')
                     if cf_path:
                         cf = ctypes.cdll.LoadLibrary(cf_path)
+                        cf.CFRelease.argtypes = [ctypes.c_void_p]
+                        cf.CFRelease.restype = None
                         if self.cf_assertion_type:
                             cf.CFRelease(self.cf_assertion_type)
                             self.cf_assertion_type = None
@@ -656,7 +681,19 @@ class NativeFrameCapturer:
             kCFStringEncodingUTF8 = 0x08000100
             self.cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
             self.cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+            self.cf.CFRelease.argtypes = [ctypes.c_void_p]
+            self.cf.CFRelease.restype = None
+
             self.jpeg_type = self.cf.CFStringCreateWithCString(None, b'public.jpeg', kCFStringEncodingUTF8)
+            self.k_num = self.cf.CFStringCreateWithCString(None, b'kCGWindowNumber', kCFStringEncodingUTF8)
+            self.k_bounds = self.cf.CFStringCreateWithCString(None, b'kCGWindowBounds', kCFStringEncodingUTF8)
+            self.k_x = self.cf.CFStringCreateWithCString(None, b'X', kCFStringEncodingUTF8)
+            self.k_y = self.cf.CFStringCreateWithCString(None, b'Y', kCFStringEncodingUTF8)
+            self.k_w = self.cf.CFStringCreateWithCString(None, b'Width', kCFStringEncodingUTF8)
+            self.k_h = self.cf.CFStringCreateWithCString(None, b'Height', kCFStringEncodingUTF8)
+            self.k_owner = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerName', kCFStringEncodingUTF8)
+            self.k_name = self.cf.CFStringCreateWithCString(None, b'kCGWindowName', kCFStringEncodingUTF8)
+            self.k_layer = self.cf.CFStringCreateWithCString(None, b'kCGWindowLayer', kCFStringEncodingUTF8)
             self.null_rect = CGRect(CGPoint(float('inf'), float('inf')), CGSize(0, 0))
 
     def capture_display(self, display_id=None):
@@ -729,31 +766,26 @@ class NativeFrameCapturer:
                 arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
                 if arr:
                     count = self.cf.CFArrayGetCount(arr)
-                    k_owner = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerName', 0x08000100)
-                    k_name = self.cf.CFStringCreateWithCString(None, b'kCGWindowName', 0x08000100)
-                    k_num = self.cf.CFStringCreateWithCString(None, b'kCGWindowNumber', 0x08000100)
-                    k_layer = self.cf.CFStringCreateWithCString(None, b'kCGWindowLayer', 0x08000100)
-
                     buf = ctypes.create_string_buffer(256)
                     for i in range(count):
                         d = self.cf.CFArrayGetValueAtIndex(arr, i)
                         layer = ctypes.c_int32(0)
-                        l_ref = self.cf.CFDictionaryGetValue(d, k_layer)
+                        l_ref = self.cf.CFDictionaryGetValue(d, self.k_layer)
                         if l_ref:
                             self.cf.CFNumberGetValue(l_ref, 3, ctypes.byref(layer))
                         if layer.value != 0:
                             continue
-                        num_ref = self.cf.CFDictionaryGetValue(d, k_num)
+                        num_ref = self.cf.CFDictionaryGetValue(d, self.k_num)
                         wid = ctypes.c_uint32(0)
                         if num_ref:
                             self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid))
                         
-                        owner_ref = self.cf.CFDictionaryGetValue(d, k_owner)
+                        owner_ref = self.cf.CFDictionaryGetValue(d, self.k_owner)
                         owner = ''
                         if owner_ref and self.cf.CFStringGetCString(owner_ref, buf, 256, 0x08000100):
                             owner = buf.value.decode('utf-8', errors='ignore')
 
-                        name_ref = self.cf.CFDictionaryGetValue(d, k_name)
+                        name_ref = self.cf.CFDictionaryGetValue(d, self.k_name)
                         name = ''
                         if name_ref and self.cf.CFStringGetCString(name_ref, buf, 256, 0x08000100):
                             name = buf.value.decode('utf-8', errors='ignore')
@@ -767,10 +799,6 @@ class NativeFrameCapturer:
                                 'title': title
                             })
                     self.cf.CFRelease(arr)
-                    self.cf.CFRelease(k_owner)
-                    self.cf.CFRelease(k_name)
-                    self.cf.CFRelease(k_num)
-                    self.cf.CFRelease(k_layer)
             except Exception:
                 pass
 
@@ -794,42 +822,31 @@ class NativeFrameCapturer:
                 arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
                 if arr:
                     count = self.cf.CFArrayGetCount(arr)
-                    k_num = self.cf.CFStringCreateWithCString(None, b'kCGWindowNumber', 0x08000100)
-                    k_bounds = self.cf.CFStringCreateWithCString(None, b'kCGWindowBounds', 0x08000100)
-                    k_x = self.cf.CFStringCreateWithCString(None, b'X', 0x08000100)
-                    k_y = self.cf.CFStringCreateWithCString(None, b'Y', 0x08000100)
-                    k_w = self.cf.CFStringCreateWithCString(None, b'Width', 0x08000100)
-                    k_h = self.cf.CFStringCreateWithCString(None, b'Height', 0x08000100)
-
                     target_bounds = None
+                    wid = ctypes.c_uint32(0)
                     for i in range(count):
                         d = self.cf.CFArrayGetValueAtIndex(arr, i)
-                        num_ref = self.cf.CFDictionaryGetValue(d, k_num)
-                        wid = ctypes.c_uint32(0)
+                        num_ref = self.cf.CFDictionaryGetValue(d, self.k_num)
                         if num_ref:
+                            wid.value = 0
                             self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid))
-                        if wid.value == int(window_id):
-                            bounds_ref = self.cf.CFDictionaryGetValue(d, k_bounds)
-                            if bounds_ref:
-                                def _get_val(k):
-                                    ref = self.cf.CFDictionaryGetValue(bounds_ref, k)
-                                    if not ref: return 0.0
-                                    val = ctypes.c_double(0)
-                                    self.cf.CFNumberGetValue(ref, 13, ctypes.byref(val))
-                                    return val.value
-                                x = int(_get_val(k_x))
-                                y = int(_get_val(k_y))
-                                w = int(_get_val(k_w))
-                                h = int(_get_val(k_h))
-                                target_bounds = (x, y, w, h)
-                            break
+                            if wid.value == int(window_id):
+                                bounds_ref = self.cf.CFDictionaryGetValue(d, self.k_bounds)
+                                if bounds_ref:
+                                    def _get_val(k):
+                                        ref = self.cf.CFDictionaryGetValue(bounds_ref, k)
+                                        if not ref: return 0.0
+                                        val = ctypes.c_double(0)
+                                        self.cf.CFNumberGetValue(ref, 13, ctypes.byref(val))
+                                        return val.value
+                                    x = int(_get_val(self.k_x))
+                                    y = int(_get_val(self.k_y))
+                                    w = int(_get_val(self.k_w))
+                                    h = int(_get_val(self.k_h))
+                                    if w > 0 and h > 0:
+                                        target_bounds = (x, y, w, h)
+                                break
                     self.cf.CFRelease(arr)
-                    self.cf.CFRelease(k_num)
-                    self.cf.CFRelease(k_bounds)
-                    self.cf.CFRelease(k_x)
-                    self.cf.CFRelease(k_y)
-                    self.cf.CFRelease(k_w)
-                    self.cf.CFRelease(k_h)
                     if target_bounds:
                         return target_bounds
             except Exception:
@@ -939,6 +956,7 @@ async def handle_client(reader, writer):
         print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin}, Screen: {sw}x{sh} at ({ox},{oy}))")
 
         # ── Native On-Demand Frame Capture & Streaming Engine ──
+        session_token = f"client-{id(writer)}"
         capture_active = False
         capture_target_type = 'display'
         capture_target_id = 0
@@ -974,16 +992,19 @@ async def handle_client(reader, writer):
         # ── Process incoming WebRTC input events ──
         _cached_win_bounds = None
         _cached_win_time = 0.0
+        _cached_win_target_id = None
 
         def map_client_coords(nx, ny):
-            nonlocal _cached_win_bounds, _cached_win_time
+            nonlocal _cached_win_bounds, _cached_win_time, _cached_win_target_id
             if capture_target_type == 'window' and capture_target_id > 0:
                 now = time.monotonic()
-                if not _cached_win_bounds or (now - _cached_win_time > 0.5):
+                # Query window geometry at most once per second or when target changes
+                if _cached_win_target_id != capture_target_id or (now - _cached_win_time > 1.0):
+                    _cached_win_time = now
+                    _cached_win_target_id = capture_target_id
                     b = _global_frame_capturer.get_window_bounds(capture_target_id)
                     if b:
                         _cached_win_bounds = b
-                        _cached_win_time = now
                 if _cached_win_bounds:
                     wx, wy, ww, wh = _cached_win_bounds
                     tx = max(wx, min(wx + ww - 1, int(wx + nx * ww)))
@@ -1052,6 +1073,7 @@ async def handle_client(reader, writer):
             elif evt_type == 'select_display':
                 selected_display_id = data.get('id')
                 _cached_win_bounds = None
+                _cached_win_target_id = None
                 ox, oy, sw, sh = get_screen_bounds(force=True)
                 writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
                 await writer.drain()
@@ -1109,7 +1131,8 @@ async def handle_client(reader, writer):
                 capture_fps = int(data.get('fps', 30))
                 _cached_win_bounds = None
                 _cached_win_time = 0.0
-                _global_wake_manager.wake()
+                _cached_win_target_id = None
+                _global_wake_manager.wake(session_token)
                 capture_active = True
                 if capture_task and not capture_task.done():
                     capture_task.cancel()
@@ -1121,10 +1144,11 @@ async def handle_client(reader, writer):
             elif evt_type in ('stop_capture', 'action') or data.get('action') == 'stop_capture':
                 capture_active = False
                 _cached_win_bounds = None
+                _cached_win_target_id = None
                 if capture_task and not capture_task.done():
                     capture_task.cancel()
                     capture_task = None
-                _global_wake_manager.release()
+                _global_wake_manager.release(session_token)
                 print("[+] Stopped native capture")
                 writer.write(make_ws_frame(json.dumps({'t': 'capture_stopped'})))
                 await writer.drain()
@@ -1144,8 +1168,9 @@ async def handle_client(reader, writer):
                 capture_target_id = int(data.get('id', 0))
                 _cached_win_bounds = None
                 _cached_win_time = 0.0
+                _cached_win_target_id = None
                 if not capture_active:
-                    _global_wake_manager.wake()
+                    _global_wake_manager.wake(session_token)
                     capture_active = True
                     capture_task = asyncio.create_task(stream_frames_loop())
                     print(f"[+] Auto-started capture loop on select_target: {capture_target_type}:{capture_target_id}")
@@ -1167,7 +1192,7 @@ async def handle_client(reader, writer):
             capture_active = False
         if capture_task and not capture_task.done():
             capture_task.cancel()
-        _global_wake_manager.release()
+        _global_wake_manager.release(session_token, force=True)
         try:
             writer.close()
             await writer.wait_closed()

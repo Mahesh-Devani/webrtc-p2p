@@ -468,6 +468,13 @@ function getCandidateBridgeUrls() {
   const isPrivateIp = /^(127\.0\.0\.1|localhost|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/.test(h);
 
   const urls = [];
+  try {
+    const custom = new URLSearchParams(window.location.search).get('bridge');
+    if (custom && (custom.startsWith('ws://127.0.0.1') || custom.startsWith('ws://localhost'))) {
+      urls.push(custom);
+    }
+  } catch {}
+
   // 1. Direct local plain WS (primary default across all platforms)
   urls.push('ws://127.0.0.1:9999');
   urls.push('ws://localhost:9999');

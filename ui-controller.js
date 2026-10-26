@@ -2687,6 +2687,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     }
     return false;
   }
+  window.__rdSendInput = sendRdInput;
+  window.__getActiveSession = () => session;
 
   function handleIncomingInputEvent(evt) {
     if (!evt || !evt.t) return;
@@ -4900,7 +4902,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         if (dev) {
           setTimeout(() => connectToRemoteDevice(dev), 800);
         }
-        window.history.replaceState({}, document.title, window.location.pathname);
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('remoteHost');
+        cleanUrl.hash = '';
+        const searchStr = cleanUrl.searchParams.toString();
+        window.history.replaceState({}, document.title, cleanUrl.pathname + (searchStr ? '?' + searchStr : ''));
       }
     } catch (e) {
       console.warn('[Remote Host URL Param Error]', e);
@@ -6267,7 +6273,10 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   ensureSupportAgentContact();
   renderContacts();
   renderRemoteDevices();
-  initNostr();
-  checkUrlRemoteHostParam();
+  initNostr().catch(err => {
+    console.error('[Nostr Init Error]', err);
+  }).finally(() => {
+    checkUrlRemoteHostParam();
+  });
 
 })();

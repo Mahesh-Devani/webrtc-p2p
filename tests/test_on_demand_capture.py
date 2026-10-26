@@ -40,6 +40,35 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('caffeinate', self.bridge_content)
         self.assertIn('SetThreadExecutionState', self.bridge_content)
 
+    def test_bridge_display_wake_manager_idempotency(self):
+        """DisplayWakeManager must be idempotent per session token to prevent assertion leaks."""
+        sys.path.insert(0, str(PROJECT_ROOT / 'remote-desktop-host'))
+        import bridge
+        manager = bridge.DisplayWakeManager()
+        # Initial state
+        self.assertEqual(manager.ref_count, 0)
+        # First wake with token A
+        manager.wake("session-A")
+        self.assertEqual(manager.ref_count, 1)
+        # Repeated wake with token A must NOT increment ref_count
+        manager.wake("session-A")
+        manager.wake("session-A")
+        self.assertEqual(manager.ref_count, 1)
+        # Second session with token B
+        manager.wake("session-B")
+        self.assertEqual(manager.ref_count, 2)
+        # Release token A: token B still active
+        manager.release("session-A")
+        self.assertEqual(manager.ref_count, 1)
+        # Release token B: all tokens released
+        manager.release("session-B")
+        self.assertEqual(manager.ref_count, 0)
+        # Force release unconditionally cleans up
+        manager.wake("session-C")
+        manager.wake("session-D")
+        manager.release(force=True)
+        self.assertEqual(manager.ref_count, 0)
+
     def test_bridge_native_frame_capturer(self):
         """bridge.py must define NativeFrameCapturer with display and window capture."""
         self.assertIn('class NativeFrameCapturer', self.bridge_content)
@@ -52,6 +81,8 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('CFArrayGetCount', self.bridge_content)
         self.assertIn('CFDictionaryGetValue', self.bridge_content)
         self.assertIn('ImageIO', self.bridge_content)
+        self.assertIn('k_bounds', self.bridge_content)
+        self.assertIn('k_num', self.bridge_content)
 
     def test_bridge_native_frame_capturer_execution(self):
         """NativeFrameCapturer must initialize and execute enumerate_targets() without crashing."""

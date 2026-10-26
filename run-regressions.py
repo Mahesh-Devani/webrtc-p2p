@@ -106,6 +106,7 @@ FILE_TO_TESTS_MAP = {
     ],
     'tests/e2e': [
         'tests.e2e.test_two_peer_handshake',
+        'tests.e2e.test_remote_desktop_capture_e2e',
     ],
 }
 
@@ -260,11 +261,16 @@ def main():
         print(f"  {BOLD}Changed files:{RESET} {', '.join(modified[:4])}" + ("..." if len(modified) > 4 else ""))
 
     if run_e2e and not force_all:
-        modules_to_run = ['tests.e2e.test_two_peer_handshake']
+        modules_to_run = [
+            'tests.e2e.test_two_peer_handshake',
+            'tests.e2e.test_remote_desktop_capture_e2e',
+        ]
     else:
         modules_to_run = select_test_modules(modified, force_all=force_all)
-        if run_e2e and 'tests.e2e.test_two_peer_handshake' not in modules_to_run:
-            modules_to_run.append('tests.e2e.test_two_peer_handshake')
+        if run_e2e:
+            for e2e_mod in ['tests.e2e.test_two_peer_handshake', 'tests.e2e.test_remote_desktop_capture_e2e']:
+                if e2e_mod not in modules_to_run:
+                    modules_to_run.append(e2e_mod)
 
     print(f"  {BOLD}Running modules:{RESET} {len(modules_to_run)} test suites\n")
 
