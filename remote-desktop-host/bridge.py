@@ -755,8 +755,9 @@ class NativeFrameCapturer:
 
     def capture_window(self, window_id):
         if PLATFORM == 'darwin':
-            # 8 = kCGWindowListOptionIncludingWindow, 0 = kCGWindowImageDefault
-            img = self.cg.CGWindowListCreateImage(self.null_rect, 8, int(window_id), 0)
+            # 8 = kCGWindowListOptionIncludingWindow
+            # 1 = kCGWindowImageBoundsIgnoreFraming (omits drop shadow / framing, eliminating white borders and aligning mouse coordinates)
+            img = self.cg.CGWindowListCreateImage(self.null_rect, 8, int(window_id), 1)
             return self._compress_cg_image(img)
         return None, 0, 0
 

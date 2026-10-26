@@ -152,6 +152,13 @@ class TestOnDemandScreenCapture(unittest.TestCase):
                 x, y, w, h = bounds
                 self.assertGreater(w, 0)
                 self.assertGreater(h, 0)
+                # Verify capture with kCGWindowImageBoundsIgnoreFraming matches bounds without shadow padding
+                img_bytes, cw, ch = capturer.capture_window(first_win['id'])
+                if img_bytes:
+                    self.assertEqual((cw, ch), (w, h))
+
+        # Verify CGWindowListCreateImage uses option 1 (kCGWindowImageBoundsIgnoreFraming)
+        self.assertIn("CGWindowListCreateImage(self.null_rect, 8, int(window_id), 1)", self.bridge_content)
 
         # Verify scoping bug fix: ctypes at top level and no shadowing import ctypes.wintypes
         self.assertIn("from ctypes import wintypes", self.bridge_content)

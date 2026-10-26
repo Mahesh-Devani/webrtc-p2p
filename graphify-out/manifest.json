@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793019145.2061193,
-    "seen": 1793021047.904834,
-    "ast_hash": "b92f5a1c978e576d52d1fa3f206482d7",
+    "mtime": 1793033070.6183372,
+    "seen": 1793033132.029202,
+    "ast_hash": "7d74efdfefc6ef2d30daa75c2014102d",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "tests/test_on_demand_capture.py": {
-    "mtime": 1793019075.056287,
-    "seen": 1793019118.804754,
-    "ast_hash": "9284161b54d5affecc95792e872c066b",
+    "mtime": 1793033090.7413244,
+    "seen": 1793033132.0292149,
+    "ast_hash": "ec6a6ecb9b263725cf5d875ba704007a",
     "semantic_hash": ""
   },
   "tests/e2e/test_remote_desktop_capture_e2e.py": {
