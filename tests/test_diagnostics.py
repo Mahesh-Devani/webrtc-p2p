@@ -367,6 +367,17 @@ class TestDiagnosticSystem(unittest.TestCase):
         self.assertIn('support-agent/support-whitelist.json', gitignore)
         self.assertTrue((PROJECT_ROOT / 'support-agent' / 'support-whitelist.example.json').exists())
 
+    def test_screenshot_magic_byte_validation_and_chunk_preservation(self):
+        """ai-diagnostic-agent.py must validate image magic bytes and nostr-transport.js must preserve signal metadata."""
+        agent_content = (PROJECT_ROOT / 'support-agent' / 'ai-diagnostic-agent.py').read_text(encoding='utf-8')
+        self.assertIn('img_bytes.startswith(b\'\\xff\\xd8\\xff\')', agent_content, "JPEG magic byte validation missing")
+        self.assertIn('img_bytes.startswith(b\'\\x89PNG\\r\\n\\x1a\\n\')', agent_content, "PNG magic byte validation missing")
+        self.assertIn('.corrupt', agent_content, "Quarantined file handling missing in print_inbox")
+
+        transport_content = (PROJECT_ROOT / 'nostr-transport.js').read_text(encoding='utf-8')
+        self.assertIn('...message', transport_content, "sendSignal must preserve signal properties via object spread")
+        self.assertIn('...payload', transport_content, "incoming event handler must preserve signal properties via object spread")
+
 
 if __name__ == '__main__':
     unittest.main()

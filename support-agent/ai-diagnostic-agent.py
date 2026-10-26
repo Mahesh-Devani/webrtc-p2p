@@ -871,9 +871,27 @@ class DiagnosticServer(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': f'Invalid base64: {str(e)}'}).encode('utf-8'))
                 return
 
+            # Validate image format (JPEG or PNG magic bytes) to prevent corrupted files from crashing downstream tools
+            is_jpeg = img_bytes.startswith(b'\xff\xd8\xff')
+            is_png = img_bytes.startswith(b'\x89PNG\r\n\x1a\n')
+            if not (is_jpeg or is_png):
+                header_hex = img_bytes[:8].hex() if len(img_bytes) >= 8 else img_bytes.hex()
+                print(f"\n[AI Support Agent] ⚠️ Rejected corrupted screenshot from {client_pk}: missing JPEG/PNG header (bytes={len(img_bytes)}, magic={header_hex})")
+                self.send_response(400)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'error': 'Invalid image format: payload does not contain valid JPEG or PNG magic bytes',
+                    'receivedBytes': len(img_bytes),
+                    'headerHex': header_hex
+                }).encode('utf-8'))
+                return
+
+            ext = 'png' if is_png else 'jpg'
             INBOX_DIR.mkdir(parents=True, exist_ok=True)
             ts = int(time.time())
-            filename = f"screenshot_{ts}_{client_pk}.jpg"
+            filename = f"screenshot_{ts}_{client_pk}.{ext}"
             filepath = INBOX_DIR / filename
             with open(filepath, 'wb') as f:
                 f.write(img_bytes)
@@ -1070,7 +1088,8 @@ def print_inbox():
         return
     logpkgs = sorted(INBOX_DIR.glob("logpkg_*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
     comments = sorted(INBOX_DIR.glob("comment_*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
-    screenshots = sorted(INBOX_DIR.glob("screenshot_*.jpg"), key=lambda x: x.stat().st_mtime, reverse=True)
+    screenshots = sorted(list(INBOX_DIR.glob("screenshot_*.jpg")) + list(INBOX_DIR.glob("screenshot_*.png")), key=lambda x: x.stat().st_mtime, reverse=True)
+    corrupted = sorted(INBOX_DIR.glob("*.corrupt"), key=lambda x: x.stat().st_mtime, reverse=True)
 
     print("\n══════════════════════════════════════════════════════════════")
     print(f"📥 AI Support Agent — Developer Triage Inbox ({INBOX_DIR})")
@@ -1105,7 +1124,21 @@ def print_inbox():
         print("📷 Recent Screenshots:")
         for s in screenshots[:5]:
             t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(s.stat().st_mtime))
-            print(f"  • [{t_str}] {s.name} ({round(s.stat().st_size / 1024, 1)} KB)")
+            status_tag = ""
+            try:
+                with open(s, 'rb') as f:
+                    header = f.read(8)
+                if not (header.startswith(b'\xff\xd8\xff') or header.startswith(b'\x89PNG\r\n\x1a\n')):
+                    status_tag = " ⚠️ [CORRUPTED/INVALID — DO NOT PARSE AS IMAGE]"
+            except Exception:
+                status_tag = " ⚠️ [UNREADABLE]"
+            print(f"  • [{t_str}] {s.name} ({round(s.stat().st_size / 1024, 1)} KB){status_tag}")
+        print()
+
+    if corrupted:
+        print(f"🛑 Quarantined Files ({len(corrupted)}):")
+        for cf in corrupted[:5]:
+            print(f"  • {cf.name} ({round(cf.stat().st_size / 1024, 1)} KB) — quarantined broken payload")
         print()
     print("══════════════════════════════════════════════════════════════\n")
 

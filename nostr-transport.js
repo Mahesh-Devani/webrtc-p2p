@@ -312,8 +312,9 @@ export const NostrTransport = (() => {
             _iceCounters.set(message.session, count + 1);
         }
 
-        // Build payload
+        // Build payload (preserving all signal properties like chunkIndex/totalChunks/fileName)
         const payload = JSON.stringify({
+            ...message,
             v: 1,
             type: message.type,
             session: message.session,
@@ -487,6 +488,7 @@ export const NostrTransport = (() => {
         for (const handler of _signalHandlers) {
             try {
                 handler({
+                    ...payload,
                     type: payload.type,
                     session: payload.session,
                     data: payload.data,

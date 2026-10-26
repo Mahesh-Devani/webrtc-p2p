@@ -33,6 +33,9 @@ Inspect recent files in `support-agent/diagnostics-inbox/`:
 - `logpkg_<timestamp>_<pubkey>.json`: Technical telemetry (WebRTC state, candidate pairs, relay status, logs).
 - `screenshot_<timestamp>_<pubkey>.jpg`: Visual evidence of errors or connection drops.
 
+> [!CAUTION]
+> **Image Safety**: Inspect the `--inbox` output before attempting to read screenshot files. If an image is flagged as `[CORRUPTED/INVALID]` or quarantined (`.corrupt`), **do not** attempt to inspect it with image/file tools. Rely on the technical telemetry in `logpkg_*.json` instead.
+
 ### Step 2: Deep Package Diagnosis
 Run offline analysis on the target package:
 ```bash
