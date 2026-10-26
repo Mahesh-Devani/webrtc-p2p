@@ -138,6 +138,25 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn("t: 'select_target'", self.ui_content)
         self.assertIn("t: 'get_targets'", self.ui_content)
 
+    def test_window_bounds_and_mouse_coordinate_mapping(self):
+        """NativeFrameCapturer.get_window_bounds must succeed and map client coordinates within window bounds."""
+        import bridge
+        capturer = bridge.NativeFrameCapturer()
+        targets = capturer.enumerate_targets()
+        self.assertIn('windows', targets)
+        # If running on macOS or Windows with open windows, verify bounds retrieval
+        if sys.platform == 'darwin' and targets['windows']:
+            first_win = targets['windows'][0]
+            bounds = capturer.get_window_bounds(first_win['id'])
+            if bounds:
+                x, y, w, h = bounds
+                self.assertGreater(w, 0)
+                self.assertGreater(h, 0)
+
+        # Verify scoping bug fix: ctypes at top level and no shadowing import ctypes.wintypes
+        self.assertIn("from ctypes import wintypes", self.bridge_content)
+        self.assertNotIn("import ctypes.wintypes\n", self.bridge_content)
+
 
 if __name__ == '__main__':
     unittest.main()

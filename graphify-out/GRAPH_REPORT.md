@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-26)
 
 ## Corpus Check
-- 54 files · ~128,487 words
+- 54 files · ~128,601 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1298 nodes · 2469 edges · 75 communities (37 shown, 38 thin omitted)
+- 1300 nodes · 2471 edges · 73 communities (38 shown, 35 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 97 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e7d5ad87`
+- Built from commit: `ee8feea2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -54,8 +54,7 @@
 - uninstall-service.sh
 - get
 - MockNostrRelay
-- ThreadedMockRelay
-- .handle_client
+- DevHandler
 - P2P Connect — Architecture & Production Notes
 - QuietHTTPHandler
 - P2P Connect — High-Level Design
@@ -100,7 +99,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (75 total, 38 thin omitted)
+## Communities (73 total, 35 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.05
@@ -163,20 +162,20 @@ Cohesion: 0.17
 Nodes (18): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+10 more)
 
 ### Community 16 - "serve-https.py"
-Cohesion: 0.18
-Nodes (4): DevHandler, ensure_certificate(), get_local_ip_addresses(), main()
+Cohesion: 0.29
+Nodes (3): ensure_certificate(), get_local_ip_addresses(), main()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
 Nodes (13): alphabet(), assertNumber(), bech32Polymod(), bechChecksum(), convertRadix(), convertRadix2(), genBech32(), decode2() (+5 more)
 
 ### Community 19 - "test_token_codec.py"
-Cohesion: 0.18
+Cohesion: 0.16
 Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
 ### Community 21 - "mock_relay.py"
-Cohesion: 0.16
-Nodes (5): make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
+Cohesion: 0.11
+Nodes (7): make_ws_frame(), QuietHTTPHandler, read_ws_frame(), make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame()
 
 ### Community 24 - "AGENTS.md — Developer & AI Agent Guide for P2P Connect"
 Cohesion: 0.07
@@ -187,16 +186,16 @@ Cohesion: 0.11
 Nodes (3): MockHostBridge, ThreadedMockBridge, _run()
 
 ### Community 26 - "run-regressions.py"
-Cohesion: 0.11
-Nodes (6): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file(), print_inbox()
+Cohesion: 0.12
+Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
 
 ### Community 27 - "verifyEvent"
 Cohesion: 0.14
 Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
 
 ### Community 28 - "test_remote_desktop_capture_e2e.py"
-Cohesion: 0.08
-Nodes (7): find_chrome_binary(), HeadlessChromeSession, QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
+Cohesion: 0.09
+Nodes (6): find_chrome_binary(), HeadlessChromeSession, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
 
 ### Community 29 - "check-invariants.py"
 Cohesion: 0.07
@@ -209,6 +208,10 @@ Nodes (23): calcPaddedLen(), concatBytes3(), decode(), decodePayload(), decrypt3
 ### Community 36 - "get"
 Cohesion: 0.29
 Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
+
+### Community 37 - "MockNostrRelay"
+Cohesion: 0.07
+Nodes (4): ThreadedMockRelay, ThreadedMockRelay, MockNostrRelay, _run_cli()
 
 ### Community 40 - "P2P Connect — Architecture & Production Notes"
 Cohesion: 0.13
@@ -247,19 +250,19 @@ Cohesion: 0.40
 Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
 
 ### Community 61 - "cdp_client.py"
-Cohesion: 0.14
-Nodes (11): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_whitelist() (+3 more)
+Cohesion: 0.13
+Nodes (12): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 475 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **38 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 476 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **35 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `6. Critical Invariants for AI Agents (MUST FOLLOW)` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `bridge.py`?**
-  _High betweenness centrality (0.446) - this node is a cross-community bridge._
+  _High betweenness centrality (0.456) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
@@ -267,8 +270,8 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.051299060254284136 - nodes in this community are weakly interconnected._
 - **Why does `7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`)` connect `bridge.py` to `AGENTS.md — Developer & AI Agent Guide for P2P Connect`?**
-  _High betweenness centrality (0.423) - this node is a cross-community bridge._
+  _High betweenness centrality (0.432) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
-  _High betweenness centrality (0.326) - this node is a cross-community bridge._
+  _High betweenness centrality (0.340) - this node is a cross-community bridge._

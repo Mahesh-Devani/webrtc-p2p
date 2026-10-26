@@ -1300,6 +1300,9 @@ async function initSignaling() {
             if (evt.t === 'select_target') {
               currentCaptureTarget = { type: evt.target || 'display', id: evt.id || 0 };
               ensureNativeOnDemandCapture();
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try { bridgeWs.send(JSON.stringify(evt)); } catch {}
+              }
               return;
             }
             if (evt.t === 'reselect_screen') {

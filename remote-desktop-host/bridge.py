@@ -30,6 +30,8 @@ import struct
 import urllib.parse
 import re
 import ssl
+import ctypes
+import ctypes.util
 
 # ── 1. Native OS Input Injection Engine (Zero-Dependency) ────────────────────
 SCREEN_WIDTH = 1920
@@ -38,9 +40,6 @@ SCREEN_HEIGHT = 1080
 PLATFORM = sys.platform
 
 if PLATFORM == 'darwin':
-    import ctypes
-    import ctypes.util
-
     cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))
 
     class CGPoint(ctypes.Structure):
@@ -853,8 +852,8 @@ class NativeFrameCapturer:
                 pass
         elif PLATFORM == 'win32' and window_id > 0:
             try:
-                import ctypes.wintypes
-                rect = ctypes.wintypes.RECT()
+                from ctypes import wintypes
+                rect = wintypes.RECT()
                 if ctypes.windll.user32.GetWindowRect(int(window_id), ctypes.byref(rect)):
                     return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
             except Exception:
@@ -996,13 +995,14 @@ async def handle_client(reader, writer):
 
         def map_client_coords(nx, ny):
             nonlocal _cached_win_bounds, _cached_win_time, _cached_win_target_id
-            if capture_target_type == 'window' and capture_target_id > 0:
+            win_id = int(capture_target_id or 0)
+            if capture_target_type == 'window' and win_id > 0:
                 now = time.monotonic()
-                # Query window geometry at most once per second or when target changes
-                if _cached_win_target_id != capture_target_id or (now - _cached_win_time > 1.0):
+                # Query window geometry at most once per second or immediately if target changed / bounds not yet cached
+                if _cached_win_target_id != win_id or _cached_win_bounds is None or (now - _cached_win_time > 1.0):
                     _cached_win_time = now
-                    _cached_win_target_id = capture_target_id
-                    b = _global_frame_capturer.get_window_bounds(capture_target_id)
+                    _cached_win_target_id = win_id
+                    b = _global_frame_capturer.get_window_bounds(win_id)
                     if b:
                         _cached_win_bounds = b
                 if _cached_win_bounds:
