@@ -170,6 +170,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('kCGEventFlagMaskShift', self.bridge_content)
         self.assertIn('CGEventSetFlags', self.bridge_content)
         self.assertIn('native_type_text', self.bridge_content)
+        self.assertIn('release_all_modifiers', self.bridge_content)
 
         # Check virtual keycodes and shift mapping on darwin
         if sys.platform == 'darwin':
@@ -180,9 +181,11 @@ class TestOnDemandScreenCapture(unittest.TestCase):
             self.assertIn('$', bridge.SHIFT_MAP)
             self.assertIn('%', bridge.SHIFT_MAP)
             self.assertIn('a', bridge.VK_MAP)
+            self.assertIn('capslock', bridge.VK_MAP)
             self.assertIn('-', bridge.VK_MAP)
             self.assertIn('=', bridge.VK_MAP)
             self.assertIn('return', bridge.VK_MAP)
+            self.assertTrue(callable(bridge.release_all_modifiers))
 
     def test_mobile_virtual_keyboard_and_text_bar(self):
         """Mobile client must have dedicated on-screen text bar and keyboard toggle for lock screen."""

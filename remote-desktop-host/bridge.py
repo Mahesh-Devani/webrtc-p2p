@@ -197,6 +197,16 @@ if PLATFORM == 'darwin':
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
 
+    def release_all_modifiers():
+        # Release modifier keycodes: LeftShift (56), RightShift (60), LeftAlt (58), RightAlt (61),
+        # LeftCtrl (59), RightCtrl (62), Command (55)
+        for code in (56, 60, 58, 61, 59, 62, 55):
+            evt = cg.CGEventCreateKeyboardEvent(None, code, False)
+            if evt:
+                cg.CGEventSetFlags(evt, 0)
+                cg.CGEventPost(kCGHIDEventTap, evt)
+                cg.CFRelease(evt)
+
     def native_key(key, is_down, modifiers=None):
         mods = modifiers or {}
         shift_pressed = bool(mods.get('shift', False))
@@ -225,7 +235,7 @@ if PLATFORM == 'darwin':
             evt = cg.CGEventCreateKeyboardEvent(None, code, is_down)
             if evt:
                 flags = 0
-                if shift_pressed or needs_shift:
+                if shift_pressed or (needs_shift and is_down):
                     flags |= kCGEventFlagMaskShift
                 if ctrl_pressed:
                     flags |= kCGEventFlagMaskControl
@@ -234,15 +244,29 @@ if PLATFORM == 'darwin':
                 if meta_pressed:
                     flags |= kCGEventFlagMaskCommand
 
-                if flags:
-                    cg.CGEventSetFlags(evt, flags)
+                # UNCONDITIONALLY set flags to explicitly clear modifiers when flags == 0
+                cg.CGEventSetFlags(evt, flags)
 
                 cg.CGEventPost(kCGHIDEventTap, evt)
                 cg.CFRelease(evt)
+
+                # If this was an auto-shifted character (e.g. 'A' or '!') and shift key is NOT physically held down:
+                # Post a keyup on shift code (56) with flags=0 so WindowServer immediately clears any latch
+                if needs_shift and not shift_pressed and not is_down:
+                    clr_evt = cg.CGEventCreateKeyboardEvent(None, 56, False)
+                    if clr_evt:
+                        cg.CGEventSetFlags(clr_evt, 0)
+                        cg.CGEventPost(kCGHIDEventTap, clr_evt)
+                        cg.CFRelease(clr_evt)
+
         elif len(key) == 1:
             # Fallback for unicode characters outside US layout
             evt = cg.CGEventCreateKeyboardEvent(None, 0, is_down)
             if evt:
+                flags = 0
+                if shift_pressed or (key.isupper() and is_down):
+                    flags |= kCGEventFlagMaskShift
+                cg.CGEventSetFlags(evt, flags)
                 cg.CGEventKeyboardSetUnicodeString(evt, 1, key)
                 cg.CGEventPost(kCGHIDEventTap, evt)
                 cg.CFRelease(evt)
@@ -251,6 +275,7 @@ if PLATFORM == 'darwin':
         for char in text:
             native_key(char, True)
             native_key(char, False)
+        release_all_modifiers()
 
 else:
     # Windows / Linux fallback via PyAutoGUI if available
@@ -286,6 +311,11 @@ else:
         def native_type_text(text):
             pyautogui.write(text, interval=0.01)
 
+        def release_all_modifiers():
+            for k in ('shift', 'ctrl', 'alt', 'win'):
+                try: pyautogui.keyUp(k)
+                except Exception: pass
+
     except Exception:
         print("[!] Warning: Non-macOS OS detected and PyAutoGUI not installed.")
         def native_mouse_move(x, y): pass
@@ -295,6 +325,7 @@ else:
         def native_scroll(units): pass
         def native_key(key, is_down, modifiers=None): pass
         def native_type_text(text): pass
+        def release_all_modifiers(): pass
 
 
 selected_display_id = None
@@ -1088,6 +1119,9 @@ async def handle_client(reader, writer):
             ty = max(oy, min(oy + sh - 1, int(oy + ny * sh)))
             return tx, ty
 
+        # Ensure no stuck modifier keys from previous sessions or OS interrupts
+        release_all_modifiers()
+
         while True:
             opcode, payload = await read_ws_frame(reader)
             if opcode == 0x08:  # Close frame
@@ -1192,6 +1226,9 @@ async def handle_client(reader, writer):
                 elif action == 'enter':
                     native_key('return', True)
                     native_key('return', False)
+                elif action == 'capslock':
+                    native_key('capslock', True)
+                    native_key('capslock', False)
 
             elif evt_type == 'type_text':
                 t_str = data.get('text', '')
@@ -1276,6 +1313,7 @@ async def handle_client(reader, writer):
             capture_active = False
         if capture_task and not capture_task.done():
             capture_task.cancel()
+        release_all_modifiers()
         _global_wake_manager.release(session_token, force=True)
         try:
             writer.close()

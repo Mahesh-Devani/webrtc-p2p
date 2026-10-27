@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793036556.3251154,
-    "seen": 1793036651.592559,
-    "ast_hash": "6ac8440f8ec09120a4bf16e484d93999",
+    "mtime": 1793100779.9001594,
+    "seen": 1793100883.259925,
+    "ast_hash": "76684f275d16eefcbcd576ff0a25ee1e",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793092090.0806804,
-    "seen": 1793092467.4277492,
-    "ast_hash": "e352b3a65326b3ab44dbdd54de95b567",
+    "mtime": 1793100654.2664084,
+    "seen": 1793100883.259947,
+    "ast_hash": "939f713dcdbc8e10a8ee2c8c0727276d",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "tests/test_on_demand_capture.py": {
-    "mtime": 1793036582.130223,
-    "seen": 1793036651.592574,
-    "ast_hash": "bc0996ad9ed00c4e33e4a94dd09b8118",
+    "mtime": 1793100795.603668,
+    "seen": 1793100883.259938,
+    "ast_hash": "151ea23796fa89454d88618a98f8ff48",
     "semantic_hash": ""
   },
   "tests/e2e/test_remote_desktop_capture_e2e.py": {
