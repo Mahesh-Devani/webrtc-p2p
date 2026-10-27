@@ -183,8 +183,17 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdBtnDisconnect: $('#rd-btn-disconnect'),
     rdBtnCollapse: $('#rd-btn-collapse'),
     rdBtnKeyboard: $('#rd-btn-keyboard'),
+    rdBtnZoomOut: $('#rd-btn-zoom-out'),
+    rdBtnZoom: $('#rd-btn-zoom'),
+    rdZoomLabel: $('#rd-zoom-label'),
+    rdZoomMenu: $('#rd-zoom-menu'),
+    rdBtnZoomIn: $('#rd-btn-zoom-in'),
+    rdBtnPan: $('#rd-btn-pan'),
     rdZoomIndicator: $('#rd-zoom-indicator'),
     rdZoomLevel: $('#rd-zoom-level'),
+    rdBtnPillZoomOut: $('#rd-btn-pill-zoom-out'),
+    rdBtnPillZoomIn: $('#rd-btn-pill-zoom-in'),
+    rdBtnPillPan: $('#rd-btn-pill-pan'),
     rdBtnResetZoom: $('#rd-btn-reset-zoom'),
     rdHostPrompt: $('#rd-host-prompt'),
     rdHostPromptText: $('#rd-host-prompt-text'),
@@ -2520,16 +2529,198 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   let localBridgeWs = null;
   let bridgeConnected = false;
 
-  function cycleFitMode() {
-    if (rdFitMode === 'contain') {
-      rdFitMode = 'native';
-      if (dom.remoteVideo) {
-        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover');
-        dom.remoteVideo.classList.add('rd-fit-native');
+  // ── Remote Desktop Zoom & Pan Subsystem ──
+  let rdZoomScale = 1.0;
+  let rdPanX = 0;
+  let rdPanY = 0;
+  let rdPanToolActive = false;
+  let isMousePanning = false;
+  let lastPanMouseX = 0;
+  let lastPanMouseY = 0;
+  let isMiddleMouseDown = false;
+
+  function getPanLimits(scale = rdZoomScale) {
+    if (!dom.remoteVideo) return { maxPanX: 0, maxPanY: 0, unscaledWidth: 0, unscaledHeight: 0, pWidth: 0, pHeight: 0, vWidth: 0, vHeight: 0 };
+    const parent = dom.remoteVideo.parentElement;
+    const pWidth = parent ? parent.clientWidth : window.innerWidth;
+    const pHeight = parent ? parent.clientHeight : window.innerHeight;
+    const vWidth = dom.remoteVideo.videoWidth || pWidth;
+    const vHeight = dom.remoteVideo.videoHeight || pHeight;
+    const videoRatio = vWidth / (vHeight || 1);
+    const parentRatio = pWidth / (pHeight || 1);
+
+    let unscaledWidth, unscaledHeight;
+    if (parentRatio > videoRatio) {
+      unscaledHeight = pHeight;
+      unscaledWidth = pHeight * videoRatio;
+    } else {
+      unscaledWidth = pWidth;
+      unscaledHeight = pWidth / videoRatio;
+    }
+
+    const scaledWidth = unscaledWidth * scale;
+    const scaledHeight = unscaledHeight * scale;
+
+    const maxPanX = Math.max(0, (scaledWidth - pWidth) / 2) + 24;
+    const maxPanY = Math.max(0, (scaledHeight - pHeight) / 2) + 24;
+    return { maxPanX, maxPanY, unscaledWidth, unscaledHeight, pWidth, pHeight, vWidth, vHeight };
+  }
+
+  function clampPan() {
+    const { maxPanX, maxPanY } = getPanLimits(rdZoomScale);
+    rdPanX = Math.max(-maxPanX, Math.min(maxPanX, rdPanX));
+    rdPanY = Math.max(-maxPanY, Math.min(maxPanY, rdPanY));
+  }
+
+  function updateZoomUI() {
+    const text = rdZoomScale <= 1.02 ? 'Fit' : `${Math.round(rdZoomScale * 100)}%`;
+    if (dom.rdZoomLevel) dom.rdZoomLevel.textContent = rdZoomScale <= 1.02 ? '1.0x' : `${rdZoomScale.toFixed(1)}x`;
+    if (dom.rdZoomLabel) dom.rdZoomLabel.textContent = `${text} ▾`;
+    if (dom.rdFitLabel) dom.rdFitLabel.textContent = text;
+    dom.rdZoomMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+      const z = btn.dataset.zoom;
+      if (z === 'fit') btn.classList.toggle('active', rdZoomScale <= 1.02);
+      else if (z && !isNaN(parseFloat(z))) {
+        btn.classList.toggle('active', Math.abs(parseFloat(z) - rdZoomScale) < 0.08);
       }
-      if (dom.rdFitLabel) dom.rdFitLabel.textContent = '1:1';
-      toast('Display: 1:1 Native Resolution (Click & drag to pan)');
-    } else if (rdFitMode === 'native') {
+    });
+  }
+
+  function applyRdZoomTransform(animate = false) {
+    if (!dom.remoteVideo) return;
+    if (animate) {
+      dom.remoteVideo.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1)';
+      setTimeout(() => {
+        if (dom.remoteVideo) dom.remoteVideo.style.transition = '';
+      }, 200);
+    } else {
+      dom.remoteVideo.style.transition = '';
+    }
+
+    if (rdZoomScale > 1.02) {
+      dom.remoteVideo.style.transform = `translate(${rdPanX}px, ${rdPanY}px) scale(${rdZoomScale})`;
+      if (dom.rdZoomIndicator) show(dom.rdZoomIndicator);
+    } else {
+      dom.remoteVideo.style.transform = '';
+      if (dom.rdZoomIndicator && !rdPanToolActive) hide(dom.rdZoomIndicator);
+    }
+    updateZoomUI();
+    if (rdMode === 'control' || rdMode === 'pointer') {
+      renderVirtualCursor();
+    }
+  }
+
+  function setRdZoom(newScale, centerClientX = null, centerClientY = null, animate = false) {
+    const oldScale = rdZoomScale;
+    newScale = Math.max(1.0, Math.min(5.0, Math.round(newScale * 100) / 100));
+    if (newScale <= 1.02) {
+      resetRdZoom(animate);
+      return;
+    }
+
+    if (centerClientX !== null && centerClientY !== null && dom.remoteVideo) {
+      const parent = dom.remoteVideo.parentElement;
+      const rect = parent ? parent.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const mouseOffsetX = centerClientX - centerX;
+      const mouseOffsetY = centerClientY - centerY;
+      const scaleRatio = newScale / oldScale;
+      rdPanX = mouseOffsetX - (mouseOffsetX - rdPanX) * scaleRatio;
+      rdPanY = mouseOffsetY - (mouseOffsetY - rdPanY) * scaleRatio;
+    }
+
+    rdZoomScale = newScale;
+    clampPan();
+    applyRdZoomTransform(animate);
+  }
+
+  function resetRdZoom(animate = true) {
+    rdZoomScale = 1.0;
+    rdPanX = 0;
+    rdPanY = 0;
+    if (dom.remoteVideo) {
+      dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover', 'rd-fit-native');
+    }
+    rdFitMode = 'contain';
+    applyRdZoomTransform(animate);
+  }
+
+  function zoomFitHeight() {
+    const limits = getPanLimits(1.0);
+    if (limits.unscaledHeight > 0) {
+      const fitHeightScale = Math.min(4.0, Math.max(1.1, limits.pHeight / limits.unscaledHeight));
+      setRdZoom(fitHeightScale, null, null, true);
+      toast(`Zoom: Fit Height (${Math.round(fitHeightScale * 100)}%) — Full screen height for ultrawide screen`);
+    }
+  }
+
+  function zoomNative() {
+    const limits = getPanLimits(1.0);
+    if (limits.unscaledWidth > 0 && limits.vWidth > 0) {
+      const nativeScale = Math.min(5.0, Math.max(1.0, limits.vWidth / limits.unscaledWidth));
+      setRdZoom(nativeScale, null, null, true);
+      toast(`Zoom: 1:1 Native Resolution (${Math.round(nativeScale * 100)}%) — Pixel-perfect sharpness`);
+    }
+  }
+
+  function zoomIn() {
+    const nextScale = Math.min(5.0, rdZoomScale + 0.25);
+    setRdZoom(nextScale, window.innerWidth / 2, window.innerHeight / 2, true);
+  }
+
+  function zoomOut() {
+    const nextScale = Math.max(1.0, rdZoomScale - 0.25);
+    setRdZoom(nextScale, window.innerWidth / 2, window.innerHeight / 2, true);
+  }
+
+  function setRdPanTool(active) {
+    rdPanToolActive = !!active;
+    dom.rdBtnPan?.classList.toggle('active', rdPanToolActive);
+    dom.rdBtnPillPan?.classList.toggle('active', rdPanToolActive);
+    if (rdPanToolActive && dom.rdZoomIndicator) show(dom.rdZoomIndicator);
+    else if (rdZoomScale <= 1.02 && dom.rdZoomIndicator) hide(dom.rdZoomIndicator);
+    updatePanCursor();
+  }
+
+  function updatePanCursor() {
+    const isPanning = rdPanToolActive || isMiddleMouseDown || (rdMode === 'view' && rdZoomScale > 1.02);
+    const parent = dom.remoteVideo?.parentElement;
+    if (parent) {
+      parent.classList.toggle('rd-panning-active', isPanning);
+      parent.classList.toggle('rd-dragging', isMousePanning);
+    }
+    if (dom.remoteVideo) {
+      dom.remoteVideo.classList.toggle('rd-panning-active', isPanning);
+      dom.remoteVideo.classList.toggle('rd-dragging', isMousePanning);
+    }
+  }
+
+  function startMousePan(e) {
+    isMousePanning = true;
+    lastPanMouseX = e.clientX;
+    lastPanMouseY = e.clientY;
+    updatePanCursor();
+  }
+
+  function stopMousePan() {
+    if (!isMousePanning) return;
+    isMousePanning = false;
+    isMiddleMouseDown = false;
+    updatePanCursor();
+  }
+
+  function cycleFitMode() {
+    if (rdFitMode === 'contain' && rdZoomScale <= 1.02) {
+      // Step 1: Fit Height (eliminates ultrawide black bars on 1080p screen)
+      zoomFitHeight();
+    } else if (rdFitMode === 'contain' && rdZoomScale > 1.02) {
+      // Step 2: 1:1 Native Resolution
+      zoomNative();
+      rdFitMode = 'native-zoom';
+    } else if (rdFitMode === 'native-zoom') {
+      // Step 3: Stretch
+      resetRdZoom(true);
       rdFitMode = 'fill';
       if (dom.remoteVideo) {
         dom.remoteVideo.classList.remove('rd-fit-native', 'rd-fit-cover');
@@ -2537,15 +2728,9 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       }
       if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Stretch';
       toast('Display: Stretch to Fill Window');
-    } else if (rdFitMode === 'fill') {
-      rdFitMode = 'cover';
-      if (dom.remoteVideo) {
-        dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-native');
-        dom.remoteVideo.classList.add('rd-fit-cover');
-      }
-      if (dom.rdFitLabel) dom.rdFitLabel.textContent = 'Zoom';
-      toast('Display: Zoom / Fill Window');
     } else {
+      // Step 4: Fit to Window
+      resetRdZoom(true);
       rdFitMode = 'contain';
       if (dom.remoteVideo) {
         dom.remoteVideo.classList.remove('rd-fit-fill', 'rd-fit-cover', 'rd-fit-native');
@@ -2568,44 +2753,6 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     sendRdInput({ t: 'set_quality', preset });
     const desc = preset === 'crisp' ? 'Crisp Text (15 Mbps / 30 FPS)' : (preset === 'low' ? 'Data Saver (2 Mbps / 30 FPS)' : 'Balanced (8 Mbps / 60 FPS)');
     toast(`Stream Quality: ${desc}`);
-  }
-
-  // ── Mobile Pinch-to-Zoom Subsystem ──
-  let rdZoomScale = 1.0;
-  let rdPanX = 0;
-  let rdPanY = 0;
-
-  function applyRdZoomTransform(animate = false) {
-    if (!dom.remoteVideo) return;
-    if (animate) {
-      dom.remoteVideo.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1)';
-      setTimeout(() => {
-        if (dom.remoteVideo) dom.remoteVideo.style.transition = '';
-      }, 200);
-    } else {
-      dom.remoteVideo.style.transition = '';
-    }
-
-    if (rdZoomScale > 1.02) {
-      dom.remoteVideo.style.transform = `translate(${rdPanX}px, ${rdPanY}px) scale(${rdZoomScale})`;
-      if (dom.rdZoomIndicator) {
-        show(dom.rdZoomIndicator);
-        if (dom.rdZoomLevel) dom.rdZoomLevel.textContent = `${rdZoomScale.toFixed(1)}x`;
-      }
-    } else {
-      dom.remoteVideo.style.transform = '';
-      if (dom.rdZoomIndicator) hide(dom.rdZoomIndicator);
-    }
-    if (rdMode === 'control' || rdMode === 'pointer') {
-      renderVirtualCursor();
-    }
-  }
-
-  function resetRdZoom(animate = true) {
-    rdZoomScale = 1.0;
-    rdPanX = 0;
-    rdPanY = 0;
-    applyRdZoomTransform(animate);
   }
 
   function setRdMode(mode) {
@@ -3407,7 +3554,12 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     let lastMouseClientX = null;
     let lastMouseClientY = null;
 
+    window.addEventListener('mouseup', () => {
+      if (isMousePanning) stopMousePan();
+    });
+
     v.addEventListener('mouseleave', (e) => {
+      if (isMousePanning) stopMousePan();
       // In Trackpad mode without pointer lock, if cursor leaves near an edge, snap to that edge
       if (rdTouchMode === 'trackpad' && document.pointerLockElement !== v) {
         const rect = v.getBoundingClientRect();
@@ -3425,6 +3577,43 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     });
 
     v.addEventListener('mousemove', (e) => {
+      if (isMousePanning) {
+        const dx = e.clientX - lastPanMouseX;
+        const dy = e.clientY - lastPanMouseY;
+        lastPanMouseX = e.clientX;
+        lastPanMouseY = e.clientY;
+        rdPanX += dx;
+        rdPanY += dy;
+        clampPan();
+        applyRdZoomTransform(false);
+        return;
+      }
+
+      if (rdPanToolActive) return;
+
+      // In Control/Pointer mode, if zoomed in, edge auto-pan gently scrolls the screen when near boundaries
+      if (rdZoomScale > 1.05 && (rdMode === 'control' || rdMode === 'pointer')) {
+        const edgeMargin = 32;
+        let edgeSpeedX = 0;
+        let edgeSpeedY = 0;
+        if (e.clientX < edgeMargin) {
+          edgeSpeedX = Math.min(18, (edgeMargin - e.clientX) * 0.7);
+        } else if (e.clientX > window.innerWidth - edgeMargin) {
+          edgeSpeedX = -Math.min(18, (e.clientX - (window.innerWidth - edgeMargin)) * 0.7);
+        }
+        if (e.clientY < edgeMargin) {
+          edgeSpeedY = Math.min(18, (edgeMargin - e.clientY) * 0.7);
+        } else if (e.clientY > window.innerHeight - edgeMargin) {
+          edgeSpeedY = -Math.min(18, (e.clientY - (window.innerHeight - edgeMargin)) * 0.7);
+        }
+        if (edgeSpeedX !== 0 || edgeSpeedY !== 0) {
+          rdPanX += edgeSpeedX;
+          rdPanY += edgeSpeedY;
+          clampPan();
+          applyRdZoomTransform(false);
+        }
+      }
+
       if (rdMode === 'view') return;
       const now = performance.now();
       if (now - lastMoveTime < 16) return; // ~60fps
@@ -3483,6 +3672,14 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     });
 
     v.addEventListener('mousedown', (e) => {
+      // Panning triggers: Pan Tool active, middle mouse click (wheel press), Alt key, or View mode when zoomed in
+      if (rdPanToolActive || e.button === 1 || e.altKey || (rdMode === 'view' && rdZoomScale > 1.02)) {
+        e.preventDefault();
+        if (e.button === 1) isMiddleMouseDown = true;
+        startMousePan(e);
+        return;
+      }
+
       if (rdMode === 'view') return;
       const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
         ? virtualCursor
@@ -3498,6 +3695,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     });
 
     v.addEventListener('mouseup', (e) => {
+      if (isMousePanning) {
+        stopMousePan();
+        return;
+      }
+
       if (rdMode === 'control') {
         const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
           ? virtualCursor
@@ -3507,19 +3709,40 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     });
 
     v.addEventListener('contextmenu', (e) => {
-      if (rdMode === 'control') {
+      if (rdMode === 'control' || rdPanToolActive || isMousePanning) {
         e.preventDefault();
       }
     });
 
     v.addEventListener('wheel', (e) => {
-      if (rdMode === 'control') {
+      // Zoom with Ctrl / Cmd + wheel (including Windows laptop trackpad pinch gesture!)
+      if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        sendRdInput({ t: 'wheel', dx: e.deltaX, dy: e.deltaY });
+        const factor = e.deltaY < 0 ? 1.12 : 0.89;
+        setRdZoom(rdZoomScale * factor, e.clientX, e.clientY);
+        return;
+      }
+
+      // When zoomed in View mode, scrolling pans the display
+      if (rdMode === 'view' && rdZoomScale > 1.02) {
+        e.preventDefault();
+        rdPanX -= e.deltaX;
+        rdPanY -= e.deltaY;
+        clampPan();
+        applyRdZoomTransform(false);
+        return;
+      }
+
+      if (rdMode === 'control') {
+        if (!isMousePanning && !rdPanToolActive) {
+          e.preventDefault();
+          sendRdInput({ t: 'wheel', dx: e.deltaX, dy: e.deltaY });
+        }
       }
     }, { passive: false });
 
     v.addEventListener('dblclick', (e) => {
+      if (rdPanToolActive || isMousePanning) return;
       if (rdMode === 'control') {
         const coords = (rdTouchMode === 'trackpad' || document.pointerLockElement === v)
           ? virtualCursor
@@ -3567,6 +3790,20 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     let pinchMovedSignificantly = false;
 
     v.addEventListener('touchstart', (e) => {
+      if (rdPanToolActive && e.touches.length === 1) {
+        touchStartTime = Date.now();
+        lastPanMouseX = e.touches[0].clientX;
+        lastPanMouseY = e.touches[0].clientY;
+        isMousePanning = true;
+        return;
+      }
+      if (rdMode === 'view' && e.touches.length === 1 && rdZoomScale > 1.02) {
+        touchStartTime = Date.now();
+        lastPanMouseX = e.touches[0].clientX;
+        lastPanMouseY = e.touches[0].clientY;
+        isMousePanning = true;
+        return;
+      }
       if (rdMode === 'view') return;
       e.preventDefault(); // Prevent default browser touch gestures (double-tap-zoom, delayed clicks)
 
@@ -3667,6 +3904,19 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     }, { passive: false });
 
     v.addEventListener('touchmove', (e) => {
+      if (isMousePanning && e.touches.length === 1) {
+        e.preventDefault();
+        const t0 = e.touches[0];
+        const dx = t0.clientX - lastPanMouseX;
+        const dy = t0.clientY - lastPanMouseY;
+        lastPanMouseX = t0.clientX;
+        lastPanMouseY = t0.clientY;
+        rdPanX += dx;
+        rdPanY += dy;
+        clampPan();
+        applyRdZoomTransform(false);
+        return;
+      }
       if (rdMode === 'view') return;
       e.preventDefault(); // Prevent page bounce/zoom while interacting
 
@@ -3726,16 +3976,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
               const panDeltaY = currentMidY - initialPinchMidY;
               rdPanX = initialPanX + panDeltaX;
               rdPanY = initialPanY + panDeltaY;
-
-              // Clamping pan bounds to prevent video flying off screen
-              const parent = v.parentElement;
-              const pWidth = parent ? parent.clientWidth : window.innerWidth;
-              const pHeight = parent ? parent.clientHeight : window.innerHeight;
-              const maxPanX = (pWidth * (newScale - 1)) / 1.8;
-              const maxPanY = (pHeight * (newScale - 1)) / 1.8;
-              rdPanX = Math.max(-maxPanX, Math.min(maxPanX, rdPanX));
-              rdPanY = Math.max(-maxPanY, Math.min(maxPanY, rdPanY));
               rdZoomScale = newScale;
+              clampPan();
               applyRdZoomTransform(false);
             } else {
               // Not zoomed in -> Two-finger vertical scroll
@@ -3814,16 +4056,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
             const panDeltaY = currentMidY - initialPinchMidY;
             rdPanX = initialPanX + panDeltaX;
             rdPanY = initialPanY + panDeltaY;
-
-            // Clamping pan bounds to prevent video flying off screen
-            const parent = v.parentElement;
-            const pWidth = parent ? parent.clientWidth : window.innerWidth;
-            const pHeight = parent ? parent.clientHeight : window.innerHeight;
-            const maxPanX = (pWidth * (newScale - 1)) / 1.8;
-            const maxPanY = (pHeight * (newScale - 1)) / 1.8;
-            rdPanX = Math.max(-maxPanX, Math.min(maxPanX, rdPanX));
-            rdPanY = Math.max(-maxPanY, Math.min(maxPanY, rdPanY));
             rdZoomScale = newScale;
+            clampPan();
             applyRdZoomTransform(false);
           } else {
             // Not zoomed in and distance not changing much -> Two-finger vertical scroll
@@ -3841,6 +4075,9 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
     v.addEventListener('touchend', (e) => {
       clearTimeout(longPressTimer);
+      if (isMousePanning && e.touches.length === 0) {
+        isMousePanning = false;
+      }
       if (rdMode === 'view') return;
       e.preventDefault();
 
@@ -4096,6 +4333,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdPerfHudOverlay);
     hide(dom.rdSoftKeysBar);
     hide(dom.rdAudioMenu);
+    hide(dom.rdZoomMenu);
+    setRdPanTool(false);
     unlatchAllModifiers();
     setRdMode('view');
     hide(dom.rdToolbar);
@@ -5383,6 +5622,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdQualityMenu);
     hide(dom.rdDisplaysMenu);
     hide(dom.rdAudioMenu);
+    hide(dom.rdZoomMenu);
   };
 
   document.addEventListener('click', dismissAllRdMenus);
@@ -5391,7 +5631,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
                     (!dom.rdKeysMenu?.classList.contains('hidden')) ||
                     (!dom.rdQualityMenu?.classList.contains('hidden')) ||
                     (!dom.rdClipboardMenu?.classList.contains('hidden')) ||
-                    (!dom.rdAudioMenu?.classList.contains('hidden'));
+                    (!dom.rdAudioMenu?.classList.contains('hidden')) ||
+                    (!dom.rdZoomMenu?.classList.contains('hidden'));
     if (anyOpen && !e.target.closest('.rd-dropdown-container') && !e.target.closest('.rd-keys-menu')) {
       dismissAllRdMenus();
     }
@@ -5405,6 +5646,48 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       if (action) {
         sendRdInput({ t: 'special_key', key: action });
         toast(`Sent ${btn.textContent} to remote machine`);
+      }
+    });
+  });
+
+  dom.rdBtnZoomOut?.addEventListener('click', () => zoomOut());
+  dom.rdBtnZoomIn?.addEventListener('click', () => zoomIn());
+  dom.rdBtnPillZoomOut?.addEventListener('click', () => zoomOut());
+  dom.rdBtnPillZoomIn?.addEventListener('click', () => zoomIn());
+
+  dom.rdBtnPan?.addEventListener('click', () => {
+    setRdPanTool(!rdPanToolActive);
+    toast(rdPanToolActive ? 'Drag / Pan tool active (Click & drag to move screen)' : 'Pan tool off (Normal control restored)', 'info');
+  });
+
+  dom.rdBtnPillPan?.addEventListener('click', () => {
+    setRdPanTool(!rdPanToolActive);
+    toast(rdPanToolActive ? 'Drag / Pan tool active (Click & drag to move screen)' : 'Pan tool off (Normal control restored)', 'info');
+  });
+
+  dom.rdBtnZoom?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hide(dom.rdKeysMenu);
+    hide(dom.rdClipboardMenu);
+    hide(dom.rdQualityMenu);
+    hide(dom.rdDisplaysMenu);
+    hide(dom.rdAudioMenu);
+    dom.rdZoomMenu?.classList.toggle('hidden');
+  });
+
+  dom.rdZoomMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hide(dom.rdZoomMenu);
+      const action = btn.dataset.zoom;
+      if (action === 'fit' || action === 'reset') {
+        resetRdZoom(true);
+      } else if (action === 'fit-height') {
+        zoomFitHeight();
+      } else if (action === 'native') {
+        zoomNative();
+      } else if (action && !isNaN(parseFloat(action))) {
+        setRdZoom(parseFloat(action), window.innerWidth / 2, window.innerHeight / 2, true);
       }
     });
   });

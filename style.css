@@ -2296,7 +2296,7 @@ textarea {
 
 /* Remote Laser Pointer */
 .rd-laser-pointer {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 22px;
@@ -2492,7 +2492,7 @@ textarea {
   }
 }
 
-/* Mobile Pinch-to-Zoom Indicator & Floating Pill */
+/* Zoom Indicator & Floating Controls Pill */
 .rd-zoom-indicator {
   position: absolute;
   bottom: 20px;
@@ -2500,18 +2500,47 @@ textarea {
   z-index: 520;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(14, 20, 28, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(10px);
-  padding: 4px 10px;
+  gap: 6px;
+  background: rgba(14, 20, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 4px 8px;
   border-radius: 20px;
   color: #fff;
   font-size: 0.72rem;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
   animation: fadeIn 0.15s ease;
   user-select: none;
+}
+
+.rd-zoom-pill-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  padding: 0;
+}
+
+.rd-zoom-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.rd-zoom-pill-btn.active {
+  background: var(--c-primary) !important;
+  color: #fff !important;
 }
 
 .rd-zoom-reset-btn {
@@ -2535,6 +2564,18 @@ textarea {
   will-change: transform;
 }
 
+.rd-panning-active,
+.rd-panning-active * {
+  cursor: grab !important;
+}
+
+.rd-panning-active.rd-dragging,
+.rd-panning-active.rd-dragging *,
+.rd-dragging,
+.rd-dragging * {
+  cursor: grabbing !important;
+}
+
 @keyframes pulseHighlight {
   0% { box-shadow: 0 0 0 0 rgba(0, 168, 132, 0.7); }
   70% { box-shadow: 0 0 0 10px rgba(0, 168, 132, 0); }
@@ -2548,11 +2589,7 @@ textarea {
 /* 1:1 Native Resolution Pixel Mode */
 .remote-video.rd-fit-native,
 video#remote-video.rd-fit-native {
-  object-fit: none !important;
-  width: auto !important;
-  height: auto !important;
-  max-width: none !important;
-  max-height: none !important;
+  object-fit: contain !important;
 }
 
 .rd-key-item.active {

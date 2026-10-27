@@ -157,6 +157,35 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("if (isRdStream) {", self.ui_content)
         self.assertIn("// Standard Call (Audio / Video Call between peers):", self.ui_content)
 
+    def test_remote_desktop_zoom_and_drag_pan(self):
+        """Remote Desktop must support Zoom In/Out, Fit Height/Native presets, and Drag/Pan."""
+        # index.html controls
+        self.assertIn('id="rd-btn-zoom-out"', self.html_content)
+        self.assertIn('id="rd-btn-zoom"', self.html_content)
+        self.assertIn('id="rd-zoom-menu"', self.html_content)
+        self.assertIn('id="rd-btn-zoom-in"', self.html_content)
+        self.assertIn('id="rd-btn-pan"', self.html_content)
+        self.assertIn('id="rd-btn-pill-zoom-out"', self.html_content)
+        self.assertIn('id="rd-btn-pill-zoom-in"', self.html_content)
+        self.assertIn('id="rd-btn-pill-pan"', self.html_content)
+        self.assertIn('id="rd-btn-reset-zoom"', self.html_content)
+
+        # ui-controller.js functions
+        self.assertIn("function getPanLimits", self.ui_content)
+        self.assertIn("function clampPan", self.ui_content)
+        self.assertIn("function setRdZoom", self.ui_content)
+        self.assertIn("function zoomFitHeight", self.ui_content)
+        self.assertIn("function zoomNative", self.ui_content)
+        self.assertIn("function setRdPanTool", self.ui_content)
+        self.assertIn("function startMousePan", self.ui_content)
+        self.assertIn("function stopMousePan", self.ui_content)
+
+        # style.css drag & cursor classes
+        css_content = (PROJECT_ROOT / 'style.css').read_text(encoding='utf-8')
+        self.assertIn(".rd-panning-active", css_content)
+        self.assertIn(".rd-dragging", css_content)
+        self.assertIn(".rd-zoom-pill-btn", css_content)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,17 +1,17 @@
-# Graph Report - webrtc-p2p  (2026-10-26)
+# Graph Report - webrtc-p2p  (2026-10-27)
 
 ## Corpus Check
-- 54 files · ~129,377 words
+- 54 files · ~130,686 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1308 nodes · 2491 edges · 84 communities (43 shown, 41 thin omitted)
+- 1322 nodes · 2531 edges · 80 communities (45 shown, 35 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 97 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `acfa91a9`
+- Built from commit: `c6247d51`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -42,8 +42,8 @@
 - TestMockNostrRelay
 - AGENTS.md — Developer & AI Agent Guide for P2P Connect
 - ThreadedMockBridge
-- NativeFrameCapturer
-- validateEvent2
+- hide
+- verifyEvent
 - test_remote_desktop_capture_e2e.py
 - check-invariants.py
 - decode
@@ -54,8 +54,8 @@
 - uninstall-service.sh
 - get
 - MockNostrRelay
-- ThreadedMockRelay
-- 🔐 P2P Connect
+- toast
+- attachRemoteVideoInputListeners
 - P2P Connect — Architecture & Production Notes
 - .handle_client
 - P2P Connect — High-Level Design
@@ -65,28 +65,26 @@
 - 2. Triage Procedure
 - TestMobileLifecycle
 - P2P Connect — Roadmap
-- Linux (systemd User Service)
+- P2P Connect — Native OS Remote Desktop Host Agent
 - 🚀 1. Recommended Triage Prompts
+- appendChatBubble
 - DevHandler
-- 🤖 AI Support Agent & Developer Triage System
+- initNostr
 - run.sh
 - cdp_client.py
-- sys
-- P2P Connect — Native OS Remote Desktop Host Agent
-- DisplayWakeManager
-- ._process_nostr_message
-- How to Download & Run the Host Agent
+- serve-https.py
+- loadRemoteDevices
+- createCipher
+- closeQrScanner
 - ColoredTextTestResult
-- Windows (Task Scheduler & pythonw)
-- 5. Client Authorization Whitelist & Anti-Flooding Shield
-- 5. Security Model
+- DiagnosticServer
 
 ## God Nodes (most connected - your core abstractions)
-1. `toast()` - 38 edges
-2. `hide()` - 31 edges
+1. `toast()` - 40 edges
+2. `hide()` - 32 edges
 3. `TestDiagnosticSystem` - 30 edges
 4. `initNostr()` - 29 edges
-5. `show()` - 27 edges
+5. `show()` - 28 edges
 6. `buildNostrSessionConfig()` - 24 edges
 7. `MockNostrRelay` - 23 edges
 8. `weierstrass()` - 21 edges
@@ -108,23 +106,23 @@
 ## Import Cycles
 - None detected.
 
-## Communities (84 total, 41 thin omitted)
+## Communities (80 total, 35 thin omitted)
 
 ### Community 0 - "ui-controller.js"
-Cohesion: 0.05
-Nodes (128): ChatStore, TokenCodec, acceptIncomingCall(), addContact(), addOrUpdateRemoteDevice(), analyzeUserSupportComment(), appendChatBubble(), applyRdZoomTransform() (+120 more)
+Cohesion: 0.10
+Nodes (22): ChatStore, TokenCodec, applyRemoteAudioVolume(), applySavedRemoteAudioSettings(), attemptRdReconnect(), formatConnectionTime(), formatDate(), formatDuration() (+14 more)
 
 ### Community 1 - "weierstrass"
-Cohesion: 0.08
-Nodes (47): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+39 more)
+Cohesion: 0.07
+Nodes (51): bytesToHex(), bytesToNumberBE(), bytesToNumberLE(), challenge(), concatBytes2(), createHmacDrbg(), ensureBytes(), Field() (+43 more)
 
 ### Community 2 - "update"
-Cohesion: 0.11
-Nodes (30): computeTag(), computeTag2(), constructor(), digest(), digestInto(), exists(), exists3(), extract() (+22 more)
+Cohesion: 0.13
+Nodes (27): computeTag(), computeTag2(), constructor(), digest(), digestInto(), exists(), exists3(), finalize() (+19 more)
 
 ### Community 3 - "bridge.py"
-Cohesion: 0.12
-Nodes (22): 7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`), CGPoint, execute_mouse_move(), get_screen_bounds(), handle_client(), map_client_coords(), stream_frames_loop(), is_origin_allowed() (+14 more)
+Cohesion: 0.07
+Nodes (26): 7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`), CGPoint, CGRect, CGSize, DisplayWakeManager, execute_mouse_move(), get_screen_bounds(), handle_client() (+18 more)
 
 ### Community 4 - "host-controller.js"
 Cohesion: 0.10
@@ -132,15 +130,15 @@ Nodes (43): DiagnosticLogger, acquireScreenWakeLock(), addAuthorizedClient(), br
 
 ### Community 5 - "nostr.bundle.js"
 Cohesion: 0.04
-Nodes (43): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve(), FpInvertBatch(), FpPow(), FpSqrt() (+35 more)
+Nodes (41): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve(), extract(), FpSqrt(), getConversationKey() (+33 more)
 
 ### Community 6 - "check-invariants.py"
 Cohesion: 0.06
 Nodes (17): 1. `test_no_query_params_on_internal_imports` Failed, 1. When to Use This Skill, 2. Test Architecture & Coverage, 2. `test_host_and_client_storage_keys_isolated` Failed, 3. How to Run Regressions, 3. `test_add_local_stream_passes_stream_to_add_track` Failed, 4. Failure Diagnosis & Resolution Runbook, 4. `test_dc_files_protocol_flow` or `test_datachannel_watermarks` Failed (+9 more)
 
 ### Community 7 - "decode"
-Cohesion: 0.12
-Nodes (22): bytesToHex2(), createRumor(), createSeal(), createWrap(), fastEventHash(), finalizeEvent(), finishReactionEvent(), finishRepostEvent() (+14 more)
+Cohesion: 0.15
+Nodes (19): bytesToHex2(), createRumor(), createSeal(), createWrap(), encrypt2(), fastEventHash(), finalizeEvent(), finishReactionEvent() (+11 more)
 
 ### Community 8 - "NostrRelay"
 Cohesion: 0.07
@@ -151,8 +149,8 @@ Cohesion: 0.09
 Nodes (21): author, bugs, url, description, devDependencies, serve, homepage, keywords (+13 more)
 
 ### Community 10 - "encode"
-Cohesion: 0.15
-Nodes (22): concatBytes3(), encode(), encodeBech32(), encodeBytes(), encodeTLV(), encrypt3(), encode(), getToken() (+14 more)
+Cohesion: 0.19
+Nodes (17): encode(), encodeBech32(), encodeBytes(), encodeTLV(), encode(), getToken(), hashPayload(), hexToBytes2() (+9 more)
 
 ### Community 11 - "remote-desktop-host/package.json"
 Cohesion: 0.14
@@ -167,12 +165,12 @@ Cohesion: 0.05
 Nodes (44): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 1. `webrtc-core.js` — PeerSession, 2. `nostr-crypto.js` — NostrCrypto, 3. `nostr-relay.js` — NostrRelay, 4. `nostr-transport.js` — NostrTransport, 5. `nostr-signaling.js` — NostrSignaling (+36 more)
 
 ### Community 15 - "bytes3"
-Cohesion: 0.11
-Nodes (27): apply0123(), applySbox(), bool2(), bytes3(), checkOpts(), createCipher(), ctr32(), ctrCounter() (+19 more)
+Cohesion: 0.17
+Nodes (18): apply0123(), applySbox(), bytes3(), ctr32(), ctrCounter(), decrypt(), decrypt2(), deriveKeys() (+10 more)
 
 ### Community 16 - "serve-https.py"
-Cohesion: 0.12
-Nodes (7): get_modified_files(), main(), run_tests(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main()
+Cohesion: 0.11
+Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
@@ -183,8 +181,8 @@ Cohesion: 0.18
 Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
 ### Community 21 - "mock_relay.py"
-Cohesion: 0.15
-Nodes (5): make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
+Cohesion: 0.10
+Nodes (7): event_matches_any_filter(), event_matches_filter(), make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
 
 ### Community 24 - "AGENTS.md — Developer & AI Agent Guide for P2P Connect"
 Cohesion: 0.07
@@ -194,33 +192,41 @@ Nodes (27): 1. ES Module Singleton Integrity (DO NOT BREAK), 1. Project Overview
 Cohesion: 0.11
 Nodes (3): MockHostBridge, ThreadedMockBridge, _run()
 
-### Community 26 - "NativeFrameCapturer"
-Cohesion: 0.26
-Nodes (3): CGRect, CGSize, NativeFrameCapturer
+### Community 26 - "hide"
+Cohesion: 0.21
+Nodes (27): buildIceServers(), buildNostrSessionConfig(), closeDiagnosticsModal(), copyText(), disableChat(), disconnectRemoteDesktop(), enableChat(), endMediaCall() (+19 more)
 
-### Community 27 - "validateEvent2"
-Cohesion: 0.29
-Nodes (7): unpackEventFromToken(), validateEvent2(), validateEventKind(), validateEventMethodTag(), validateEventTimestamp(), validateEventUrlTag(), validateToken()
+### Community 27 - "verifyEvent"
+Cohesion: 0.14
+Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
 
 ### Community 28 - "test_remote_desktop_capture_e2e.py"
-Cohesion: 0.08
-Nodes (7): find_chrome_binary(), HeadlessChromeSession, QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
+Cohesion: 0.07
+Nodes (8): find_chrome_binary(), HeadlessChromeSession, QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, QuietHTTPHandler, ReusableTCPServer, TestTwoPeerHandshakeE2E
 
 ### Community 29 - "check-invariants.py"
 Cohesion: 0.07
 Nodes (15): check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_signal_type_whitelist(), check_storage_key_isolation() (+7 more)
 
 ### Community 30 - "decode"
-Cohesion: 0.12
-Nodes (18): calcPaddedLen(), decode(), decodePayload(), decrypt3(), equalBytes2(), expand(), getMessageKeys(), getZapEndpoint() (+10 more)
+Cohesion: 0.11
+Nodes (23): calcPaddedLen(), concatBytes3(), decode(), decodePayload(), decrypt3(), encrypt3(), equalBytes2(), expand() (+15 more)
 
 ### Community 36 - "get"
 Cohesion: 0.29
 Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
 
-### Community 39 - "🔐 P2P Connect"
-Cohesion: 0.18
-Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Optional: Run as a Persistent Background Service (24/7 Access), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
+### Community 37 - "MockNostrRelay"
+Cohesion: 0.08
+Nodes (3): ThreadedMockRelay, ThreadedMockRelay, MockNostrRelay
+
+### Community 38 - "toast"
+Cohesion: 0.22
+Nodes (19): acceptIncomingCall(), attachDisplaysMenuListeners(), connectLocalBridge(), disconnectLocalBridge(), getVideoConstraints(), handleIncomingInputEvent(), initMobileTouchAndSoftKeys(), populateDeviceSelectors() (+11 more)
+
+### Community 39 - "attachRemoteVideoInputListeners"
+Cohesion: 0.16
+Nodes (19): applyRdZoomTransform(), attachRemoteVideoInputListeners(), clampPan(), cycleFitMode(), getNormalizedVideoCoordinates(), getPanLimits(), renderVirtualCursor(), resetRdZoom() (+11 more)
 
 ### Community 40 - "P2P Connect — Architecture & Production Notes"
 Cohesion: 0.13
@@ -235,8 +241,8 @@ Cohesion: 0.40
 Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
 
 ### Community 47 - "P2P Connect — Architecture"
-Cohesion: 0.17
-Nodes (12): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs, 8. Module Dependency Graph (+4 more)
+Cohesion: 0.04
+Nodes (43): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 5. Security Model, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs (+35 more)
 
 ### Community 49 - "2. Triage Procedure"
 Cohesion: 0.22
@@ -246,61 +252,61 @@ Nodes (8): 1. When to Use This Skill, 2. Triage Procedure, Step 1: List and Insp
 Cohesion: 0.22
 Nodes (8): 💡 Backlog / Ideas, P2P Connect — Roadmap, ✅ Phase 0: Foundation (Complete), 🔜 Phase 1: Group Chat, 📞 Phase 2: Group Calling, 📱 Phase 3: Native Applications, 🔒 Phase 4: Enhanced Security & Privacy, 🌐 Phase 5: Scalability & Infrastructure
 
-### Community 52 - "Linux (systemd User Service)"
-Cohesion: 0.22
-Nodes (9): 1. Install & Start Service, 1. Install & Start Service, 2. Manage the Service, 2. Useful systemd Commands, 3. Uninstall, 3. Uninstall, Linux (systemd User Service), macOS (LaunchAgent) (+1 more)
+### Community 52 - "P2P Connect — Native OS Remote Desktop Host Agent"
+Cohesion: 0.07
+Nodes (28): 1. Install & Start Service, 1. Install & Start Service, 1. Install via Batch Script (Recommended), 2. Manage the Service, 2. Manual Setup via PowerShell / Command Prompt, 2. Useful systemd Commands, 3. Manage & Check Status, 3. Uninstall (+20 more)
 
 ### Community 54 - "🚀 1. Recommended Triage Prompts"
 Cohesion: 0.25
 Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Operates, 📋 Developer Triage Prompt Guide, Full Autonomous Diagnosis & Fix Proposal, Inspect Screenshots & Visual Errors, Quick Triage & Summary (Everyday Check), Specific Client Investigation
 
-### Community 58 - "🤖 AI Support Agent & Developer Triage System"
-Cohesion: 0.18
-Nodes (11): 1. Dual-Tier Architecture, 2. Why Does the Support Agent Run When the Python Script Is Not Started?, 3. Developer + Antigravity Triage Workflow, 4. CLI Reference for `ai-diagnostic-agent.py`, 🤖 AI Support Agent & Developer Triage System, Offline Deep Analysis of a Specific Package, Start Ingestion Server (Port 9998), The Resolution Loop (+3 more)
+### Community 55 - "appendChatBubble"
+Cohesion: 0.20
+Nodes (18): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDiagnosticBubbleHtml(), formatFileSize() (+10 more)
+
+### Community 58 - "initNostr"
+Cohesion: 0.19
+Nodes (16): addContact(), ensureSupportAgentContact(), getHostStatusDisplay(), handleAppResume(), initNostr(), loadContacts(), pingAllRemoteDevices(), removeContact() (+8 more)
 
 ### Community 61 - "cdp_client.py"
-Cohesion: 0.13
-Nodes (12): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
+Cohesion: 0.18
+Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
 
-### Community 65 - "P2P Connect — Native OS Remote Desktop Host Agent"
-Cohesion: 0.25
-Nodes (8): Architecture Overview, Linux, macOS, Operating System Permissions (First Run), P2P Connect — Native OS Remote Desktop Host Agent, Pairing & Unattended Remote Control, Security & Defense-in-Depth, Windows
+### Community 62 - "serve-https.py"
+Cohesion: 0.29
+Nodes (3): ensure_certificate(), get_local_ip_addresses(), main()
 
-### Community 78 - "How to Download & Run the Host Agent"
-Cohesion: 0.33
-Nodes (6): How to Download & Run the Host Agent, macOS & Linux:, Method 1: Download from Web UI (Fastest), Method 2: One-Liner Terminal Command (No Git Clone Needed), Method 3: From Cloned Repository or Unzipped Package (Automated Launcher), Windows (PowerShell):
+### Community 65 - "loadRemoteDevices"
+Cohesion: 0.26
+Nodes (15): addOrUpdateRemoteDevice(), checkUrlRemoteHostParam(), connectToRemoteDevice(), deriveKey(), exportFleet(), exportKey(), importFleet(), importKey() (+7 more)
 
-### Community 81 - "Windows (Task Scheduler & pythonw)"
+### Community 75 - "createCipher"
 Cohesion: 0.40
-Nodes (5): 1. Install via Batch Script (Recommended), 2. Manual Setup via PowerShell / Command Prompt, 3. Manage & Check Status, 4. Uninstall, Windows (Task Scheduler & pythonw)
+Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
 
-### Community 82 - "5. Client Authorization Whitelist & Anti-Flooding Shield"
-Cohesion: 0.40
-Nodes (5): 5. Client Authorization Whitelist & Anti-Flooding Shield, CLI Whitelist Commands, Dual-Layer Defense Architecture, Storage & Privacy, Visual Management via Support Desk UI
-
-### Community 83 - "5. Security Model"
-Cohesion: 0.50
-Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encrypted
+### Community 77 - "closeQrScanner"
+Cohesion: 0.83
+Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 479 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **41 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 480 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **35 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `6. Critical Invariants for AI Agents (MUST FOLLOW)` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `bridge.py`?**
-  _High betweenness centrality (0.447) - this node is a cross-community bridge._
+  _High betweenness centrality (0.446) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.05077286389008158 - nodes in this community are weakly interconnected._
-- **Why does `7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`)` connect `bridge.py` to `AGENTS.md — Developer & AI Agent Guide for P2P Connect`, `NativeFrameCapturer`?**
-  _High betweenness centrality (0.422) - this node is a cross-community bridge._
+  _Cohesion score 0.1010752688172043 - nodes in this community are weakly interconnected._
+- **Why does `7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`)` connect `bridge.py` to `AGENTS.md — Developer & AI Agent Guide for P2P Connect`?**
+  _High betweenness centrality (0.423) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
-  _Cohesion score 0.08078431372549019 - nodes in this community are weakly interconnected._
-- **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `README.md`?**
-  _High betweenness centrality (0.325) - this node is a cross-community bridge._
+  _Cohesion score 0.07272727272727272 - nodes in this community are weakly interconnected._
+- **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `P2P Connect — System Design`, `P2P Connect — Architecture`?**
+  _High betweenness centrality (0.307) - this node is a cross-community bridge._
