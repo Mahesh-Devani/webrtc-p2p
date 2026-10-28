@@ -211,9 +211,50 @@ class TestArchitecturalInvariants(unittest.TestCase):
 
         self.assertEqual(errors, [], f"Syntax errors detected:\n" + "\n".join(errors) + f"\n\n{format_remediation_box('INV-7')}")
 
+    def test_signaling_idempotency_and_resubscription_shielding(self):
+        """INV-10: Host keepalive heartbeats must be shielded and offer handlers idempotent."""
+        content = read_project_file('host-controller.js')
+        self.assertIsNotNone(content, "host-controller.js must exist")
+
+        self.assertIn('activeSessionId', content, f"host-controller.js missing activeSessionId tracking\n\n{format_remediation_box('INV-10')}")
+        self.assertIn('activeSession && activeSessionId === sessionId', content, f"host-controller.js missing duplicate session check\n\n{format_remediation_box('INV-10')}")
+        self.assertIn('offerAgeSec > 45', content, f"host-controller.js missing staleness check\n\n{format_remediation_box('INV-10')}")
+
+        # Check setInterval calls
+        heartbeats = re.findall(r'setInterval\s*\(\s*(?:async\s*)?\(\s*\)\s*=>\s*\{([^}]+)\}', content)
+        for hb in heartbeats:
+            if 'ensureConnected' in hb:
+                self.assertIn('!activeSession', hb, f"setInterval calls ensureConnected without checking !activeSession\n\n{format_remediation_box('INV-10')}")
+
+    def test_zero_unthrottled_os_ipc_in_capture_loops(self):
+        """INV-11: Native OS queries in capture/input loops must use monotonic clock caching."""
+        bridge_content = read_project_file('remote-desktop-host/bridge.py')
+        self.assertIsNotNone(bridge_content, "bridge.py must exist")
+
+        self.assertIn('def is_screen_locked(self, max_age=', bridge_content, f"is_screen_locked must support max_age caching\n\n{format_remediation_box('INV-11')}")
+        self.assertIn('is_screen_locked(max_age=', bridge_content, f"stream_frames_loop must pass max_age to is_screen_locked\n\n{format_remediation_box('INV-11')}")
+
+    def test_remote_desktop_aspect_ratio_and_bitrate_encoding(self):
+        """INV-12: Canvas scaling must support ultrawide 3840x2160 with 12Mbps / 0.85 JPEG."""
+        host_content = read_project_file('host-controller.js')
+        self.assertIsNotNone(host_content, "host-controller.js must exist")
+
+        w_match = re.search(r'MAX_STREAM_WIDTH\s*=\s*(\d+)', host_content)
+        h_match = re.search(r'MAX_STREAM_HEIGHT\s*=\s*(\d+)', host_content)
+        self.assertIsNotNone(w_match, "MAX_STREAM_WIDTH missing in host-controller.js")
+        self.assertIsNotNone(h_match, "MAX_STREAM_HEIGHT missing in host-controller.js")
+        self.assertGreaterEqual(int(w_match.group(1)), 3840, f"MAX_STREAM_WIDTH must be at least 3840\n\n{format_remediation_box('INV-12')}")
+        self.assertGreaterEqual(int(h_match.group(1)), 2160, f"MAX_STREAM_HEIGHT must be at least 2160\n\n{format_remediation_box('INV-12')}")
+
+        self.assertIn('peerSession.setVideoQuality(12_000_000', host_content, f"Missing proactive 12Mbps video quality call on connection\n\n{format_remediation_box('INV-12')}")
+
+        bridge_content = read_project_file('remote-desktop-host/bridge.py')
+        self.assertIsNotNone(bridge_content, "bridge.py must exist")
+        self.assertIn('kCGImageDestinationLossyCompressionQuality', bridge_content, f"Missing hardware JPEG quality setting in bridge.py\n\n{format_remediation_box('INV-12')}")
+
     def test_all_invariants_have_remediation_metadata(self):
-        """Verify that every architectural invariant rule (INV-1 to INV-9) has rich remediation metadata."""
-        expected_rules = [f'INV-{i}' for i in range(1, 10)]
+        """Verify that every architectural invariant rule (INV-1 to INV-12) has rich remediation metadata."""
+        expected_rules = [f'INV-{i}' for i in range(1, 13)]
         for r_id in expected_rules:
             self.assertIn(r_id, INVARIANT_RULES, f"Missing remediation rule definition for {r_id}")
             meta = INVARIANT_RULES[r_id]

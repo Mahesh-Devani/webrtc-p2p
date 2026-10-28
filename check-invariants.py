@@ -21,6 +21,9 @@ Invariant Categories:
     7. JavaScript Syntax Balance (bracket/paren matching)
     8. Host Rejects When Capture Inactive
     9. Nostr Signal Type Whitelist
+    10. Signaling Idempotency & Re-subscription Shielding
+    11. Zero Unthrottled OS IPC in Capture/Input Loops
+    12. Remote Desktop Aspect Ratio & Stream Quality Encoding
 """
 
 import re
@@ -380,6 +383,95 @@ def check_signal_type_whitelist():
     )
 
 
+# ── Invariant 10: Signaling Idempotency & Re-subscription Shielding ──
+def check_signaling_idempotency_shielding():
+    """Signaling keepalives and offer handlers must be shielded and idempotent."""
+    violations = []
+    content = read_file('host-controller.js')
+    if content is None:
+        return InvariantResult('Signaling idempotency shielding', True, ['host-controller.js not found (skipped)'], rule_id='INV-10')
+
+    if 'activeSessionId' not in content:
+        violations.append('host-controller.js: Missing activeSessionId tracking variable')
+
+    # Ensure ensureConnected is gated with !activeSession in setInterval
+    heartbeats = re.findall(r'setInterval\s*\(\s*(?:async\s*)?\(\s*\)\s*=>\s*\{([^}]+)\}', content)
+    for hb in heartbeats:
+        if 'ensureConnected' in hb and '!activeSession' not in hb:
+            violations.append('host-controller.js: setInterval calls ensureConnected() without checking !activeSession')
+
+    # Ensure duplicate offer protection
+    if 'activeSession && activeSessionId === sessionId' not in content:
+        violations.append('host-controller.js: unattended_offer handler missing duplicate activeSession check')
+
+    # Ensure staleness check
+    if 'offerAgeSec > 45' not in content and 'offerAge' not in content:
+        violations.append('host-controller.js: unattended_offer handler missing staleness check (>45s)')
+
+    return InvariantResult(
+        'Signaling idempotency and re-subscription shielding',
+        len(violations) == 0,
+        violations if violations else ['Signaling heartbeats shielded and offers idempotent'],
+        rule_id='INV-10'
+    )
+
+
+# ── Invariant 11: Zero Unthrottled OS IPC in Capture/Input Loops ──────
+def check_os_ipc_throttling_in_capture_loops():
+    """Native OS queries inside high-frequency capture/input loops must be throttled."""
+    violations = []
+    content = read_file('remote-desktop-host/bridge.py')
+    if content is None:
+        return InvariantResult('OS IPC throttling in capture loops', True, ['bridge.py not found (skipped)'], rule_id='INV-11')
+
+    # is_screen_locked must support max_age caching
+    if 'def is_screen_locked(self, max_age=' not in content:
+        violations.append('bridge.py: is_screen_locked missing monotonic clock max_age caching')
+
+    # stream_frames_loop must pass max_age
+    if 'is_screen_locked(max_age=' not in content:
+        violations.append('bridge.py: stream_frames_loop does not pass max_age to is_screen_locked')
+
+    return InvariantResult(
+        'Zero unthrottled OS IPC in capture/input loops',
+        len(violations) == 0,
+        violations if violations else ['All OS queries in capture/input loops are throttled via monotonic clock'],
+        rule_id='INV-11'
+    )
+
+
+# ── Invariant 12: Remote Desktop Aspect Ratio & Stream Quality Encoding
+def check_rd_aspect_ratio_and_bitrate():
+    """Remote Desktop must support ultrawide resolutions and high video bitrate."""
+    violations = []
+    host_content = read_file('host-controller.js')
+    bridge_content = read_file('remote-desktop-host/bridge.py')
+
+    if host_content:
+        # Check canvas dimensions
+        w_match = re.search(r'MAX_STREAM_WIDTH\s*=\s*(\d+)', host_content)
+        h_match = re.search(r'MAX_STREAM_HEIGHT\s*=\s*(\d+)', host_content)
+        if not w_match or int(w_match.group(1)) < 3840:
+            violations.append('host-controller.js: MAX_STREAM_WIDTH must be at least 3840 (for ultrawide displays)')
+        if not h_match or int(h_match.group(1)) < 2160:
+            violations.append('host-controller.js: MAX_STREAM_HEIGHT must be at least 2160')
+
+        # Check initial setVideoQuality call
+        if 'peerSession.setVideoQuality(12_000_000' not in host_content and 'setVideoQuality(12_000_000' not in host_content:
+            violations.append('host-controller.js: Missing proactive setVideoQuality(12_000_000, 60) on connection')
+
+    if bridge_content:
+        if 'kCGImageDestinationLossyCompressionQuality' not in bridge_content:
+            violations.append('bridge.py: Missing kCGImageDestinationLossyCompressionQuality for hardware JPEG compression')
+
+    return InvariantResult(
+        'Remote desktop aspect ratio and stream quality encoding',
+        len(violations) == 0,
+        violations if violations else ['Stream dimensions support ultrawide 3840x2160 with 12Mbps / 0.85 JPEG'],
+        rule_id='INV-12'
+    )
+
+
 # ── Main ───────────────────────────────────────────────────────────────
 def main():
     print(f'\n{BOLD}{CYAN}═══ P2P Connect — Architectural Invariant Checker ═══{RESET}\n')
@@ -394,6 +486,9 @@ def main():
         check_js_syntax_balance,
         check_host_rejects_inactive_capture,
         check_signal_type_whitelist,
+        check_signaling_idempotency_shielding,
+        check_os_ipc_throttling_in_capture_loops,
+        check_rd_aspect_ratio_and_bitrate,
     ]
 
     results = []

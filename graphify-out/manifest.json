@@ -6,9 +6,9 @@
     "semantic_hash": "2ba99877809b7a87004629a7961e3a66"
   },
   "check-invariants.py": {
-    "mtime": 1792595491.8415155,
-    "seen": 1792595929.301134,
-    "ast_hash": "c017194c67ee134367fec54c02c7a98c",
+    "mtime": 1793205920.1105845,
+    "seen": 1793206003.698144,
+    "ast_hash": "5da485465b2b5e6bb054756b9aae3b91",
     "semantic_hash": ""
   },
   "host-controller.js": {
@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1792985677.2989545,
-    "seen": 1792985710.595254,
-    "ast_hash": "91fad03a4aa4351991a926fb92d6b0c1",
+    "mtime": 1793205984.114532,
+    "seen": 1793206003.698168,
+    "ast_hash": "471d780d82165cc55cd506fe2c0b9879",
     "semantic_hash": ""
   },
   "README.md": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "tests/test_invariants.py": {
-    "mtime": 1792595505.8614626,
-    "seen": 1792595929.3011498,
-    "ast_hash": "93ff7b84d0cea5763c61dc7457bdc860",
+    "mtime": 1793205944.149648,
+    "seen": 1793206003.6981618,
+    "ast_hash": "1bf61803ef667f9ff22c689b68ed5083",
     "semantic_hash": ""
   },
   "tests/test_mobile_lifecycle.py": {
@@ -282,9 +282,9 @@
     "semantic_hash": ""
   },
   "tests/invariant_metadata.py": {
-    "mtime": 1792380568.9586182,
-    "seen": 1792380820.8711538,
-    "ast_hash": "3572e3a3e4f9665f5a80d2f8f5edb13b",
+    "mtime": 1793205867.1521559,
+    "seen": 1793206003.6981602,
+    "ast_hash": "3a88a2c80051102fa2c5bcc88c44aaad",
     "semantic_hash": ""
   },
   "tests/mock_relay.py": {

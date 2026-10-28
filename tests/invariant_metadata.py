@@ -159,6 +159,55 @@ INVARIANT_RULES = {
         'example_bad': "switch (payload.type) { case 'custom': ... } // without whitelist check",
         'example_good': "const VALID_TYPES = ['offer', 'answer', 'ice', ...]; if (!VALID_TYPES.includes(payload.type)) return;",
     },
+    'INV-10': {
+        'title': 'Signaling Idempotency & Re-subscription Shielding',
+        'rule_ref': 'AGENTS.md § 6.8 (Signaling Idempotency & Re-subscription Shielding)',
+        'root_cause': (
+            "Nostr relays replay historical events on WebSocket reconnect or re-subscription.\n"
+            "Unshielded keep-alive timers calling ensureConnected() cause relay reconnects.\n"
+            "If the incoming offer handler lacks duplicate session and staleness checks,\n"
+            "it unconditionally calls activeSession.close(), causing a 15-30s disconnect loop."
+        ),
+        'remediation': (
+            "1. Gate all background signaling reconnect heartbeats with if (!activeSession).\n"
+            "2. In unattended_offer handler, ignore duplicate offers (activeSession && activeSessionId === sessionId).\n"
+            "3. Drop stale offers older than 45 seconds (offerAgeSec > 45)."
+        ),
+        'example_bad': "setInterval(() => NostrTransport.ensureConnected(), 15000); // kills active sessions",
+        'example_good': "if (!activeSession) NostrTransport.ensureConnected(); // protected",
+    },
+    'INV-11': {
+        'title': 'Zero Unthrottled OS IPC in Capture/Input Loops',
+        'rule_ref': 'AGENTS.md § 6.9 (Zero Unthrottled OS IPC in Capture/Input Loops)',
+        'root_cause': (
+            "Synchronous native OS queries (e.g. CGSessionCopyCurrentDictionary, CGWindowListCopyWindowInfo)\n"
+            "perform Mach IPC messages to WindowServer. When invoked directly inside 30-60 FPS frame capture\n"
+            "loops or 60-120 Hz mouse event handlers, they flood WindowServer IPC channels, inducing capture\n"
+            "latency, jitter, frame drops, and stream quality degradation."
+        ),
+        'remediation': (
+            "All OS status and geometry queries inside stream_frames_loop() or map_client_coords()\n"
+            "MUST use monotonic clock caching (max_age >= 1.0s) to prevent WindowServer IPC flooding."
+        ),
+        'example_bad': "while capture_active: is_locked = capturer.is_screen_locked() # queries Mach IPC 60x/sec",
+        'example_good': "def is_screen_locked(self, max_age=1.0): # cached via time.monotonic()",
+    },
+    'INV-12': {
+        'title': 'Remote Desktop Aspect Ratio & Stream Quality Encoding',
+        'rule_ref': 'AGENTS.md § 6.10 (Remote Desktop Aspect Ratio & Stream Quality Encoding)',
+        'root_cause': (
+            "Assuming 16:9 aspect ratios when setting canvas resolution caps (e.g. MAX_STREAM_WIDTH = 2560)\n"
+            "severely degrades 32:9 and 21:9 ultrawide displays (e.g. 5120x1440), squishing vertical height\n"
+            "to 720p. Leaving video encoders at Chrome default ~1.5 Mbps produces blurry text."
+        ),
+        'remediation': (
+            "1. Canvas stream scaling limits must be at least 3840x2160 (preserving full 1080p+ height on ultrawide).\n"
+            "2. setVideoQuality(12_000_000, 60) must be called proactively on connection.\n"
+            "3. Hardware JPEG compression must set kCGImageDestinationLossyCompressionQuality >= 0.80."
+        ),
+        'example_bad': "const MAX_STREAM_WIDTH = 2560; const MAX_STREAM_HEIGHT = 1440; // squishes 32:9 to 720p",
+        'example_good': "const MAX_STREAM_WIDTH = 3840; const MAX_STREAM_HEIGHT = 2160; // 3840x1080 for 32:9",
+    },
 }
 
 
