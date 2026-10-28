@@ -688,11 +688,54 @@ async function releaseScreenWakeLock() {
   }
 }
 
+let keepAliveAudioCtx = null;
+
+function enableHostAudioKeepAlive() {
+  if (keepAliveAudioCtx) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    keepAliveAudioCtx = new AudioCtx();
+    const osc = keepAliveAudioCtx.createOscillator();
+    const gain = keepAliveAudioCtx.createGain();
+    gain.gain.value = 0.00001; // Silent / inaudible to human ear
+    osc.connect(gain);
+    gain.connect(keepAliveAudioCtx.destination);
+    osc.start();
+    console.log('[Host Power] Web Audio keep-alive active (prevents background tab throttling/sleep when screen locked)');
+  } catch (e) {
+    console.warn('[Host Power] Web Audio keep-alive error:', e);
+  }
+}
+
+document.addEventListener('click', () => {
+  enableHostAudioKeepAlive();
+  if (keepAliveAudioCtx && keepAliveAudioCtx.state === 'suspended') {
+    keepAliveAudioCtx.resume().catch(() => {});
+  }
+}, { once: false });
+
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && isHostStreamLive() && !screenWakeLock && !bridgeConnected) {
-    await acquireScreenWakeLock();
+  if (document.visibilityState === 'visible') {
+    if (!screenWakeLock) await acquireScreenWakeLock();
+    if (NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
+      await NostrTransport.ensureConnected();
+    }
+    if (!bridgeConnected) connectBridge();
   }
 });
+
+// Periodic background keep-alive heartbeat (every 15s) to guarantee Nostr relays & Bridge stay connected while locked
+setInterval(async () => {
+  try {
+    if (NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
+      await NostrTransport.ensureConnected();
+    }
+    if (!bridgeConnected) {
+      connectBridge();
+    }
+  } catch {}
+}, 15000);
 
 function initNativeCanvas() {
   if (!nativeCanvas) {
@@ -1716,6 +1759,8 @@ document.getElementById('btn-host-download-logpkg')?.addEventListener('click', a
     await initHostIdentity();
     updateWhitelistFilter();
     renderAuthorizedClients();
+    enableHostAudioKeepAlive();
+    acquireScreenWakeLock().catch(() => {});
     connectBridge();
     await initSignaling();
 

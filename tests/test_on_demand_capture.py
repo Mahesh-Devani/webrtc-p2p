@@ -37,6 +37,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('def wake(', self.bridge_content)
         self.assertIn('def release(', self.bridge_content)
         self.assertIn('PreventUserIdleDisplaySleep', self.bridge_content)
+        self.assertIn('IOPMAssertionDeclareUserActivity', self.bridge_content)
         self.assertIn('caffeinate', self.bridge_content)
         self.assertIn('SetThreadExecutionState', self.bridge_content)
 
@@ -74,6 +75,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('class NativeFrameCapturer', self.bridge_content)
         self.assertIn('def capture_display(', self.bridge_content)
         self.assertIn('def capture_window(', self.bridge_content)
+        self.assertIn('def is_screen_locked(', self.bridge_content)
         self.assertIn('def enumerate_targets(', self.bridge_content)
         self.assertIn('CGDisplayCreateImage', self.bridge_content)
         self.assertIn('CGWindowListCreateImage', self.bridge_content)
@@ -121,6 +123,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('captureStream(30)', self.host_content)
         self.assertIn('acquireScreenWakeLock', self.host_content)
         self.assertIn('releaseScreenWakeLock', self.host_content)
+        self.assertIn('enableHostAudioKeepAlive', self.host_content)
 
     def test_host_view_only_backward_compatibility(self):
         """host-controller.js must preserve Mode 2 View-Only fallback when bridge is offline."""

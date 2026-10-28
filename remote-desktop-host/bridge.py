@@ -582,7 +582,32 @@ class DisplayWakeManager:
         """Acquire display assertion idempotently for a given session token."""
         is_first = len(self._active_tokens) == 0
         self._active_tokens.add(token)
-        self.last_wake_time = time.monotonic()
+        now = time.monotonic()
+        should_tickle = is_first or (now - self.last_wake_time > 15.0)
+        self.last_wake_time = now
+
+        if PLATFORM == 'darwin':
+            # 1. Declare local user activity via IOKit to wake sleeping display immediately
+            try:
+                iokit_path = ctypes.util.find_library('IOKit')
+                cf_path = ctypes.util.find_library('CoreFoundation')
+                if iokit_path and cf_path:
+                    iokit = ctypes.cdll.LoadLibrary(iokit_path)
+                    cf = ctypes.cdll.LoadLibrary(cf_path)
+                    kCFStringEncodingUTF8 = 0x08000100
+                    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+                    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+                    cf.CFRelease.argtypes = [ctypes.c_void_p]
+                    cf.CFRelease.restype = None
+
+                    name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
+                    wake_aid = ctypes.c_uint32(0)
+                    iokit.IOPMAssertionDeclareUserActivity.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
+                    iokit.IOPMAssertionDeclareUserActivity.restype = ctypes.c_int
+                    iokit.IOPMAssertionDeclareUserActivity(name, 0, ctypes.byref(wake_aid))
+                    cf.CFRelease(name)
+            except Exception:
+                pass
 
         if not is_first and self.assertion_id is not None:
             return True
@@ -776,7 +801,28 @@ class NativeFrameCapturer:
             self.k_owner = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerName', kCFStringEncodingUTF8)
             self.k_name = self.cf.CFStringCreateWithCString(None, b'kCGWindowName', kCFStringEncodingUTF8)
             self.k_layer = self.cf.CFStringCreateWithCString(None, b'kCGWindowLayer', kCFStringEncodingUTF8)
+            self.k_locked = self.cf.CFStringCreateWithCString(None, b'CGSSessionScreenIsLocked', kCFStringEncodingUTF8)
             self.null_rect = CGRect(CGPoint(float('inf'), float('inf')), CGSize(0, 0))
+
+            self.cg.CGSessionCopyCurrentDictionary.argtypes = []
+            self.cg.CGSessionCopyCurrentDictionary.restype = ctypes.c_void_p
+            self.cf.CFBooleanGetValue.argtypes = [ctypes.c_void_p]
+            self.cf.CFBooleanGetValue.restype = ctypes.c_bool
+
+    def is_screen_locked(self):
+        """Check if macOS user session is currently locked."""
+        if PLATFORM == 'darwin':
+            try:
+                d = self.cg.CGSessionCopyCurrentDictionary()
+                if not d:
+                    return False
+                val = self.cf.CFDictionaryGetValue(d, self.k_locked)
+                is_locked = bool(self.cf.CFBooleanGetValue(val)) if val else False
+                self.cf.CFRelease(d)
+                return is_locked
+            except Exception:
+                return False
+        return False
 
     def capture_display(self, display_id=None):
         if PLATFORM == 'darwin':
@@ -1065,20 +1111,32 @@ async def handle_client(reader, writer):
         capture_fps = 30
         capture_task = None
 
+        # If host screen is currently locked, wake display immediately on client connect
+        if _global_frame_capturer.is_screen_locked():
+            _global_wake_manager.wake(session_token)
+
         async def stream_frames_loop():
             nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
             target_delay = 1.0 / max(1, min(60, capture_fps))
+            last_wake_tickle = 0.0
             while capture_active:
                 t0 = time.time()
                 try:
-                    if capture_target_type == 'window' and capture_target_id > 0:
+                    is_locked = _global_frame_capturer.is_screen_locked()
+                    # While macOS is locked, ALWAYS capture physical display so login/lock screen is visible
+                    if is_locked or capture_target_type != 'window' or capture_target_id <= 0:
+                        jpeg_bytes, w, h = _global_frame_capturer.capture_display(capture_target_id if not is_locked else 0)
+                        t_code = 1
+                    else:
                         jpeg_bytes, w, h = _global_frame_capturer.capture_window(capture_target_id)
                         t_code = 2
-                    else:
-                        jpeg_bytes, w, h = _global_frame_capturer.capture_display(capture_target_id)
-                        t_code = 1
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
+                        # If frame is unusually small while locked (< 130KB indicates black sleeping frame), wake display
+                        if is_locked and len(jpeg_bytes) < 130000 and (t0 - last_wake_tickle > 3.0):
+                            last_wake_tickle = t0
+                            _global_wake_manager.wake(session_token)
+
                         header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
                         writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
                         await writer.drain()
@@ -1098,8 +1156,9 @@ async def handle_client(reader, writer):
 
         def map_client_coords(nx, ny):
             nonlocal _cached_win_bounds, _cached_win_time, _cached_win_target_id
+            is_locked = _global_frame_capturer.is_screen_locked()
             win_id = int(capture_target_id or 0)
-            if capture_target_type == 'window' and win_id > 0:
+            if not is_locked and capture_target_type == 'window' and win_id > 0:
                 now = time.monotonic()
                 # Query window geometry at most once per second or immediately if target changed / bounds not yet cached
                 if _cached_win_target_id != win_id or _cached_win_bounds is None or (now - _cached_win_time > 1.0):
@@ -1114,7 +1173,7 @@ async def handle_client(reader, writer):
                     ty = max(wy, min(wy + wh - 1, int(wy + ny * wh)))
                     return tx, ty
 
-            ox, oy, sw, sh = get_screen_bounds(capture_target_id if capture_target_type == 'display' else None)
+            ox, oy, sw, sh = get_screen_bounds(capture_target_id if (capture_target_type == 'display' and not is_locked) else None)
             tx = max(ox, min(ox + sw - 1, int(ox + nx * sw)))
             ty = max(oy, min(oy + sh - 1, int(oy + ny * sh)))
             return tx, ty
