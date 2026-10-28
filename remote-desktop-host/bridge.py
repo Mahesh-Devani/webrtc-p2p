@@ -723,6 +723,9 @@ class NativeFrameCapturer:
     """
     def __init__(self):
         self._bounds_cache = (0, None, 0.0)
+        self._last_locked_check = 0.0
+        self._cached_is_locked = False
+        self.jpeg_opts = None
         self._init_platform()
 
     def _init_platform(self):
@@ -809,19 +812,53 @@ class NativeFrameCapturer:
             self.cf.CFBooleanGetValue.argtypes = [ctypes.c_void_p]
             self.cf.CFBooleanGetValue.restype = ctypes.c_bool
 
-    def is_screen_locked(self):
-        """Check if macOS user session is currently locked."""
+            # Quality dictionary for ImageIO JPEG compression (0.85 = crisp text & crystal clear display)
+            try:
+                self.cf.CFNumberCreate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+                self.cf.CFNumberCreate.restype = ctypes.c_void_p
+                k_quality = self.cf.CFStringCreateWithCString(None, b'kCGImageDestinationLossyCompressionQuality', kCFStringEncodingUTF8)
+                q_val = ctypes.c_float(0.85)
+                q_num = self.cf.CFNumberCreate(None, 12, ctypes.byref(q_val))
+                keys = (ctypes.c_void_p * 1)(k_quality)
+                vals = (ctypes.c_void_p * 1)(q_num)
+                self.cf.CFDictionaryCreate.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.POINTER(ctypes.c_void_p),
+                    ctypes.POINTER(ctypes.c_void_p),
+                    ctypes.c_size_t,
+                    ctypes.c_void_p,
+                    ctypes.c_void_p
+                ]
+                self.cf.CFDictionaryCreate.restype = ctypes.c_void_p
+                key_callbacks = ctypes.c_void_p.in_dll(self.cf, 'kCFTypeDictionaryKeyCallBacks')
+                val_callbacks = ctypes.c_void_p.in_dll(self.cf, 'kCFTypeDictionaryValueCallBacks')
+                self.jpeg_opts = self.cf.CFDictionaryCreate(None, keys, vals, 1, ctypes.byref(key_callbacks), ctypes.byref(val_callbacks))
+                self.cf.CFRelease(k_quality)
+                self.cf.CFRelease(q_num)
+            except Exception:
+                self.jpeg_opts = None
+
+    def is_screen_locked(self, max_age=1.0):
+        """Check if macOS user session is currently locked (cached with max_age to prevent WindowServer IPC flooding)."""
+        now = time.monotonic()
+        if (now - self._last_locked_check) < max_age:
+            return self._cached_is_locked
+        self._last_locked_check = now
         if PLATFORM == 'darwin':
             try:
                 d = self.cg.CGSessionCopyCurrentDictionary()
                 if not d:
+                    self._cached_is_locked = False
                     return False
                 val = self.cf.CFDictionaryGetValue(d, self.k_locked)
                 is_locked = bool(self.cf.CFBooleanGetValue(val)) if val else False
                 self.cf.CFRelease(d)
+                self._cached_is_locked = is_locked
                 return is_locked
             except Exception:
+                self._cached_is_locked = False
                 return False
+        self._cached_is_locked = False
         return False
 
     def capture_display(self, display_id=None):
@@ -857,7 +894,7 @@ class NativeFrameCapturer:
             h = self.cg.CGImageGetHeight(img)
             data_buf = self.cf.CFDataCreateMutable(None, 0)
             dest = self.imageio.CGImageDestinationCreateWithData(data_buf, self.jpeg_type, 1, None)
-            self.imageio.CGImageDestinationAddImage(dest, img, None)
+            self.imageio.CGImageDestinationAddImage(dest, img, self.jpeg_opts)
             self.imageio.CGImageDestinationFinalize(dest)
             self.cg.CGImageRelease(img)
             self.cf.CFRelease(dest)
@@ -1122,7 +1159,7 @@ async def handle_client(reader, writer):
             while capture_active:
                 t0 = time.time()
                 try:
-                    is_locked = _global_frame_capturer.is_screen_locked()
+                    is_locked = _global_frame_capturer.is_screen_locked(max_age=1.5)
                     # While macOS is locked, ALWAYS capture physical display so login/lock screen is visible
                     if is_locked or capture_target_type != 'window' or capture_target_id <= 0:
                         jpeg_bytes, w, h = _global_frame_capturer.capture_display(capture_target_id if not is_locked else 0)

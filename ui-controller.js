@@ -2909,6 +2909,9 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         toast('Remote control granted! You can now control the peer screen.');
       }
       setRdMode('control');
+      if (rdQualityPreset) {
+        sendRdInput({ t: 'set_quality', preset: rdQualityPreset });
+      }
       return;
     }
 

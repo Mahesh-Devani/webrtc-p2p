@@ -214,6 +214,27 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('/password|pin/i.test(errMsg)', self.ui_content)
         self.assertIn('delete activeRemoteDesktopDevice.pin', self.ui_content)
 
+    def test_stream_quality_and_session_drop_resilience(self):
+        """Host and Bridge must enforce high quality (3840x2160, 12Mbps, 0.85 JPEG) and ignore duplicate offers."""
+        # 1. Canvas scaling supports ultrawide 3840x2160
+        self.assertIn('MAX_STREAM_WIDTH = 3840', self.host_content)
+        self.assertIn('MAX_STREAM_HEIGHT = 2160', self.host_content)
+
+        # 2. Duplicate offer protection and staleness check in host-controller.js
+        self.assertIn('activeSession && activeSessionId === sessionId', self.host_content)
+        self.assertIn('offerAgeSec > 45', self.host_content)
+
+        # 3. Reconnect heartbeat only when no active session
+        self.assertIn('if (!activeSession && NostrTransport && typeof NostrTransport.ensureConnected', self.host_content)
+
+        # 4. Proactive high-bitrate WebRTC encoding
+        self.assertIn('peerSession.setVideoQuality(12_000_000, 60)', self.host_content)
+
+        # 5. ImageIO JPEG quality dictionary and is_screen_locked caching in bridge.py
+        self.assertIn('kCGImageDestinationLossyCompressionQuality', self.bridge_content)
+        self.assertIn('def is_screen_locked(self, max_age=1.0):', self.bridge_content)
+        self.assertIn('self.jpeg_opts', self.bridge_content)
+
 
 if __name__ == '__main__':
     unittest.main()

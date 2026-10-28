@@ -113,6 +113,7 @@ const dom = {
 let hostIdentity = null;
 let hostStream = null;
 let activeSession = null;
+let activeSessionId = null;
 let bridgeWs = null;
 let bridgeConnected = false;
 
@@ -728,7 +729,10 @@ document.addEventListener('visibilitychange', async () => {
 // Periodic background keep-alive heartbeat (every 15s) to guarantee Nostr relays & Bridge stay connected while locked
 setInterval(async () => {
   try {
-    if (NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
+    // Only check NostrTransport reconnect when there is NO active session.
+    // Reconnecting relays while a P2P session is active causes relays to replay stored unattended_offer events,
+    // which previously tore down the active WebRTC connection.
+    if (!activeSession && NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
       await NostrTransport.ensureConnected();
     }
     if (!bridgeConnected) {
@@ -803,9 +807,9 @@ function stopNativeOnDemandCapture() {
 async function renderNativeFrameToCanvas(blob, w, h) {
   if (!nativeCanvas) initNativeCanvas();
 
-  // Scale down dimensions to fit mobile WebRTC limits (max 2560x1440, even dimensions)
-  const MAX_STREAM_WIDTH = 2560;
-  const MAX_STREAM_HEIGHT = 1440;
+  // Scale down dimensions to fit mobile WebRTC limits (max 3840x2160, even dimensions)
+  const MAX_STREAM_WIDTH = 3840;
+  const MAX_STREAM_HEIGHT = 2160;
   let targetW = w;
   let targetH = h;
   if (targetW > MAX_STREAM_WIDTH || targetH > MAX_STREAM_HEIGHT) {
@@ -1169,7 +1173,20 @@ async function initSignaling() {
     }
 
     if (type === 'unattended_offer') {
-      console.log(`[Host] Incoming connection request from ${senderPubKey.slice(0, 8)}...`);
+      console.log(`[Host] Incoming connection request from ${senderPubKey.slice(0, 8)}... (session: ${sessionId?.slice(0, 8)})`);
+
+      // Staleness check: ignore offers older than 45 seconds (e.g. from relay resubscription history)
+      const offerAgeSec = signal.ts ? (Date.now() - signal.ts) / 1000 : 0;
+      if (offerAgeSec > 45) {
+        console.log(`[Host] Dropped stale unattended_offer (${offerAgeSec.toFixed(1)}s old)`);
+        return;
+      }
+
+      // Duplicate offer check: if this session is already active or in progress, ignore
+      if (activeSession && activeSessionId === sessionId) {
+        console.log(`[Host] Ignoring duplicate unattended_offer for active session ${sessionId?.slice(0, 8)}`);
+        return;
+      }
 
       // Verify Client Whitelist (if enforced)
       if (!isClientAuthorized(senderPubKey)) {
@@ -1178,6 +1195,25 @@ async function initSignaling() {
           ? 'Host whitelist is active and empty. Please add your Client ID to the host authorized clients list.'
           : 'Unauthorized client public key';
         console.warn(`[Host Security] Blocked connection from ${senderPubKey.slice(0, 8)}... (${reason})`);
+        try {
+          await NostrTransport.sendSignal(senderPubKey, {
+            type: 'close',
+            session: sessionId,
+            data: reason
+          });
+        } catch {}
+        return;
+      }
+
+      // In Native Bridge mode, ensure native on-demand capture is active
+      if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+        ensureNativeOnDemandCapture();
+      }
+
+      // Reject if host desktop capture is not active
+      if (!isHostStreamLive()) {
+        const reason = 'Host desktop capture is inactive. Click "Start Desktop Capture" on the host computer.';
+        console.warn(`[Host Security] Blocked unattended connection from ${senderPubKey.slice(0, 8)}… (${reason})`);
         try {
           await NostrTransport.sendSignal(senderPubKey, {
             type: 'close',
@@ -1202,25 +1238,6 @@ async function initSignaling() {
               type: 'close',
               session: sessionId,
               data: 'Invalid host password / PIN'
-            });
-          } catch {}
-          return;
-        }
-
-        // In Native Bridge mode, ensure native on-demand capture is active
-        if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
-          ensureNativeOnDemandCapture();
-        }
-
-        // Reject if host desktop capture is not active
-        if (!isHostStreamLive()) {
-          const reason = 'Host desktop capture is inactive. Click "Start Desktop Capture" on the host computer.';
-          console.warn(`[Host Security] Blocked unattended connection from ${senderPubKey.slice(0, 8)}… (${reason})`);
-          try {
-            await NostrTransport.sendSignal(senderPubKey, {
-              type: 'close',
-              session: sessionId,
-              data: reason
             });
           } catch {}
           return;
@@ -1279,6 +1296,7 @@ async function initSignaling() {
               if (activeSession) {
                 try { activeSession.close({ stopTracks: false }); } catch {}
                 activeSession = null;
+                activeSessionId = null;
               }
               return;
             }
@@ -1385,10 +1403,16 @@ async function initSignaling() {
             if (activeSession) {
               try { activeSession.close({ stopTracks: false }); } catch {}
               activeSession = null;
+              activeSessionId = null;
             }
           },
           onChannelOpen: () => {
             console.log('[Host] P2P Connected with remote controller!');
+
+            // Immediately configure high-bitrate video stream (12 Mbps / 60 FPS) for crisp text and fluid movement
+            if (peerSession?.setVideoQuality) {
+              peerSession.setVideoQuality(12_000_000, 60).catch(() => {});
+            }
 
             // Proactively ensure bridge is connected or connecting
             if (!bridgeConnected || !bridgeWs || bridgeWs.readyState !== WebSocket.OPEN) {
@@ -1459,10 +1483,16 @@ async function initSignaling() {
             if (nativeStreamActive) {
               stopNativeOnDemandCapture();
             }
+            if (activeSession) {
+              try { activeSession.close({ stopTracks: false }); } catch {}
+              activeSession = null;
+              activeSessionId = null;
+            }
           }
         });
 
         activeSession = peerSession;
+        activeSessionId = sessionId;
 
         // Accept offer and attach desktop stream directly to the offer's transceivers
         const answer = await peerSession.acceptOffer(sdp, { stream });
@@ -1513,9 +1543,11 @@ async function initSignaling() {
     }
   });
 
-  // Keepalive heartbeat
+  // Keepalive heartbeat (only reconnect relays if not in an active P2P session)
   setInterval(() => {
-    NostrTransport.ensureConnected();
+    if (!activeSession && NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
+      NostrTransport.ensureConnected();
+    }
   }, 20000);
 }
 
