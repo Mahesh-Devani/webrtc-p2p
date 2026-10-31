@@ -32,6 +32,7 @@ import re
 import ssl
 import ctypes
 import ctypes.util
+import subprocess
 
 # ── 1. Native OS Input Injection Engine (Zero-Dependency) ────────────────────
 SCREEN_WIDTH = 1920
@@ -565,6 +566,8 @@ class DisplayWakeManager:
         self.cf_assertion_type = None
         self.cf_assertion_name = None
         self.last_wake_time = 0.0
+        self._caffeinate_proc = None
+        self._last_tickle_time = 0.0
 
     @property
     def ref_count(self):
@@ -583,11 +586,24 @@ class DisplayWakeManager:
         is_first = len(self._active_tokens) == 0
         self._active_tokens.add(token)
         now = time.monotonic()
-        should_tickle = is_first or (now - self.last_wake_time > 15.0)
         self.last_wake_time = now
 
         if PLATFORM == 'darwin':
-            # 1. Declare local user activity via IOKit to wake sleeping display immediately
+            # 1. Continuous caffeinate process:
+            # loginwindow overrides IOPMAssertionCreateWithName assertions when user is locked out.
+            # Running 'caffeinate -d -u' as a persistent background process forces display & user idle stay-awake!
+            if self._caffeinate_proc is None or self._caffeinate_proc.poll() is not None:
+                try:
+                    self._caffeinate_proc = subprocess.Popen(
+                        ['caffeinate', '-d', '-u'],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    print(f"[Power] Started continuous caffeinate display wake process (PID: {self._caffeinate_proc.pid})")
+                except Exception as e:
+                    print(f"[Power] Could not start caffeinate: {e}")
+
+            # 2. Declare local user activity via IOKit to wake sleeping display immediately
             try:
                 iokit_path = ctypes.util.find_library('IOKit')
                 cf_path = ctypes.util.find_library('CoreFoundation')
@@ -609,19 +625,9 @@ class DisplayWakeManager:
             except Exception:
                 pass
 
-        if not is_first and self.assertion_id is not None:
-            return True
-
-        if is_first:
-            print(f"[Power] Remote session started: Waking display & activating sleep assertion")
-            if PLATFORM == 'darwin':
-                # 1. Wake the display immediately
-                try:
-                    subprocess.Popen(['caffeinate', '-u', '-t', '5'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
-
-                # 2. Simulate subtle mouse movement to wake macOS WindowServer
+            if is_first:
+                print(f"[Power] Remote session started: Waking display & activating sleep assertion")
+                # 3. Simulate subtle mouse movement to wake macOS WindowServer
                 try:
                     if 'cg' in globals() and 'kCGEventMouseMoved' in globals():
                         ox, oy, sw, sh = get_screen_bounds()
@@ -633,7 +639,8 @@ class DisplayWakeManager:
                 except Exception:
                     pass
 
-                # 3. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
+            # 4. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
+            if self.assertion_id is None:
                 try:
                     iokit_path = ctypes.util.find_library('IOKit')
                     cf_path = ctypes.util.find_library('CoreFoundation')
@@ -659,14 +666,23 @@ class DisplayWakeManager:
                 except Exception as e:
                     print(f"[Power] Could not acquire IOKit assertion: {e}")
 
-            elif PLATFORM == 'win32':
-                try:
-                    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+        elif PLATFORM == 'win32':
+            try:
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+                if is_first:
                     print("[Power] Acquired Windows display sleep assertion")
-                except Exception as e:
-                    print(f"[Power] Could not acquire Win32 assertion: {e}")
+            except Exception as e:
+                print(f"[Power] Could not acquire Win32 assertion: {e}")
 
         return True
+
+    def tickle(self, token="default"):
+        """Lightweight periodic or input-driven tickle to maintain display wake state."""
+        now = time.monotonic()
+        if now - self._last_tickle_time < 2.0:
+            return
+        self._last_tickle_time = now
+        self.wake(token=token)
 
     def release(self, token=None, force=False):
         """Release display assertion for a token or unconditionally if force=True or token is None."""
@@ -680,6 +696,17 @@ class DisplayWakeManager:
 
         print("[Power] Remote session ended: Releasing display sleep assertion (display can now sleep/lock naturally)")
         if PLATFORM == 'darwin':
+            if self._caffeinate_proc is not None:
+                try:
+                    self._caffeinate_proc.terminate()
+                    self._caffeinate_proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        self._caffeinate_proc.kill()
+                    except Exception:
+                        pass
+                self._caffeinate_proc = None
+
             if self.assertion_id is not None:
                 try:
                     iokit_path = ctypes.util.find_library('IOKit')
@@ -1169,10 +1196,13 @@ async def handle_client(reader, writer):
                         t_code = 2
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
-                        # If frame is unusually small while locked (< 130KB indicates black sleeping frame), wake display
-                        if is_locked and len(jpeg_bytes) < 130000 and (t0 - last_wake_tickle > 3.0):
-                            last_wake_tickle = t0
-                            _global_wake_manager.wake(session_token)
+                        # If frame is unusually small while locked (< 200KB indicates black sleeping frame), wake display and skip black frame
+                        if is_locked and len(jpeg_bytes) < 200000:
+                            if t0 - last_wake_tickle > 2.0:
+                                last_wake_tickle = t0
+                                _global_wake_manager.wake(session_token)
+                            await asyncio.sleep(0.05)
+                            continue
 
                         header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
                         writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
@@ -1236,6 +1266,9 @@ async def handle_client(reader, writer):
             text = payload.decode('utf-8', errors='replace')
             data = json.loads(text)
             evt_type = data.get('t') or data.get('action')
+
+            if evt_type in ('mouse_move', 'mouse_down', 'mouse_up', 'mouse_click', 'wheel', 'key_down', 'key_up', 'special_key', 'type_text'):
+                _global_wake_manager.tickle(session_token)
 
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))

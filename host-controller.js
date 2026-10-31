@@ -855,6 +855,9 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     const bitmap = await createImageBitmap(blob);
     nativeCanvasCtx.drawImage(bitmap, 0, 0, nativeCanvas.width, nativeCanvas.height);
     bitmap.close();
+    if (nativeCanvasTrack && typeof nativeCanvasTrack.requestFrame === 'function') {
+      try { nativeCanvasTrack.requestFrame(); } catch {}
+    }
     nativeStreamActive = true;
     updateCaptureUI(true, nativeCanvas.width, nativeCanvas.height, false);
     if (dom.hostScreenVideo && dom.hostScreenVideo.srcObject !== nativeCanvasStream) {
