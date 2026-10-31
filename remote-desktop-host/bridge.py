@@ -1182,7 +1182,6 @@ async def handle_client(reader, writer):
         async def stream_frames_loop():
             nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
             target_delay = 1.0 / max(1, min(60, capture_fps))
-            last_wake_tickle = 0.0
             while capture_active:
                 t0 = time.time()
                 try:
@@ -1196,14 +1195,6 @@ async def handle_client(reader, writer):
                         t_code = 2
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
-                        # If frame is unusually small while locked (< 200KB indicates black sleeping frame), wake display and skip black frame
-                        if is_locked and len(jpeg_bytes) < 200000:
-                            if t0 - last_wake_tickle > 2.0:
-                                last_wake_tickle = t0
-                                _global_wake_manager.wake(session_token)
-                            await asyncio.sleep(0.05)
-                            continue
-
                         header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
                         writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
                         await writer.drain()

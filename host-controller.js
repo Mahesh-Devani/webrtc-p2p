@@ -719,7 +719,7 @@ document.addEventListener('click', () => {
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
     if (!screenWakeLock) await acquireScreenWakeLock();
-    if (NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
+    if (!activeSession && NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
       await NostrTransport.ensureConnected();
     }
     if (!bridgeConnected) connectBridge();
@@ -829,24 +829,32 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     nativeCanvas.height = targetH;
     nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
 
-    // Generate new captureStream track matching the new canvas dimensions
-    nativeCanvasStream = nativeCanvas.captureStream(30);
-    nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
-    if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
-      nativeCanvasTrack.contentHint = 'detail';
-    }
+    // Note: Canvas.captureStream tracks automatically adapt to changes in canvas width and height!
+    // Re-creating captureStream() and calling addLocalStream() creates track churn, restarts hardware encoders mid-session,
+    // and causes transient ICE disconnects or session teardowns.
+    // Only create stream/track if missing or ended:
+    if (!nativeCanvasStream || !nativeCanvasTrack || nativeCanvasTrack.readyState === 'ended') {
+      nativeCanvasStream = nativeCanvas.captureStream(30);
+      nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
+      if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
+        nativeCanvasTrack.contentHint = 'detail';
+      }
 
-    if (dom.hostScreenVideo) {
-      dom.hostScreenVideo.srcObject = nativeCanvasStream;
-    }
+      if (dom.hostScreenVideo) {
+        dom.hostScreenVideo.srcObject = nativeCanvasStream;
+      }
 
-    // Switch active WebRTC sender to the new stream so encoder reconfigures!
-    if (activeSession) {
-      try {
-        activeSession.addLocalStream(nativeCanvasStream);
-        console.log('[Host Canvas] Pushed resized canvas stream to active WebRTC session');
-      } catch (e) {
-        console.warn('[Host Canvas] Error pushing resized stream:', e);
+      // Switch active WebRTC sender to the new stream and configure bitrate
+      if (activeSession) {
+        try {
+          activeSession.addLocalStream(nativeCanvasStream);
+          if (activeSession.setVideoQuality) {
+            activeSession.setVideoQuality(12_000_000, 60).catch(() => {});
+          }
+          console.log('[Host Canvas] Pushed new canvas stream to active WebRTC session');
+        } catch (e) {
+          console.warn('[Host Canvas] Error pushing new stream:', e);
+        }
       }
     }
   }
@@ -1190,21 +1198,8 @@ async function initSignaling() {
         console.log(`[Host] Ignoring duplicate unattended_offer for active session ${sessionId?.slice(0, 8)}`);
         return;
       }
-
-      // Verify Client Whitelist (if enforced)
-      if (!isClientAuthorized(senderPubKey)) {
-        const clients = loadAuthorizedClients();
-        const reason = (isWhitelistEnforced() && clients.length === 0)
-          ? 'Host whitelist is active and empty. Please add your Client ID to the host authorized clients list.'
-          : 'Unauthorized client public key';
-        console.warn(`[Host Security] Blocked connection from ${senderPubKey.slice(0, 8)}... (${reason})`);
-        try {
-          await NostrTransport.sendSignal(senderPubKey, {
-            type: 'close',
-            session: sessionId,
-            data: reason
-          });
-        } catch {}
+      if (activeSession && (activeSession.getState() === 'connected' || activeSession.isChannelOpen())) {
+        console.log(`[Host] Ignoring unattended_offer (session: ${sessionId?.slice(0, 8)}) — session ${activeSessionId?.slice(0, 8)} is already active and connected (state: ${activeSession.getState()})`);
         return;
       }
 
@@ -1217,6 +1212,23 @@ async function initSignaling() {
       if (!isHostStreamLive()) {
         const reason = 'Host desktop capture is inactive. Click "Start Desktop Capture" on the host computer.';
         console.warn(`[Host Security] Blocked unattended connection from ${senderPubKey.slice(0, 8)}… (${reason})`);
+        try {
+          await NostrTransport.sendSignal(senderPubKey, {
+            type: 'close',
+            session: sessionId,
+            data: reason
+          });
+        } catch {}
+        return;
+      }
+
+      // Verify Client Whitelist (if enforced)
+      if (!isClientAuthorized(senderPubKey)) {
+        const clients = loadAuthorizedClients();
+        const reason = (isWhitelistEnforced() && clients.length === 0)
+          ? 'Host whitelist is active and empty. Please add your Client ID to the host authorized clients list.'
+          : 'Unauthorized client public key';
+        console.warn(`[Host Security] Blocked connection from ${senderPubKey.slice(0, 8)}... (${reason})`);
         try {
           await NostrTransport.sendSignal(senderPubKey, {
             type: 'close',
@@ -1363,8 +1375,9 @@ async function initSignaling() {
             }
             if (evt.t === 'select_target') {
               currentCaptureTarget = { type: evt.target || 'display', id: evt.id || 0 };
-              ensureNativeOnDemandCapture();
-              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+              if (!nativeStreamActive) {
+                ensureNativeOnDemandCapture();
+              } else if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
                 try { bridgeWs.send(JSON.stringify(evt)); } catch {}
               }
               return;
