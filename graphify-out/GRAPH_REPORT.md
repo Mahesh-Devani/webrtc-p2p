@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-10-31)
 
 ## Corpus Check
-- 54 files · ~133,100 words
+- 54 files · ~133,183 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1345 nodes · 2578 edges · 91 communities (64 shown, 27 thin omitted)
+- 1346 nodes · 2582 edges · 91 communities (64 shown, 27 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 103 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d849c3d3`
+- Built from commit: `cba6f1af`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -32,7 +32,7 @@
 - .analyze
 - 7. `ui-controller.js` — UI Controller
 - verifyEvent
-- serve-https.py
+- pathlib
 - TestDiagnosticSystem
 - assertNumber
 - test_token_codec.py
@@ -127,7 +127,7 @@
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.10
-Nodes (22): ChatStore, TokenCodec, applyRemoteAudioVolume(), applySavedRemoteAudioSettings(), attemptRdReconnect(), formatConnectionTime(), formatDate(), formatDuration() (+14 more)
+Nodes (27): ChatStore, TokenCodec, addContact(), applyRemoteAudioVolume(), applySavedRemoteAudioSettings(), attemptRdReconnect(), ensureSupportAgentContact(), formatConnectionTime() (+19 more)
 
 ### Community 1 - "weierstrass"
 Cohesion: 0.08
@@ -185,7 +185,7 @@ Nodes (10): 7. Local Development & Verification, Running the Application Locally
 Cohesion: 0.11
 Nodes (19): getHex64(), getRepostedEvent(), getRepostedEventPointer(), getSubscriptionId(), handleNext(), isKind(), matchEventId(), matchEventPubkey() (+11 more)
 
-### Community 16 - "serve-https.py"
+### Community 16 - "pathlib"
 Cohesion: 0.13
 Nodes (4): get_modified_files(), main(), run_tests(), select_test_modules()
 
@@ -210,8 +210,8 @@ Cohesion: 0.21
 Nodes (7): loadNostrTools(), NostrCrypto, RelayState, NostrSignaling, DEFAULT_RELAYS, init(), PeerSession
 
 ### Community 26 - "hide"
-Cohesion: 0.21
-Nodes (27): buildIceServers(), buildNostrSessionConfig(), closeDiagnosticsModal(), copyText(), disableChat(), disconnectRemoteDesktop(), enableChat(), endMediaCall() (+19 more)
+Cohesion: 0.34
+Nodes (16): buildIceServers(), buildNostrSessionConfig(), copyText(), disableChat(), enableChat(), endMediaCall(), handleFileAbort(), handleFileProgress() (+8 more)
 
 ### Community 27 - "test_remote_desktop_capture_e2e.py"
 Cohesion: 0.10
@@ -238,12 +238,12 @@ Cohesion: 0.08
 Nodes (3): ThreadedMockRelay, ThreadedMockRelay, MockNostrRelay
 
 ### Community 38 - "toast"
-Cohesion: 0.22
-Nodes (19): acceptIncomingCall(), attachDisplaysMenuListeners(), connectLocalBridge(), disconnectLocalBridge(), getVideoConstraints(), handleIncomingInputEvent(), initMobileTouchAndSoftKeys(), populateDeviceSelectors() (+11 more)
+Cohesion: 0.16
+Nodes (29): acceptIncomingCall(), attachDisplaysMenuListeners(), closeDiagnosticsModal(), connectLocalBridge(), disconnectLocalBridge(), disconnectRemoteDesktop(), exitRemoteDesktopMode(), getContactDisplayName() (+21 more)
 
 ### Community 39 - "attachRemoteVideoInputListeners"
-Cohesion: 0.16
-Nodes (19): applyRdZoomTransform(), attachRemoteVideoInputListeners(), clampPan(), cycleFitMode(), getNormalizedVideoCoordinates(), getPanLimits(), renderVirtualCursor(), resetRdZoom() (+11 more)
+Cohesion: 0.18
+Nodes (19): applyRdZoomTransform(), attachRemoteVideoInputListeners(), clampPan(), cycleFitMode(), getNormalizedVideoCoordinates(), getPanLimits(), getVideoActualDimensions(), renderVirtualCursor() (+11 more)
 
 ### Community 40 - "P2P Connect — Architecture & Production Notes"
 Cohesion: 0.13
@@ -294,16 +294,16 @@ Cohesion: 0.25
 Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Operates, 📋 Developer Triage Prompt Guide, Full Autonomous Diagnosis & Fix Proposal, Inspect Screenshots & Visual Errors, Quick Triage & Summary (Everyday Check), Specific Client Investigation
 
 ### Community 55 - "appendChatBubble"
-Cohesion: 0.20
-Nodes (18): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDiagnosticBubbleHtml(), formatFileSize() (+10 more)
+Cohesion: 0.16
+Nodes (21): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDate(), formatDiagnosticBubbleHtml() (+13 more)
 
 ### Community 57 - "DiagnosticServer"
 Cohesion: 0.27
 Nodes (4): DiagnosticServer, is_client_authorized(), load_whitelist(), print_whitelist()
 
 ### Community 58 - "initNostr"
-Cohesion: 0.19
-Nodes (16): addContact(), ensureSupportAgentContact(), getHostStatusDisplay(), handleAppResume(), initNostr(), loadContacts(), pingAllRemoteDevices(), removeContact() (+8 more)
+Cohesion: 0.29
+Nodes (10): getHostStatusDisplay(), handleAppResume(), initNostr(), pingAllRemoteDevices(), renderRelayList(), setBadge(), showNextMessageRequest(), startHeartbeat() (+2 more)
 
 ### Community 61 - "P2P Connect — System Design"
 Cohesion: 0.25
@@ -396,7 +396,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.1010752688172043 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._
 - **Why does `AGENTS.md — Developer & AI Agent Guide for P2P Connect` connect `AGENTS.md — Developer & AI Agent Guide for P2P Connect` to `README.md`, `8. AI Agent Guardrails: Graphify & Invariant Verifier`, `bridge.py`, `7. `ui-controller.js` — UI Controller`?**
   _High betweenness centrality (0.323) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**

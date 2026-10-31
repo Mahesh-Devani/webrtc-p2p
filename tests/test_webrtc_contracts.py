@@ -110,6 +110,9 @@ class TestWebRtcContracts(unittest.TestCase):
         # Functions in ui-controller.js
         self.assertIn("function setRdTouchMode", self.ui_content)
         self.assertIn("function renderVirtualCursor", self.ui_content)
+        self.assertIn("function getVideoActualDimensions", self.ui_content)
+        self.assertIn("(dx * sens) / actualWidth", self.ui_content)
+        self.assertIn("(dy * sens) / actualHeight", self.ui_content)
         self.assertIn("let rdTouchMode =", self.ui_content)
         self.assertIn("let virtualCursor =", self.ui_content)
         self.assertIn("let isDirectDragging =", self.ui_content)

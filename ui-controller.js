@@ -2778,16 +2778,25 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     }
   }
 
-  function getNormalizedVideoCoordinates(e, videoEl) {
-    if (!videoEl) return null;
+  function getVideoActualDimensions(videoEl = dom.remoteVideo) {
+    const fallbackW = window.innerWidth || 1920;
+    const fallbackH = window.innerHeight || 1080;
+    if (!videoEl) {
+      return {
+        actualWidth: fallbackW,
+        actualHeight: fallbackH,
+        offsetX: 0,
+        offsetY: 0,
+        rect: { left: 0, top: 0, right: fallbackW, bottom: fallbackH, width: fallbackW, height: fallbackH },
+        videoRatio: 16 / 9
+      };
+    }
     const rect = videoEl.getBoundingClientRect();
-    const elWidth = rect.width;
-    const elHeight = rect.height;
-    if (elWidth <= 0 || elHeight <= 0) return null;
-
+    const elWidth = rect.width > 0 ? rect.width : fallbackW;
+    const elHeight = rect.height > 0 ? rect.height : fallbackH;
     const vWidth = videoEl.videoWidth || elWidth;
     const vHeight = videoEl.videoHeight || elHeight;
-    const videoRatio = vWidth / vHeight;
+    const videoRatio = (vHeight > 0) ? (vWidth / vHeight) : (elWidth / elHeight);
     const elRatio = elWidth / elHeight;
 
     let actualWidth, actualHeight, offsetX, offsetY;
@@ -2802,6 +2811,21 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       offsetX = 0;
       offsetY = (elHeight - actualHeight) / 2;
     }
+
+    return {
+      actualWidth,
+      actualHeight,
+      offsetX,
+      offsetY,
+      rect,
+      videoRatio
+    };
+  }
+
+  function getNormalizedVideoCoordinates(e, videoEl) {
+    if (!videoEl) return null;
+    const { actualWidth, actualHeight, offsetX, offsetY, rect } = getVideoActualDimensions(videoEl);
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
 
     const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
     const clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
@@ -3382,28 +3406,10 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       return;
     }
 
-    const rect = targetVideo.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
+    const { actualWidth, actualHeight, offsetX, offsetY, rect } = getVideoActualDimensions(targetVideo);
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
       hide(dom.rdVirtualCursor);
       return;
-    }
-
-    const vWidth = targetVideo.videoWidth || rect.width;
-    const vHeight = targetVideo.videoHeight || rect.height;
-    const videoRatio = vWidth / vHeight;
-    const elRatio = rect.width / rect.height;
-
-    let actualWidth, actualHeight, offsetX, offsetY;
-    if (elRatio > videoRatio) {
-      actualHeight = rect.height;
-      actualWidth = rect.height * videoRatio;
-      offsetX = (rect.width - actualWidth) / 2;
-      offsetY = 0;
-    } else {
-      actualWidth = rect.width;
-      actualHeight = rect.width / videoRatio;
-      offsetX = 0;
-      offsetY = (rect.height - actualHeight) / 2;
     }
 
     const pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
@@ -3565,11 +3571,16 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       if (isMousePanning) stopMousePan();
       // In Trackpad mode without pointer lock, if cursor leaves near an edge, snap to that edge
       if (rdTouchMode === 'trackpad' && document.pointerLockElement !== v) {
-        const rect = v.getBoundingClientRect();
-        if (e.clientY <= rect.top + 20) virtualCursor.y = 0.0;
-        else if (e.clientY >= rect.bottom - 20) virtualCursor.y = 1.0;
-        if (e.clientX <= rect.left + 20) virtualCursor.x = 0.0;
-        else if (e.clientX >= rect.right - 20) virtualCursor.x = 1.0;
+        const { actualWidth, actualHeight, offsetX, offsetY, rect } = getVideoActualDimensions(v);
+        const vTop = rect.top + offsetY;
+        const vBottom = vTop + actualHeight;
+        const vLeft = rect.left + offsetX;
+        const vRight = vLeft + actualWidth;
+
+        if (e.clientY <= vTop + 20) virtualCursor.y = 0.0;
+        else if (e.clientY >= vBottom - 20) virtualCursor.y = 1.0;
+        if (e.clientX <= vLeft + 20) virtualCursor.x = 0.0;
+        else if (e.clientX >= vRight - 20) virtualCursor.x = 1.0;
         renderVirtualCursor();
         if (rdMode === 'control') {
           sendRdInput({ t: 'mouse_move', x: virtualCursor.x, y: virtualCursor.y });
@@ -3624,9 +3635,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
       // TRACKPAD MODE or POINTER LOCK: relative glide of virtualCursor
       if (rdTouchMode === 'trackpad' || document.pointerLockElement === v) {
-        const rect = v.getBoundingClientRect();
-        const targetWidth = rect.width || window.innerWidth;
-        const targetHeight = rect.height || window.innerHeight;
+        const { actualWidth, actualHeight, offsetX, offsetY, rect } = getVideoActualDimensions(v);
         let dx = e.movementX;
         let dy = e.movementY;
         if (dx === undefined || (dx === 0 && dy === 0 && lastMouseClientX !== null && document.pointerLockElement !== v)) {
@@ -3638,16 +3647,21 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
         const sens = (document.pointerLockElement === v) ? 1.0 : 1.8;
         if (dx || dy) {
-          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / targetWidth));
-          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / targetHeight));
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / actualWidth));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / actualHeight));
         }
 
         // When not pointer-locked, moving physical mouse to the edges allows reaching full bounds (0.0 / 1.0)
         if (document.pointerLockElement !== v) {
-          if (e.clientY <= rect.top + 16) virtualCursor.y = 0.0;
-          if (e.clientY >= rect.bottom - 16) virtualCursor.y = 1.0;
-          if (e.clientX <= rect.left + 16) virtualCursor.x = 0.0;
-          if (e.clientX >= rect.right - 16) virtualCursor.x = 1.0;
+          const vTop = rect.top + offsetY;
+          const vBottom = vTop + actualHeight;
+          const vLeft = rect.left + offsetX;
+          const vRight = vLeft + actualWidth;
+
+          if (e.clientY <= vTop + 16) virtualCursor.y = 0.0;
+          else if (e.clientY >= vBottom - 16) virtualCursor.y = 1.0;
+          if (e.clientX <= vLeft + 16) virtualCursor.x = 0.0;
+          else if (e.clientX >= vRight - 16) virtualCursor.x = 1.0;
         }
 
         renderVirtualCursor();
@@ -3934,13 +3948,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           lastTrackpadX = t0.clientX;
           lastTrackpadY = t0.clientY;
 
-          const rect = v.getBoundingClientRect();
-          const targetWidth = rect.width || window.innerWidth;
-          const targetHeight = rect.height || window.innerHeight;
+          const { actualWidth, actualHeight } = getVideoActualDimensions(v);
           const sens = 1.3;
 
-          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / targetWidth));
-          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / targetHeight));
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / actualWidth));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / actualHeight));
           renderVirtualCursor();
 
           // Handle double-tap drag on trackpad
