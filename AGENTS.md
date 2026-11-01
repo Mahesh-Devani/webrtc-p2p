@@ -282,5 +282,17 @@ The project features a dual-tier diagnostic and issue reporting system:
    - Antigravity executes `python3 support-agent/ai-diagnostic-agent.py --inbox`, inspects incoming telemetry, diagnoses the root cause, and proposes a verified code fix for developer review before committing.
    - For complete documentation, see [`support-agent/README.md`](support-agent/README.md).
 
+---
+
+## 10. Remote Desktop Knowledge Base & Architectural Learnings
+
+For in-depth analysis of low-level OS issues, WebRTC signaling nuances, hardware encoder management, and the future enhancement roadmap, developers and AI agents should consult the dedicated knowledge base:
+- **Comprehensive Knowledge Base**: [`docs/remote-desktop-knowledge-base.md`](docs/remote-desktop-knowledge-base.md)
+  - Detailed breakdown of 12 critical hardware, signaling, and UX issues encountered & solved.
+  - Native display wake & Apple Silicon pointer safety specifications.
+  - WebRTC video encoder bitrate governors and canvas lifecycle rules.
+  - Future roadmap: Dirty-frame detection, WebCodecs hardware NALU streaming, and headless virtual displays.
+
+
 
 

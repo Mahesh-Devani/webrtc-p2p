@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1793205984.114532,
-    "seen": 1793206003.698168,
-    "ast_hash": "471d780d82165cc55cd506fe2c0b9879",
+    "mtime": 1793542176.5237625,
+    "seen": 1793542237.757376,
+    "ast_hash": "a40296ce688b4962da3ff59fdcbccaf5",
     "semantic_hash": ""
   },
   "README.md": {
@@ -345,6 +345,12 @@
     "mtime": 1792985570.144031,
     "seen": 1792985710.595244,
     "ast_hash": "53a82268545a0f0c665684524a3aa2c3",
+    "semantic_hash": ""
+  },
+  "docs/remote-desktop-knowledge-base.md": {
+    "mtime": 1793542156.7843633,
+    "seen": 1793542237.7573912,
+    "ast_hash": "99897f237870e6ee457bb74be889769d",
     "semantic_hash": ""
   }
 }
