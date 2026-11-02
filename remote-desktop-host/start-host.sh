@@ -11,7 +11,13 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-PROJECT_ROOT="$( dirname "$DIR" )"
+if [ -d "$DIR/web" ]; then
+    WEB_DIR="$DIR/web"
+elif [ -f "$DIR/../host.html" ]; then
+    WEB_DIR="$( cd "$DIR/.." >/dev/null 2>&1 && pwd )"
+else
+    WEB_DIR="$DIR"
+fi
 
 echo "=========================================================="
 echo " 🖥️  P2P Connect — Unattended Host Daemon"
@@ -28,7 +34,7 @@ elif nc -z 127.0.0.1 8443 2>/dev/null; then
     HOST_URL="https://localhost:8443/host.html"
 else
     echo "▶ Starting local web server on port 8080..."
-    ( cd "$PROJECT_ROOT" && nohup python3 -m http.server 8080 ) >/dev/null 2>&1 &
+    ( cd "$WEB_DIR" && nohup python3 -m http.server 8080 ) >/dev/null 2>&1 &
     HTTP_PID=$!
     echo $HTTP_PID > /tmp/p2p-http.pid
     sleep 1

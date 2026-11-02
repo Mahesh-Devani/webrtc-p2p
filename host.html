@@ -276,6 +276,17 @@
             </a>
           </div>
 
+          <!-- HTTPS Mixed Content Restriction Warning -->
+          <div id="host-https-warning" style="display: none; margin-top: 10px; background: rgba(239, 68, 68, 0.12); border: 1px solid var(--c-danger, #ef4444); border-radius: var(--radius); padding: 10px 12px; font-size: 0.74rem; color: #fca5a5; line-height: 1.45;">
+            <div style="font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: #f87171;">
+              <span>⚠️ Browser Mixed-Content Security Restriction</span>
+            </div>
+            You are viewing this Host Agent over a public HTTPS URL (<code>github.io</code>). Web browsers block public HTTPS sites from opening unencrypted local WebSockets (<code>ws://127.0.0.1:9999</code>).<br>
+            <div style="margin-top: 6px;">
+              👉 <a href="http://localhost:8080/host.html" style="color: var(--c-primary, #58a6ff); font-weight: 600; text-decoration: underline;">Click here to open http://localhost:8080/host.html</a> to connect to your local Host Bridge with zero restrictions.
+            </div>
+          </div>
+
           <!-- Expandable setup instructions -->
           <details id="bridge-setup-details" style="margin-top: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; font-size: 0.75rem; color: var(--c-text-dim);">
             <summary style="cursor: pointer; font-weight: 600; color: var(--c-primary); display: flex; align-items: center; gap: 6px; user-select: none;">

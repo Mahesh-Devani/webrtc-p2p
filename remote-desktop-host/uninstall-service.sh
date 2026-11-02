@@ -49,4 +49,9 @@ if [ -f "/tmp/p2p-http.pid" ]; then
     rm -f /tmp/p2p-http.pid
 fi
 
+if [ -d "$HOME/.p2p-connect-host" ]; then
+    rm -rf "$HOME/.p2p-connect-host"
+    echo "✓ Cleaned up $HOME/.p2p-connect-host"
+fi
+
 echo "✅ Background service uninstalled successfully."

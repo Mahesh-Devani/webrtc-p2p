@@ -111,6 +111,11 @@ Across our development and real-world field testing (including multi-hour produc
 - **Root Cause**: Native OS queries like `CGSessionCopyCurrentDictionary()` (checking if screen is locked) and `CGWindowListCopyWindowInfo()` (fetching window geometry) execute synchronous Mach IPC calls to `WindowServer`. Calling these inside 60 FPS capture loops or 120 Hz cursor mapping saturated the WindowServer IPC queue.
 - **Lesson / Rule**: Enforce strict monotonic clock caching (`time.monotonic()`, TTL 1.0–1.5s) for all OS status and window geometry queries.
 
+#### 6. macOS TCC Sandbox & LaunchAgent Execution (`Operation not permitted` / Exit Code 126)
+- **Symptom**: Installing the macOS background service via `./install-service.sh` resulted in `launchctl list` reporting exit code `126`, `/tmp/p2pconnect-host.err` logging `/bin/bash: .../start-host.sh: Operation not permitted`, and the host bridge failing to start.
+- **Root Cause**: macOS TCC (Transparency, Consent, and Control) privacy controls protect user folders (`~/Documents`, `~/Desktop`, `~/Downloads`). Background LaunchAgents managed by `launchd` run without interactive user TCC tokens and are strictly denied permission to execute scripts or read files residing in `~/Documents`.
+- **Lesson / Rule**: Never configure macOS LaunchAgent plists to execute scripts directly from `~/Documents`, `~/Desktop`, or `~/Downloads`. Always deploy the daemon files to a dedicated application directory such as `~/.p2p-connect-host/`, where `launchd` has full read and execution rights without TCC restrictions.
+
 ---
 
 ### Category B: WebRTC Signaling, Transport & Lifecycle Stability

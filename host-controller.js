@@ -88,6 +88,7 @@ const dom = {
   btnCopyPin: document.getElementById('btn-copy-pin'),
   pinValidationMsg: document.getElementById('pin-validation-msg'),
   hostBridgePill: document.getElementById('host-bridge-pill'),
+  hostHttpsWarning: document.getElementById('host-https-warning'),
   btnRecheckBridge: document.getElementById('btn-recheck-bridge'),
   hostQrCanvas: document.getElementById('host-qr-canvas'),
   hostPubkeyBox: document.getElementById('host-pubkey-box'),
@@ -534,9 +535,19 @@ function connectBridge(force = false) {
       bridgeConnected = false;
       bridgeWs = null;
       broadcastBridgeStatus(false);
+      const isHttps = window.location.protocol === 'https:';
+      const h = window.location.hostname || '';
+      const isPrivateIp = /^(127\.0\.0\.1|localhost|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/.test(h);
       if (dom.hostBridgePill) {
         dom.hostBridgePill.className = 'badge badge--failed';
-        dom.hostBridgePill.textContent = 'Not Running (run bridge.py)';
+        if (isHttps && !isPrivateIp) {
+          dom.hostBridgePill.textContent = 'Blocked by HTTPS (Use Local Host)';
+        } else {
+          dom.hostBridgePill.textContent = 'Not Running (run bridge.py)';
+        }
+      }
+      if (dom.hostHttpsWarning) {
+        dom.hostHttpsWarning.style.display = (isHttps && !isPrivateIp) ? 'block' : 'none';
       }
       document.getElementById('bridge-setup-details')?.setAttribute('open', '');
       scheduleBridgeReconnect();
@@ -593,6 +604,9 @@ function connectBridge(force = false) {
         if (dom.hostBridgePill) {
           dom.hostBridgePill.className = 'badge badge--connected';
           dom.hostBridgePill.textContent = 'Active';
+        }
+        if (dom.hostHttpsWarning) {
+          dom.hostHttpsWarning.style.display = 'none';
         }
         document.getElementById('bridge-setup-details')?.removeAttribute('open');
         broadcastBridgeStatus(true);

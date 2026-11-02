@@ -10,9 +10,11 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+PROJECT_ROOT="$( dirname "$DIR" )"
 PLIST_NAME="com.p2pconnect.host.plist"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 TARGET_PLIST="$LAUNCH_AGENTS_DIR/$PLIST_NAME"
+INSTALL_DIR="$HOME/.p2p-connect-host"
 
 echo "=========================================================="
 echo " ⚙️  Installing P2P Connect Host as macOS Background Service"
@@ -26,7 +28,36 @@ if launchctl list | grep -q "com.p2pconnect.host" 2>/dev/null; then
     launchctl unload "$TARGET_PLIST" 2>/dev/null || true
 fi
 
-# Generate LaunchAgent plist file pointing to start-host.sh
+# Deploy service files to user application directory ($HOME/.p2p-connect-host)
+# Note: macOS TCC restricts launchd from accessing ~/Documents, ~/Desktop, and ~/Downloads.
+# Running from ~/.p2p-connect-host bypasses TCC sandbox restrictions cleanly.
+echo "▶ Deploying host daemon to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/web"
+
+cp "$DIR/bridge.py" "$INSTALL_DIR/bridge.py"
+cp "$DIR/start-host.sh" "$INSTALL_DIR/start-host.sh"
+cp "$DIR/uninstall-service.sh" "$INSTALL_DIR/uninstall-service.sh"
+
+if [ -f "$PROJECT_ROOT/host.html" ]; then
+    cp "$PROJECT_ROOT/host.html" "$INSTALL_DIR/web/" 2>/dev/null || true
+    cp "$PROJECT_ROOT"/*.js "$INSTALL_DIR/web/" 2>/dev/null || true
+    cp "$PROJECT_ROOT"/*.css "$INSTALL_DIR/web/" 2>/dev/null || true
+    if [ -f "$PROJECT_ROOT/nostr.bundle.js" ]; then
+        cp "$PROJECT_ROOT/nostr.bundle.js" "$INSTALL_DIR/web/" 2>/dev/null || true
+    fi
+elif [ -d "$DIR/web" ]; then
+    cp -R "$DIR/web/"* "$INSTALL_DIR/web/" 2>/dev/null || true
+fi
+
+if [ -f "$PROJECT_ROOT/cert.pem" ]; then
+    cp "$PROJECT_ROOT/cert.pem" "$PROJECT_ROOT/key.pem" "$INSTALL_DIR/" 2>/dev/null || true
+fi
+
+chmod +x "$INSTALL_DIR/start-host.sh" "$INSTALL_DIR/bridge.py"
+echo "✓ Host daemon deployed to $INSTALL_DIR"
+
+# Generate LaunchAgent plist file pointing to $INSTALL_DIR/start-host.sh
 cat <<EOF > "$TARGET_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -37,8 +68,10 @@ cat <<EOF > "$TARGET_PLIST"
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>$DIR/start-host.sh</string>
+        <string>$INSTALL_DIR/start-host.sh</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

@@ -1116,6 +1116,13 @@ async def handle_client(reader, writer):
     peer = writer.get_extra_info('peername')
     client_ip = peer[0] if peer else 'unknown'
 
+    session_token = f"client-{id(writer)}"
+    capture_active = False
+    capture_target_type = 'display'
+    capture_target_id = 0
+    capture_fps = 30
+    capture_task = None
+
     try:
         # Read HTTP GET handshake header
         req_bytes = await reader.readuntil(b'\r\n\r\n')
@@ -1169,13 +1176,6 @@ async def handle_client(reader, writer):
         print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin}, Screen: {sw}x{sh} at ({ox},{oy}))")
 
         # ── Native On-Demand Frame Capture & Streaming Engine ──
-        session_token = f"client-{id(writer)}"
-        capture_active = False
-        capture_target_type = 'display'
-        capture_target_id = 0
-        capture_fps = 30
-        capture_task = None
-
         # If host screen is currently locked, wake display immediately on client connect
         if _global_frame_capturer.is_screen_locked():
             _global_wake_manager.wake(session_token)
@@ -1507,9 +1507,10 @@ async def main(host, port, token, extra_origins, allow_all, bounds_ttl=None):
             ACTIVE_ALLOWED_ORIGINS.add(orig.strip().rstrip('/'))
     ALLOW_ALL_ORIGINS = allow_all
 
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cert_file = os.path.join(project_root, "cert.pem")
-    key_file = os.path.join(project_root, "key.pem")
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(dir_path)
+    cert_file = os.path.join(dir_path, "cert.pem") if os.path.exists(os.path.join(dir_path, "cert.pem")) else os.path.join(project_root, "cert.pem")
+    key_file = os.path.join(dir_path, "key.pem") if os.path.exists(os.path.join(dir_path, "key.pem")) else os.path.join(project_root, "key.pem")
 
     ssl_ctx = None
     if os.path.exists(cert_file) and os.path.exists(key_file):
