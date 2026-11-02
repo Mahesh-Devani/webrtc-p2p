@@ -57,7 +57,7 @@ fi
 chmod +x "$INSTALL_DIR/start-host.sh" "$INSTALL_DIR/bridge.py"
 echo "✓ Host daemon deployed to $INSTALL_DIR"
 
-# Generate LaunchAgent plist file pointing to $INSTALL_DIR/start-host.sh
+# Generate LaunchAgent plist file pointing to $INSTALL_DIR/start-host.sh --daemon
 cat <<EOF > "$TARGET_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -69,16 +69,14 @@ cat <<EOF > "$TARGET_PLIST"
     <array>
         <string>/bin/bash</string>
         <string>$INSTALL_DIR/start-host.sh</string>
+        <string>--daemon</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$INSTALL_DIR</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
     <key>StandardOutPath</key>
     <string>/tmp/p2pconnect-host.log</string>
     <key>StandardErrorPath</key>
@@ -97,8 +95,10 @@ echo "✓ Service loaded into macOS launchd!"
 
 echo ""
 echo "=========================================================="
-echo " ✅ Background Service Installed & Running!"
-echo "    - Auto-starts on login: YES"
+echo " ✅ Background Service Installed & Running (Approach A)!"
+echo "    - Mode:        Silent Headless (Zero Windows / Tabs)"
+echo "    - Auto-starts: YES (on user login & crash recovery)"
+echo "    - Web App:     http://localhost:8080/host.html"
 echo "    - Log files:   /tmp/p2pconnect-host.log"
 echo "    - Error files: /tmp/p2pconnect-host.err"
 echo ""

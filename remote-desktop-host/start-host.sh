@@ -77,43 +77,114 @@ elif which chromium >/dev/null 2>&1; then
     CHROME_BIN="$(which chromium)"
 fi
 
-HOST_PROFILE="$HOME/.p2p-connect-host-profile"
+HOST_PROFILE="$HOME/.p2p-connect-host/chrome-profile"
 mkdir -p "$HOST_PROFILE"
 
 OS="$(uname -s)"
-
-if [ "$OS" = "Darwin" ]; then
-    # On macOS, using 'open -a' invokes Chrome through macOS LaunchServices.
-    # This ensures Chrome runs under its own system identity (with its standard Screen Recording permissions),
-    # rather than as a restricted child process of Terminal which triggers 'Could not start video source'.
-    echo "✓ Opening Host Agent in Google Chrome via macOS LaunchServices..."
-    if [ -d "/Applications/Google Chrome.app" ]; then
-        open -a "Google Chrome" "$HOST_URL"
-    elif [ -d "/Applications/Brave Browser.app" ]; then
-        open -a "Brave Browser" "$HOST_URL"
-    elif [ -d "/Applications/Microsoft Edge.app" ]; then
-        open -a "Microsoft Edge" "$HOST_URL"
-    else
-        open "$HOST_URL"
+IS_DAEMON=0
+for arg in "$@"; do
+    if [ "$arg" = "--daemon" ] || [ "$arg" = "-d" ]; then
+        IS_DAEMON=1
     fi
-else
-    # Linux (with optional X11 auto-select)
-    CHROME_FLAGS=(
-      --app="$HOST_URL"
-      --user-data-dir="$HOST_PROFILE"
-      --auto-select-desktop-capture-source="Entire screen"
-      --ignore-certificate-errors
-      --no-first-run
-      --no-default-browser-check
-    )
-    "$CHROME_BIN" "${CHROME_FLAGS[@]}" >/dev/null 2>&1 &
-    CHROME_PID=$!
-    echo $CHROME_PID > /tmp/p2p-chrome.pid
-fi
+done
 
-echo "=========================================================="
-echo " ✅ Host Daemon is RUNNING"
-echo "    - Web App:      $HOST_URL"
-echo "    - Native Input: ws://127.0.0.1:9999"
-echo "=========================================================="
-echo "=========================================================="
+if [ "$IS_DAEMON" -eq 1 ]; then
+    # ── Daemon Mode (Approach A: Headless 24/7 Background Service) ─────────
+    echo "▶ Launching Silent Headless Host Worker (Approach A)..."
+    DAEMON_URL="http://localhost:8080/host.html?daemon=1"
+    CHROME_PID=""
+
+    if [ -n "$CHROME_BIN" ]; then
+        "$CHROME_BIN" \
+          --headless=new \
+          --disable-gpu \
+          --user-data-dir="$HOST_PROFILE" \
+          --allow-insecure-localhost \
+          --use-fake-ui-for-media-stream \
+          --autoplay-policy=no-user-gesture-required \
+          --no-first-run \
+          --no-default-browser-check \
+          "$DAEMON_URL" > /tmp/p2p-headless.log 2>&1 &
+        CHROME_PID=$!
+        echo $CHROME_PID > /tmp/p2p-chrome.pid
+        echo "✓ Silent Headless Host Worker active (PID $CHROME_PID)"
+    else
+        echo "[!] Warning: Chrome binary not found. Cannot launch headless host worker."
+    fi
+
+    cleanup() {
+        echo "[Supervisor] Terminating services..."
+        [ -n "$CHROME_PID" ] && kill "$CHROME_PID" 2>/dev/null || true
+        [ -f /tmp/p2p-http.pid ] && kill "$(cat /tmp/p2p-http.pid)" 2>/dev/null || true
+        [ -f /tmp/p2p-bridge.pid ] && kill "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null || true
+        exit 0
+    }
+    trap cleanup SIGTERM SIGINT SIGHUP
+
+    echo "=========================================================="
+    echo " ✅ P2P Connect Host 24/7 Supervisor Running"
+    echo "    - Mode:        Silent Headless (Zero Windows / Tabs)"
+    echo "    - Dashboard:   http://localhost:8080/host.html"
+    echo "    - Input Port:  ws://127.0.0.1:9999"
+    echo "=========================================================="
+
+    # Supervise loop: automatically revives bridge.py or Headless Chrome if either ever crashes
+    while true; do
+        if [ -f /tmp/p2p-bridge.pid ] && ! kill -0 "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null; then
+            echo "[!] Native bridge crashed! Reviving..."
+            python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
+            echo $! > /tmp/p2p-bridge.pid
+        fi
+
+        if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then
+            echo "[!] Headless Host worker crashed! Reviving..."
+            "$CHROME_BIN" \
+              --headless=new \
+              --disable-gpu \
+              --user-data-dir="$HOST_PROFILE" \
+              --allow-insecure-localhost \
+              --use-fake-ui-for-media-stream \
+              --autoplay-policy=no-user-gesture-required \
+              --no-first-run \
+              --no-default-browser-check \
+              "$DAEMON_URL" >> /tmp/p2p-headless.log 2>&1 &
+            CHROME_PID=$!
+            echo $CHROME_PID > /tmp/p2p-chrome.pid
+        fi
+        sleep 3
+    done
+
+else
+    # ── Interactive Mode (Standard GUI Browser Launch) ──────────────────────
+    if [ "$OS" = "Darwin" ]; then
+        echo "✓ Opening Host Agent in Google Chrome via macOS LaunchServices..."
+        if [ -d "/Applications/Google Chrome.app" ]; then
+            open -a "Google Chrome" "$HOST_URL"
+        elif [ -d "/Applications/Brave Browser.app" ]; then
+            open -a "Brave Browser" "$HOST_URL"
+        elif [ -d "/Applications/Microsoft Edge.app" ]; then
+            open -a "Microsoft Edge" "$HOST_URL"
+        else
+            open "$HOST_URL"
+        fi
+    else
+        CHROME_FLAGS=(
+          --app="$HOST_URL"
+          --user-data-dir="$HOST_PROFILE"
+          --auto-select-desktop-capture-source="Entire screen"
+          --ignore-certificate-errors
+          --no-first-run
+          --no-default-browser-check
+        )
+        "$CHROME_BIN" "${CHROME_FLAGS[@]}" >/dev/null 2>&1 &
+        CHROME_PID=$!
+        echo $CHROME_PID > /tmp/p2p-chrome.pid
+    fi
+
+    echo "=========================================================="
+    echo " ✅ Host Daemon is RUNNING"
+    echo "    - Web App:      $HOST_URL"
+    echo "    - Native Input: ws://127.0.0.1:9999"
+    echo "=========================================================="
+    echo "=========================================================="
+fi

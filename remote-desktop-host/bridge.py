@@ -521,6 +521,39 @@ ACTIVE_AUTH_TOKEN = ""
 ACTIVE_ALLOWED_ORIGINS = set()
 ALLOW_ALL_ORIGINS = False
 
+# ── 2.1 Persistent Host Configuration & Identity ─────────────────────────────
+HOST_CONFIG_DIR = os.path.expanduser("~/.p2p-connect-host")
+HOST_CONFIG_FILE = os.path.join(HOST_CONFIG_DIR, "host-config.json")
+_cached_host_config = None
+_active_daemon_writer = None
+_connected_control_clients = set()
+
+def load_host_config():
+    global _cached_host_config
+    if os.path.exists(HOST_CONFIG_FILE):
+        try:
+            with open(HOST_CONFIG_FILE, "r", encoding="utf-8") as f:
+                _cached_host_config = json.load(f)
+                return _cached_host_config
+        except Exception as e:
+            print(f"[!] Warning: Could not read host config: {e}")
+    return None
+
+def save_host_config(config):
+    global _cached_host_config
+    try:
+        os.makedirs(HOST_CONFIG_DIR, exist_ok=True)
+        with open(HOST_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+        _cached_host_config = config
+        return True
+    except Exception as e:
+        print(f"[!] Warning: Could not write host config: {e}")
+        return False
+
+# Initialize cached config from disk on startup
+load_host_config()
+
 # ── 3. Zero-Lag Cursor Worker & Coordinate Smoothing ─────────────────────────
 latest_mouse_coord = None
 latest_mouse_updated = False
@@ -1112,7 +1145,7 @@ async def read_ws_frame(reader):
     return opcode, payload
 
 async def handle_client(reader, writer):
-    global latest_mouse_coord, latest_mouse_updated, current_x, current_y
+    global latest_mouse_coord, latest_mouse_updated, current_x, current_y, _active_daemon_writer
     peer = writer.get_extra_info('peername')
     client_ip = peer[0] if peer else 'unknown'
 
@@ -1168,9 +1201,20 @@ async def handle_client(reader, writer):
         writer.write(handshake_resp)
         await writer.drain()
 
-        # Send connected confirmation frame immediately with fresh screen bounds
+        _connected_control_clients.add(writer)
+
+        # Send connected confirmation frame immediately with fresh screen bounds and persistent host config
         ox, oy, sw, sh = get_screen_bounds(force=True)
-        writer.write(make_ws_frame(json.dumps({'t': 'connected', 'screen': [sw, sh], 'origin': [ox, oy]})))
+        connected_payload = {
+            't': 'connected',
+            'screen': [sw, sh],
+            'origin': [ox, oy],
+            'daemon_active': (_active_daemon_writer is not None),
+            'has_config': (_cached_host_config is not None)
+        }
+        if _cached_host_config:
+            connected_payload['config'] = _cached_host_config
+        writer.write(make_ws_frame(json.dumps(connected_payload)))
         await writer.drain()
 
         print(f"[+] Verified browser session connected from {client_ip} (Origin: {origin}, Screen: {sw}x{sh} at ({ox},{oy}))")
@@ -1477,11 +1521,39 @@ async def handle_client(reader, writer):
                         try: subprocess.run(['xdg-screensaver', 'lock'], check=False)
                         except Exception: pass
 
+            elif evt_type == 'register_daemon':
+                _active_daemon_writer = writer
+                print(f"[+] Headless Host Daemon registered with bridge ({client_ip})")
+                status_msg = make_ws_frame(json.dumps({'t': 'daemon_status', 'daemon_active': True}))
+                for client in list(_connected_control_clients):
+                    if client != writer:
+                        try: client.write(status_msg)
+                        except Exception: pass
+
+            elif evt_type == 'save_host_config':
+                new_cfg = data.get('config', {})
+                if new_cfg and isinstance(new_cfg, dict):
+                    save_host_config(new_cfg)
+                    print(f"[+] Saved persistent host config (pubkey: {new_cfg.get('host_pubkey', '')[:16]}...)")
+                    cfg_msg = make_ws_frame(json.dumps({'t': 'host_config_updated', 'config': _cached_host_config}))
+                    for client in list(_connected_control_clients):
+                        try: client.write(cfg_msg)
+                        except Exception: pass
+
     except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError):
         print(f"[-] Browser disconnected ({client_ip})")
     except Exception as err:
         print(f"[!] Error: {err}")
     finally:
+        if writer in _connected_control_clients:
+            _connected_control_clients.remove(writer)
+        if _active_daemon_writer == writer:
+            _active_daemon_writer = None
+            print("[-] Headless Host Daemon unregistered from bridge")
+            status_msg = make_ws_frame(json.dumps({'t': 'daemon_status', 'daemon_active': False}))
+            for client in list(_connected_control_clients):
+                try: client.write(status_msg)
+                except Exception: pass
         if capture_active:
             capture_active = False
         if capture_task and not capture_task.done():

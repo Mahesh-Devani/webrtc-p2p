@@ -74,6 +74,7 @@ The system operates across two distinct modes:
 | **Extended UX D: Encrypted Fleet Export/Import** | Export/import saved computers with optional PBKDF2 / AES-256-GCM encryption. | ✅ **Completed** | Full JSON export/import modal with password encryption. |
 | **Extended UX E: 24/7 Power & Sleep Guidance** | Interactive modal explaining OS power settings for unattended access. | ✅ **Completed** | Accessible directly from the Reachability box on computer cards. |
 | **Extended UX F: Transient Disconnect Auto-Resume** | In-stream auto-resume banner with countdown when network blips. | ✅ **Completed** | 4-second transient disconnect banner with automatic Nostr reconnection. |
+| **Approach A: 24/7 Silent Headless Host Service** | Run host silently in background without open browser tabs or windows; auto-restarts on crash/reboot. | ✅ **Completed** | LaunchAgent executes `start-host.sh --daemon` with supervisor loop, Headless Chrome host worker, and persistent `~/.p2p-connect-host/host-config.json` identity sync. |
 
 ---
 

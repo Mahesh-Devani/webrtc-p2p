@@ -111,7 +111,85 @@ const dom = {
   modalStartCapturePrompt: document.getElementById('modal-start-capture-prompt'),
   btnModalStartCapture: document.getElementById('btn-modal-start-capture'),
   btnModalDismissCapture: document.getElementById('btn-modal-dismiss-capture'),
+  hostDaemonBanner: document.getElementById('host-daemon-banner'),
+  btnRestartDaemon: document.getElementById('btn-restart-daemon'),
 };
+
+const isDaemonWorker = new URLSearchParams(window.location.search).get('daemon') === '1';
+let isDaemonActive = false;
+
+function updateDaemonUI(active) {
+  if (isDaemonWorker) return;
+  if (dom.hostDaemonBanner) {
+    dom.hostDaemonBanner.style.display = active ? 'block' : 'none';
+  }
+  if (dom.hostStatusText) {
+    if (active) {
+      dom.hostStatusText.textContent = 'Service Active (24/7 Background)';
+    } else {
+      dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+    }
+  }
+}
+
+function applyHostConfigFromBridge(cfg) {
+  if (!cfg || typeof cfg !== 'object') return;
+  if (cfg.host_privkey && cfg.host_pubkey) {
+    localStorage.setItem(STORAGE_HOST_PRIV, cfg.host_privkey);
+    localStorage.setItem(STORAGE_HOST_PUB, cfg.host_pubkey);
+    hostIdentity = { privateKey: cfg.host_privkey, publicKey: cfg.host_pubkey };
+    if (dom.hostPubkeyDisplay) {
+      dom.hostPubkeyDisplay.textContent = `${cfg.host_pubkey.slice(0, 8)}…${cfg.host_pubkey.slice(-6)}`;
+      dom.hostPubkeyDisplay.title = cfg.host_pubkey;
+    }
+    if (dom.hostPubkeyBox) {
+      dom.hostPubkeyBox.textContent = cfg.host_pubkey;
+    }
+  }
+  if (cfg.host_name) {
+    localStorage.setItem(STORAGE_HOST_NAME, cfg.host_name);
+    if (dom.hostNameInput) dom.hostNameInput.value = cfg.host_name;
+  }
+  if (cfg.host_pin) {
+    localStorage.setItem(STORAGE_HOST_PIN, cfg.host_pin);
+    if (dom.hostPinInput) dom.hostPinInput.value = cfg.host_pin;
+  }
+  if (Array.isArray(cfg.authorized_clients)) {
+    localStorage.setItem(STORAGE_HOST_WHITELIST, JSON.stringify(cfg.authorized_clients));
+    renderAuthorizedClients();
+  }
+  if (typeof cfg.whitelist_enabled === 'boolean') {
+    localStorage.setItem(STORAGE_HOST_WHITELIST_ENABLED, cfg.whitelist_enabled ? '1' : '0');
+    if (dom.hostWhitelistToggle) dom.hostWhitelistToggle.checked = cfg.whitelist_enabled;
+  }
+  if (typeof cfg.auto_lock === 'boolean') {
+    localStorage.setItem(STORAGE_HOST_AUTO_LOCK, cfg.auto_lock ? '1' : '0');
+    if (dom.hostAutoLockChk) dom.hostAutoLockChk.checked = cfg.auto_lock;
+  }
+  renderPairingQR();
+}
+
+function isAutoLockEnabled() {
+  return localStorage.getItem(STORAGE_HOST_AUTO_LOCK) === 'true';
+}
+
+function saveHostConfigToBridge() {
+  if (!bridgeWs || bridgeWs.readyState !== WebSocket.OPEN) return;
+  try {
+    bridgeWs.send(JSON.stringify({
+      t: 'save_host_config',
+      config: {
+        host_privkey: localStorage.getItem(STORAGE_HOST_PRIV),
+        host_pubkey: localStorage.getItem(STORAGE_HOST_PUB),
+        host_name: (dom.hostNameInput?.value || localStorage.getItem(STORAGE_HOST_NAME) || '').trim(),
+        host_pin: (dom.hostPinInput?.value || localStorage.getItem(STORAGE_HOST_PIN) || '').trim(),
+        authorized_clients: JSON.parse(localStorage.getItem(STORAGE_HOST_WHITELIST) || '[]'),
+        whitelist_enabled: isWhitelistEnforced(),
+        auto_lock: isAutoLockEnabled()
+      }
+    }));
+  } catch {}
+}
 
 let hostIdentity = null;
 let hostStream = null;
@@ -152,6 +230,7 @@ async function initHostIdentity() {
   dom.hostNameInput.addEventListener('change', () => {
     localStorage.setItem(STORAGE_HOST_NAME, dom.hostNameInput.value.trim());
     renderPairingQR();
+    saveHostConfigToBridge();
   });
 
   // Access Password / PIN initialization with complexity rules
@@ -200,6 +279,7 @@ async function initHostIdentity() {
     localStorage.setItem(STORAGE_HOST_PIN, newPwd);
     updatePinValidationUI(newPwd);
     triggerPinSavedAnimation();
+    saveHostConfigToBridge();
   });
 
   dom.btnCopyPin?.addEventListener('click', () => {
@@ -226,6 +306,7 @@ async function initHostIdentity() {
     pinSaveTimer = setTimeout(() => {
       localStorage.setItem(STORAGE_HOST_PIN, val);
       triggerPinSavedAnimation();
+      saveHostConfigToBridge();
     }, 350);
   });
 
@@ -235,6 +316,7 @@ async function initHostIdentity() {
       clearTimeout(pinSaveTimer);
       localStorage.setItem(STORAGE_HOST_PIN, val);
       triggerPinSavedAnimation();
+      saveHostConfigToBridge();
     }
   });
 
@@ -250,6 +332,21 @@ async function initHostIdentity() {
     dom.hostAutoLockChk.checked = localStorage.getItem(STORAGE_HOST_AUTO_LOCK) === 'true';
     dom.hostAutoLockChk.addEventListener('change', () => {
       localStorage.setItem(STORAGE_HOST_AUTO_LOCK, dom.hostAutoLockChk.checked ? 'true' : 'false');
+      saveHostConfigToBridge();
+    });
+  }
+
+  if (dom.btnRestartDaemon) {
+    dom.btnRestartDaemon.addEventListener('click', () => {
+      if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+        bridgeWs.send(JSON.stringify({ t: 'restart_service' }));
+        dom.btnRestartDaemon.disabled = true;
+        dom.btnRestartDaemon.textContent = 'Restarting...';
+        setTimeout(() => {
+          dom.btnRestartDaemon.disabled = false;
+          dom.btnRestartDaemon.textContent = 'Restart Service';
+        }, 5000);
+      }
     });
   }
 
@@ -287,6 +384,7 @@ function saveAuthorizedClients(list) {
   localStorage.setItem(STORAGE_HOST_WHITELIST, JSON.stringify(list));
   updateWhitelistFilter();
   renderAuthorizedClients();
+  saveHostConfigToBridge();
 }
 
 function isWhitelistEnforced() {
@@ -300,6 +398,7 @@ function setWhitelistEnforced(enabled) {
   localStorage.setItem(STORAGE_HOST_WHITELIST_ENABLED, enabled ? 'true' : 'false');
   updateWhitelistFilter();
   renderAuthorizedClients();
+  saveHostConfigToBridge();
 }
 
 function addAuthorizedClient(pubkey, name) {
@@ -638,9 +737,37 @@ function connectBridge(force = false) {
               dom.hostBridgePill.className = 'badge badge--connected';
               dom.hostBridgePill.textContent = 'Active';
             }
+            if (dom.hostHttpsWarning) {
+              dom.hostHttpsWarning.style.display = 'none';
+            }
             document.getElementById('bridge-setup-details')?.removeAttribute('open');
             broadcastBridgeStatus(true);
             updateCaptureUI(isHostStreamLive());
+
+            // Synchronize persistent host config & headless daemon status
+            if (typeof msg.daemon_active === 'boolean') {
+              isDaemonActive = msg.daemon_active;
+              updateDaemonUI(isDaemonActive);
+            }
+            if (msg.config) {
+              applyHostConfigFromBridge(msg.config);
+            } else if (isDaemonWorker || !msg.has_config) {
+              saveHostConfigToBridge();
+            }
+
+            if (isDaemonWorker) {
+              console.log('[Host Daemon] Running as headless background worker');
+              try {
+                bridgeWs.send(JSON.stringify({ t: 'register_daemon' }));
+              } catch {}
+            }
+          } else if (msg.t === 'daemon_status') {
+            isDaemonActive = !!msg.daemon_active;
+            updateDaemonUI(isDaemonActive);
+          } else if (msg.t === 'host_config_updated') {
+            if (msg.config) {
+              applyHostConfigFromBridge(msg.config);
+            }
           }
           if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors' || msg.t === 'targets' || msg.t === 'target_selected')) {
             try { activeSession.sendInput(msg); } catch {}
@@ -1234,6 +1361,12 @@ async function initSignaling() {
       }
       if (activeSession && (activeSession.getState() === 'connected' || activeSession.isChannelOpen())) {
         console.log(`[Host] Ignoring unattended_offer (session: ${sessionId?.slice(0, 8)}) — session ${activeSessionId?.slice(0, 8)} is already active and connected (state: ${activeSession.getState()})`);
+        return;
+      }
+
+      // If this is an interactive UI browser tab and a background daemon is active, let the daemon handle connections
+      if (!isDaemonWorker && isDaemonActive) {
+        console.log(`[Host] Ignoring unattended_offer in interactive UI tab — headless daemon is actively handling connections`);
         return;
       }
 
