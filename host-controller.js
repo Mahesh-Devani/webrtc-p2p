@@ -135,6 +135,7 @@ function updateDaemonUI(active) {
 function applyHostConfigFromBridge(cfg) {
   if (!cfg || typeof cfg !== 'object') return;
   if (cfg.host_privkey && cfg.host_pubkey) {
+    const keyChanged = (hostIdentity?.publicKey !== cfg.host_pubkey);
     localStorage.setItem(STORAGE_HOST_PRIV, cfg.host_privkey);
     localStorage.setItem(STORAGE_HOST_PUB, cfg.host_pubkey);
     hostIdentity = { privateKey: cfg.host_privkey, publicKey: cfg.host_pubkey };
@@ -144,6 +145,9 @@ function applyHostConfigFromBridge(cfg) {
     }
     if (dom.hostPubkeyBox) {
       dom.hostPubkeyBox.textContent = cfg.host_pubkey;
+    }
+    if (keyChanged && NostrTransport.setIdentity) {
+      NostrTransport.setIdentity(cfg.host_privkey, cfg.host_pubkey);
     }
   }
   if (cfg.host_name) {

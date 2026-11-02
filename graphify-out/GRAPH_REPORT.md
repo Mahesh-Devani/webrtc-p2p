@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 55 files · ~139,019 words
+- 55 files · ~139,112 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `02a46428`
+- Built from commit: `89dfe06b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -32,7 +32,7 @@
 - .analyze
 - P2P Connect — System Design
 - validateEvent2
-- pathlib
+- run-regressions.py
 - TestDiagnosticSystem
 - assertNumber
 - test_token_codec.py
@@ -72,8 +72,8 @@
 - Category B: WebRTC Signaling, Transport & Lifecycle Stability
 - 🚀 1. Recommended Triage Prompts
 - appendChatBubble
-- 5. Future Roadmap & Proposed Improvements
-- Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
+- 🔐 P2P Connect
+- 🤖 AI Support Agent & Developer Triage System
 - initNostr
 - run.sh
 - QuietHTTPHandler
@@ -81,21 +81,21 @@
 - cdp_client.py
 - loadRemoteDevices
 - DiagnosticServer
-- 🔐 P2P Connect
-- P2P Connect — Native OS Remote Desktop Host Agent
-- 🤖 AI Support Agent & Developer Triage System
-- closeQrScanner
-- How to Download & Run the Host Agent
-- Windows (Task Scheduler & pythonw)
-- ColoredTextTestResult
+- Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
 - Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap
+- P2P Connect — Native OS Remote Desktop Host Agent
+- closeQrScanner
+- 5. Future Roadmap & Proposed Improvements
+- How to Download & Run the Host Agent
+- ColoredTextTestResult
+- Windows (Task Scheduler & pythonw)
 - DevHandler
 - 8. AI Agent Guardrails: Graphify & Invariant Verifier
 - classifyKind
 - ai-diagnostic-agent.py
 - 5. Client Authorization Whitelist & Anti-Flooding Shield
-- Operating System Permissions (First Run)
 - 5. Security Model
+- Operating System Permissions (First Run)
 
 ## God Nodes (most connected - your core abstractions)
 1. `toast()` - 40 edges
@@ -186,7 +186,7 @@ Nodes (44): 7. Local Development & Verification, Running the Application Locally
 Cohesion: 0.29
 Nodes (7): unpackEventFromToken(), validateEvent2(), validateEventKind(), validateEventMethodTag(), validateEventTimestamp(), validateEventUrlTag(), validateToken()
 
-### Community 16 - "pathlib"
+### Community 16 - "run-regressions.py"
 Cohesion: 0.29
 Nodes (4): get_modified_files(), main(), run_tests(), select_test_modules()
 
@@ -294,13 +294,13 @@ Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Op
 Cohesion: 0.16
 Nodes (21): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDate(), formatDiagnosticBubbleHtml() (+13 more)
 
-### Community 56 - "5. Future Roadmap & Proposed Improvements"
-Cohesion: 0.33
-Nodes (6): 2. In-Band WebRTC ICE Restart (Near-Term), 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term), 4. Native WebCodecs H.264 / AV1 Pipeline (Mid-Term), 5. Future Roadmap & Proposed Improvements, 5. Virtual Display Emulation for Headless Hosts (Mid-Term), 6. Native macOS Audio Loopback Streaming (Mid-Term)
+### Community 56 - "🔐 P2P Connect"
+Cohesion: 0.18
+Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Optional: Run as a Persistent Background Service (24/7 Access), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
 
-### Community 57 - "Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)"
-Cohesion: 0.25
-Nodes (7): 1. 64-bit Pointer Truncation on ARM64 Apple Silicon (INV-11 / Bridge Stability), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. The macOS `loginwindow` Idle Override & Blank Lock Screen, 4. The Erroneous Frame Size Filter in Native Frame Capture, 5. WindowServer IPC Saturation from Unthrottled Status Queries (INV-11), 6. macOS TCC Sandbox & LaunchAgent Execution (`Operation not permitted` / Exit Code 126), Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
+### Community 57 - "🤖 AI Support Agent & Developer Triage System"
+Cohesion: 0.18
+Nodes (11): 1. Dual-Tier Architecture, 2. Why Does the Support Agent Run When the Python Script Is Not Started?, 3. Developer + Antigravity Triage Workflow, 4. CLI Reference for `ai-diagnostic-agent.py`, 🤖 AI Support Agent & Developer Triage System, Offline Deep Analysis of a Specific Package, Start Ingestion Server (Port 9998), The Resolution Loop (+3 more)
 
 ### Community 58 - "initNostr"
 Cohesion: 0.19
@@ -314,33 +314,33 @@ Nodes (3): ensure_certificate(), get_local_ip_addresses(), main()
 Cohesion: 0.26
 Nodes (15): addOrUpdateRemoteDevice(), checkUrlRemoteHostParam(), connectToRemoteDevice(), deriveKey(), exportFleet(), exportKey(), importFleet(), importKey() (+7 more)
 
-### Community 72 - "🔐 P2P Connect"
-Cohesion: 0.18
-Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Optional: Run as a Persistent Background Service (24/7 Access), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
+### Community 72 - "Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)"
+Cohesion: 0.25
+Nodes (7): 1. 64-bit Pointer Truncation on ARM64 Apple Silicon (INV-11 / Bridge Stability), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. The macOS `loginwindow` Idle Override & Blank Lock Screen, 4. The Erroneous Frame Size Filter in Native Frame Capture, 5. WindowServer IPC Saturation from Unthrottled Status Queries (INV-11), 6. macOS TCC Sandbox & LaunchAgent Execution (`Operation not permitted` / Exit Code 126), Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
 
-### Community 75 - "P2P Connect — Native OS Remote Desktop Host Agent"
+### Community 75 - "Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap"
+Cohesion: 0.29
+Nodes (4): 1. Executive Summary & Evolution, 4. Architectural Invariants Enforced in Code, 6. Guide for AI Agents Working on This Codebase, Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap
+
+### Community 76 - "P2P Connect — Native OS Remote Desktop Host Agent"
 Cohesion: 0.29
 Nodes (4): Architecture Overview, P2P Connect — Native OS Remote Desktop Host Agent, Pairing & Unattended Remote Control, Security & Defense-in-Depth
-
-### Community 76 - "🤖 AI Support Agent & Developer Triage System"
-Cohesion: 0.18
-Nodes (11): 1. Dual-Tier Architecture, 2. Why Does the Support Agent Run When the Python Script Is Not Started?, 3. Developer + Antigravity Triage Workflow, 4. CLI Reference for `ai-diagnostic-agent.py`, 🤖 AI Support Agent & Developer Triage System, Offline Deep Analysis of a Specific Package, Start Ingestion Server (Port 9998), The Resolution Loop (+3 more)
 
 ### Community 77 - "closeQrScanner"
 Cohesion: 0.83
 Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
 
-### Community 78 - "How to Download & Run the Host Agent"
+### Community 78 - "5. Future Roadmap & Proposed Improvements"
+Cohesion: 0.33
+Nodes (6): 2. In-Band WebRTC ICE Restart (Near-Term), 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term), 4. Native WebCodecs H.264 / AV1 Pipeline (Mid-Term), 5. Future Roadmap & Proposed Improvements, 5. Virtual Display Emulation for Headless Hosts (Mid-Term), 6. Native macOS Audio Loopback Streaming (Mid-Term)
+
+### Community 79 - "How to Download & Run the Host Agent"
 Cohesion: 0.33
 Nodes (6): How to Download & Run the Host Agent, macOS & Linux:, Method 1: Download from Web UI (Fastest), Method 2: One-Liner Terminal Command (No Git Clone Needed), Method 3: From Cloned Repository or Unzipped Package (Automated Launcher), Windows (PowerShell):
 
-### Community 79 - "Windows (Task Scheduler & pythonw)"
+### Community 81 - "Windows (Task Scheduler & pythonw)"
 Cohesion: 0.40
 Nodes (5): 1. Install via Batch Script (Recommended), 2. Manual Setup via PowerShell / Command Prompt, 3. Manage & Check Status, 4. Uninstall, Windows (Task Scheduler & pythonw)
-
-### Community 81 - "Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap"
-Cohesion: 0.29
-Nodes (4): 1. Executive Summary & Evolution, 4. Architectural Invariants Enforced in Code, 6. Guide for AI Agents Working on This Codebase, Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap
 
 ### Community 83 - "8. AI Agent Guardrails: Graphify & Invariant Verifier"
 Cohesion: 0.33
@@ -358,13 +358,13 @@ Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(
 Cohesion: 0.40
 Nodes (5): 5. Client Authorization Whitelist & Anti-Flooding Shield, CLI Whitelist Commands, Dual-Layer Defense Architecture, Storage & Privacy, Visual Management via Support Desk UI
 
-### Community 87 - "Operating System Permissions (First Run)"
-Cohesion: 0.50
-Nodes (4): Linux, macOS, Operating System Permissions (First Run), Windows
-
-### Community 102 - "5. Security Model"
+### Community 87 - "5. Security Model"
 Cohesion: 0.50
 Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encrypted
+
+### Community 88 - "Operating System Permissions (First Run)"
+Cohesion: 0.50
+Nodes (4): Linux, macOS, Operating System Permissions (First Run), Windows
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`

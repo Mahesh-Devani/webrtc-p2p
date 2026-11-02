@@ -145,6 +145,26 @@ export const NostrTransport = (() => {
     }
 
     /**
+     * Update Nostr identity dynamically and re-subscribe across all relays if changed.
+     * @param {string} privateKey
+     * @param {string} publicKey
+     */
+    function setIdentity(privateKey, publicKey) {
+        if (!publicKey || !privateKey) return;
+        const changed = (_publicKey !== publicKey || _privateKey !== privateKey);
+        _privateKey = privateKey;
+        _publicKey = publicKey;
+        if (changed && _connected) {
+            for (const [url, relay] of _relays) {
+                if (relay.state === RelayState.CONNECTED) {
+                    _subscribeOnRelay(relay, url);
+                }
+            }
+            _logHandler('[Nostr] Identity updated and re-subscribed across relays', 'info');
+        }
+    }
+
+    /**
      * Connect to all configured relays.
      * @returns {Promise<void>}
      */
@@ -594,6 +614,7 @@ export const NostrTransport = (() => {
 
     return {
         init,
+        setIdentity,
         connect,
         ensureConnected,
         disconnect,
