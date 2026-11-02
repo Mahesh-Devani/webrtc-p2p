@@ -748,6 +748,10 @@ function connectBridge(force = false) {
             broadcastBridgeStatus(true);
             updateCaptureUI(isHostStreamLive());
 
+            if (Array.isArray(msg.screen) && msg.screen.length >= 2) {
+              lastReportedScreenSize = { w: Number(msg.screen[0]), h: Number(msg.screen[1]) };
+            }
+
             // Synchronize persistent host config & headless daemon status
             if (typeof msg.daemon_active === 'boolean') {
               isDaemonActive = msg.daemon_active;
@@ -818,6 +822,7 @@ let nativeCanvasTrack = null;
 let nativeStreamActive = false;
 let currentCaptureTarget = { type: 'display', id: 0 };
 let screenWakeLock = null;
+let lastReportedScreenSize = { w: 1920, h: 1080 };
 
 async function acquireScreenWakeLock() {
   if ('wakeLock' in navigator) {
@@ -898,11 +903,27 @@ setInterval(async () => {
 function initNativeCanvas() {
   if (!nativeCanvas) {
     nativeCanvas = document.createElement('canvas');
-    nativeCanvas.width = 1920;
-    nativeCanvas.height = 1080;
+    nativeCanvas.id = 'native-stream-canvas';
+    nativeCanvas.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:100px;height:100px;opacity:0.01;pointer-events:none;z-index:-9999;';
+    document.body.appendChild(nativeCanvas);
+
+    let targetW = lastReportedScreenSize.w || 1920;
+    let targetH = lastReportedScreenSize.h || 1080;
+    const MAX_STREAM_WIDTH = 3840;
+    const MAX_STREAM_HEIGHT = 2160;
+    if (targetW > MAX_STREAM_WIDTH || targetH > MAX_STREAM_HEIGHT) {
+      const scale = Math.min(MAX_STREAM_WIDTH / targetW, MAX_STREAM_HEIGHT / targetH);
+      targetW = Math.round(targetW * scale);
+      targetH = Math.round(targetH * scale);
+    }
+    if (targetW % 2 !== 0) targetW -= 1;
+    if (targetH % 2 !== 0) targetH -= 1;
+
+    nativeCanvas.width = targetW;
+    nativeCanvas.height = targetH;
     nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
     nativeCanvasCtx.fillStyle = '#000000';
-    nativeCanvasCtx.fillRect(0, 0, 1920, 1080);
+    nativeCanvasCtx.fillRect(0, 0, targetW, targetH);
   }
   if (!nativeCanvasStream) {
     nativeCanvasStream = nativeCanvas.captureStream(30);

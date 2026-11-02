@@ -2446,6 +2446,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
           dom.remoteVideo.srcObject = stream;
+          dom.remoteVideo.muted = true;
           applySavedRemoteAudioSettings();
           const playPromise = dom.remoteVideo.play();
           if (playPromise !== undefined) {

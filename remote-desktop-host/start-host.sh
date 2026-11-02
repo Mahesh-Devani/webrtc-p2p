@@ -97,8 +97,10 @@ if [ "$IS_DAEMON" -eq 1 ]; then
     if [ -n "$CHROME_BIN" ]; then
         "$CHROME_BIN" \
           --headless=new \
-          --disable-gpu \
           --user-data-dir="$HOST_PROFILE" \
+          --disable-background-timer-throttling \
+          --disable-renderer-backgrounding \
+          --disable-backgrounding-occluded-windows \
           --allow-insecure-localhost \
           --use-fake-ui-for-media-stream \
           --autoplay-policy=no-user-gesture-required \
@@ -140,8 +142,10 @@ if [ "$IS_DAEMON" -eq 1 ]; then
             echo "[!] Headless Host worker crashed! Reviving..."
             "$CHROME_BIN" \
               --headless=new \
-              --disable-gpu \
               --user-data-dir="$HOST_PROFILE" \
+              --disable-background-timer-throttling \
+              --disable-renderer-backgrounding \
+              --disable-backgrounding-occluded-windows \
               --allow-insecure-localhost \
               --use-fake-ui-for-media-stream \
               --autoplay-policy=no-user-gesture-required \
