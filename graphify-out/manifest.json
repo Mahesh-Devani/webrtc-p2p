@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793462805.8929102,
-    "seen": 1793462847.576319,
-    "ast_hash": "e4fd953d9e8ec38a1bbbf32d153a6329",
+    "mtime": 1793643487.7845871,
+    "seen": 1793643908.4526908,
+    "ast_hash": "fecbd3bf0914066c73001fd9aa7ed0a3",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793462756.9622147,
-    "seen": 1793462847.576324,
-    "ast_hash": "eb50f5860cc750a805cb388e0eef79fe",
+    "mtime": 1793643305.9821029,
+    "seen": 1793643908.452706,
+    "ast_hash": "66706d82017086d5b03dbb72f2cf4958",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,15 +114,15 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793459716.573738,
-    "seen": 1793459782.488971,
-    "ast_hash": "1a86ffca6f6fdcc7204077a11b05c2a9",
+    "mtime": 1793643829.7503507,
+    "seen": 1793643908.452754,
+    "ast_hash": "8e20271e671e4e8d65cd555958ac3d45",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1792391785.87691,
-    "seen": 1792392149.378054,
-    "ast_hash": "dea157437e60e16e562536ed6714d168",
+    "mtime": 1793643540.5832129,
+    "seen": 1793643908.452756,
+    "ast_hash": "a01a6d51593564a5bb71fcdb86acaaf1",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1792955714.9444752,
-    "seen": 1792955762.9824672,
-    "ast_hash": "2082bc88c8ae34f4fde4a9a7fd75a4ec",
+    "mtime": 1793643319.8905432,
+    "seen": 1793643908.452777,
+    "ast_hash": "899ed1f7dd561c79cee8d0a5b97ed316",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793100654.2664084,
-    "seen": 1793100883.259947,
-    "ast_hash": "939f713dcdbc8e10a8ee2c8c0727276d",
+    "mtime": 1793643550.7044644,
+    "seen": 1793643908.452779,
+    "ast_hash": "7104483ead7f3b9b77035050af1d278b",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "docs/remote-desktop-knowledge-base.md": {
-    "mtime": 1793542156.7843633,
-    "seen": 1793542237.7573912,
-    "ast_hash": "99897f237870e6ee457bb74be889769d",
+    "mtime": 1793643885.2730093,
+    "seen": 1793643908.4527721,
+    "ast_hash": "2c8032396ff2fb0c0d990036bb13fdb6",
     "semantic_hash": ""
   }
 }

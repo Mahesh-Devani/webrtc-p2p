@@ -154,6 +154,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     rdBtnSoftKeysToggle: $('#rd-btn-soft-keys-toggle'),
     rdSoftKeysBar: $('#rd-soft-keys-bar'),
     rdSoftBtnKeyboard: $('#rd-soft-btn-keyboard'),
+    rdSoftBtnScroll: $('#rd-soft-btn-scroll'),
     rdHiddenInput: $('#rd-hidden-input'),
     rdTextBar: $('#rd-text-bar'),
     rdTextInput: $('#rd-text-input'),
@@ -3118,6 +3119,9 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
   function showRdReconnectBanner() {
     if (!dom.callOverlay?.classList.contains('call-overlay--rd')) return;
+    if (session && typeof session.restartIce === 'function') {
+      session.restartIce().catch(() => {});
+    }
     if (dom.rdReconnectBanner) {
       show(dom.rdReconnectBanner);
       rdReconnectCountdown = 4;
@@ -3507,6 +3511,19 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       toggleRdTextBar();
     });
 
+    dom.rdSoftBtnScroll?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      rdOneFingerScrollMode = !rdOneFingerScrollMode;
+      if (dom.rdSoftBtnScroll) {
+        dom.rdSoftBtnScroll.classList.toggle('active', rdOneFingerScrollMode);
+      }
+      if (rdOneFingerScrollMode) {
+        toast('1-Finger Scroll active — swipe up/down to scroll page', 'info');
+      } else {
+        toast('Scroll mode off — normal touch active');
+      }
+    });
+
     if (dom.rdHiddenInput) {
       dom.rdHiddenInput.addEventListener('keydown', (e) => {
         if (rdMode !== 'control') return;
@@ -3806,6 +3823,12 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     let lastPinchMidY = null;
     let pinchMovedSignificantly = false;
 
+    let lastTwoFingerX = 0;
+    let lastPinchMidX = null;
+    let rdOneFingerScrollMode = false;
+    let lastScrollTouchX = 0;
+    let lastScrollTouchY = 0;
+
     v.addEventListener('touchstart', (e) => {
       if (rdPanToolActive && e.touches.length === 1) {
         touchStartTime = Date.now();
@@ -3823,6 +3846,17 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       }
       if (rdMode === 'view') return;
       e.preventDefault(); // Prevent default browser touch gestures (double-tap-zoom, delayed clicks)
+
+      // Dedicated 1-Finger Scroll Mode
+      if (rdOneFingerScrollMode && e.touches.length === 1) {
+        touchStartTime = Date.now();
+        lastScrollTouchX = e.touches[0].clientX;
+        lastScrollTouchY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchMoved = false;
+        return;
+      }
 
       if (rdTouchMode === 'trackpad') {
         touchStartTime = Date.now();
@@ -3843,6 +3877,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           trackpadTwoFinger = true;
           twoFingerStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
           lastTwoFingerY = twoFingerStartY;
+          lastTwoFingerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
 
           // Initialize pinch-to-zoom and pan variables for Trackpad mode
           isPinching = true;
@@ -3856,6 +3891,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           initialPanX = rdPanX;
           initialPanY = rdPanY;
           lastPinchMidY = initialPinchMidY;
+        lastPinchMidX = initialPinchMidX;
+          lastPinchMidX = initialPinchMidX;
         }
         return;
       }
@@ -3917,6 +3954,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         initialPanX = rdPanX;
         initialPanY = rdPanY;
         lastPinchMidY = initialPinchMidY;
+        lastPinchMidX = initialPinchMidX;
       }
     }, { passive: false });
 
@@ -3936,6 +3974,28 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       }
       if (rdMode === 'view') return;
       e.preventDefault(); // Prevent page bounce/zoom while interacting
+
+      // Dedicated 1-Finger Page Scroll Mode
+      if (rdOneFingerScrollMode && e.touches.length === 1) {
+        const t0 = e.touches[0];
+        const dist = Math.hypot(t0.clientX - touchStartX, t0.clientY - touchStartY);
+        if (dist > 4) touchMoved = true;
+        const deltaY = (lastScrollTouchY - t0.clientY) * 2.5;
+        const deltaX = (lastScrollTouchX - t0.clientX) * 2.5;
+        lastScrollTouchY = t0.clientY;
+        lastScrollTouchX = t0.clientX;
+        if (Math.abs(deltaY) > 0.5 || Math.abs(deltaX) > 0.5) {
+          const coords = getNormalizedVideoCoordinates(t0, v);
+          sendRdInput({
+            t: 'wheel',
+            dy: deltaY,
+            dx: deltaX,
+            x: coords ? coords.x : virtualCursor.x,
+            y: coords ? coords.y : virtualCursor.y
+          });
+        }
+        return;
+      }
 
       if (rdTouchMode === 'trackpad') {
         if (e.touches.length === 1 && !trackpadTwoFinger) {
@@ -3978,14 +4038,14 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
 
           const distanceDiff = Math.abs(currentDistance - initialPinchDistance);
-          if (distanceDiff > 12) pinchMovedSignificantly = true;
+          if (distanceDiff > 16) pinchMovedSignificantly = true;
 
           if (initialPinchDistance > 10) {
             const scaleFactor = currentDistance / initialPinchDistance;
             let newScale = Math.min(5.0, Math.max(1.0, initialPinchScale * scaleFactor));
 
-            // If zoomed in (or currently zooming), allow two-finger pan and pinch-to-zoom in Trackpad mode
-            if (newScale > 1.05 || initialPinchScale > 1.05) {
+            // Only pinch-to-zoom if fingers moved apart or together significantly
+            if (pinchMovedSignificantly && Math.abs(scaleFactor - 1.0) > 0.08) {
               touchMoved = true;
               const panDeltaX = currentMidX - initialPinchMidX;
               const panDeltaY = currentMidY - initialPinchMidY;
@@ -3995,15 +4055,25 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
               clampPan();
               applyRdZoomTransform(false);
             } else {
-              // Not zoomed in -> Two-finger vertical scroll
-              if (Math.abs(currentMidY - twoFingerStartY) > 5) touchMoved = true;
+              // Two-finger scroll: fingers moving together in parallel!
+              if (Math.abs(currentMidY - twoFingerStartY) > 3) touchMoved = true;
               const scrollDy = (lastTwoFingerY - currentMidY) * 2.5;
-              if (Math.abs(scrollDy) > 2 && rdMode === 'control') {
-                sendRdInput({ t: 'wheel', dy: scrollDy });
+              const scrollDx = (lastTwoFingerX - currentMidX) * 2.5;
+              if ((Math.abs(scrollDy) > 0.8 || Math.abs(scrollDx) > 0.8) && rdMode === 'control') {
+                const midCoords = getNormalizedVideoCoordinates({ clientX: currentMidX, clientY: currentMidY }, v);
+                sendRdInput({
+                  t: 'wheel',
+                  dy: scrollDy,
+                  dx: scrollDx,
+                  x: midCoords ? midCoords.x : virtualCursor.x,
+                  y: midCoords ? midCoords.y : virtualCursor.y
+                });
               }
             }
             lastTwoFingerY = currentMidY;
+            lastTwoFingerX = currentMidX;
             lastPinchMidY = currentMidY;
+            lastPinchMidX = currentMidX;
           }
         }
         return;
@@ -4065,8 +4135,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           const scaleFactor = currentDistance / initialPinchDistance;
           let newScale = Math.min(5.0, Math.max(1.0, initialPinchScale * scaleFactor));
 
-          // If zoomed in, allow panning with two fingers
-          if (newScale > 1.05 || initialPinchScale > 1.05) {
+          // Only zoom if pinch distance changed significantly
+          if (pinchMovedSignificantly && Math.abs(scaleFactor - 1.0) > 0.08) {
             const panDeltaX = currentMidX - initialPinchMidX;
             const panDeltaY = currentMidY - initialPinchMidY;
             rdPanX = initialPanX + panDeltaX;
@@ -4075,15 +4145,24 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
             clampPan();
             applyRdZoomTransform(false);
           } else {
-            // Not zoomed in and distance not changing much -> Two-finger vertical scroll
-            if (!pinchMovedSignificantly && lastPinchMidY !== null) {
-              const scrollDy = (lastPinchMidY - currentMidY) * 2;
-              if (Math.abs(scrollDy) > 2) {
-                sendRdInput({ t: 'wheel', dy: scrollDy });
+            // Not zooming -> Two-finger vertical and horizontal scroll
+            if (lastPinchMidY !== null && lastPinchMidX !== null) {
+              const scrollDy = (lastPinchMidY - currentMidY) * 2.5;
+              const scrollDx = (lastPinchMidX - currentMidX) * 2.5;
+              if (Math.abs(scrollDy) > 0.8 || Math.abs(scrollDx) > 0.8) {
+                const midCoords = getNormalizedVideoCoordinates({ clientX: currentMidX, clientY: currentMidY }, v);
+                sendRdInput({
+                  t: 'wheel',
+                  dy: scrollDy,
+                  dx: scrollDx,
+                  x: midCoords ? midCoords.x : virtualCursor.x,
+                  y: midCoords ? midCoords.y : virtualCursor.y
+                });
               }
             }
           }
           lastPinchMidY = currentMidY;
+          lastPinchMidX = currentMidX;
         }
       }
     }, { passive: false });
@@ -4096,10 +4175,16 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       if (rdMode === 'view') return;
       e.preventDefault();
 
+      if (rdOneFingerScrollMode && e.touches.length === 0) {
+        touchMoved = false;
+        return;
+      }
+
       if (rdTouchMode === 'trackpad') {
         if (e.touches.length === 0) {
           isPinching = false;
           lastPinchMidY = null;
+          lastPinchMidX = null;
 
           // If zoom is very close to 1.0, snap back cleanly
           if (rdZoomScale < 1.08) {
@@ -4143,6 +4228,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           trackpadTwoFinger = false;
           isPinching = false;
           lastPinchMidY = null;
+          lastPinchMidX = null;
         }
         return;
       }
@@ -4151,6 +4237,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       if (e.touches.length === 0) {
         isPinching = false;
         lastPinchMidY = null;
+        lastPinchMidX = null;
 
         // If zoom is very close to 1.0, snap back cleanly
         if (rdZoomScale < 1.08) {
@@ -4351,6 +4438,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdZoomMenu);
     setRdPanTool(false);
     unlatchAllModifiers();
+    rdOneFingerScrollMode = false;
+    if (dom.rdSoftBtnScroll) dom.rdSoftBtnScroll.classList.remove('active');
     setRdMode('view');
     hide(dom.rdToolbar);
     dom.rdToolbar?.classList.remove('rd-toolbar--collapsed');

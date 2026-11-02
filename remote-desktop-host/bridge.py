@@ -33,6 +33,7 @@ import ssl
 import ctypes
 import ctypes.util
 import subprocess
+import zlib
 
 # ── 1. Native OS Input Injection Engine (Zero-Dependency) ────────────────────
 SCREEN_WIDTH = 1920
@@ -1179,11 +1180,23 @@ async def handle_client(reader, writer):
         if _global_frame_capturer.is_screen_locked():
             _global_wake_manager.wake(session_token)
 
+        _last_activity_time = time.monotonic()
+        _last_frame_crc = None
+        _last_frame_send_time = 0.0
+        _accumulated_scroll_y = 0.0
+        _accumulated_scroll_x = 0.0
+
         async def stream_frames_loop():
             nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
-            target_delay = 1.0 / max(1, min(60, capture_fps))
+            nonlocal _last_activity_time, _last_frame_crc, _last_frame_send_time
+            active_delay = 1.0 / max(1, min(60, capture_fps))
+            idle_delay = 0.5  # Check twice a second when screen is idle and static
             while capture_active:
                 t0 = time.time()
+                now_mono = time.monotonic()
+                is_idle = (now_mono - _last_activity_time) > 2.0
+                is_dirty = True
+
                 try:
                     is_locked = _global_frame_capturer.is_screen_locked(max_age=1.5)
                     # While macOS is locked, ALWAYS capture physical display so login/lock screen is visible
@@ -1195,15 +1208,26 @@ async def handle_client(reader, writer):
                         t_code = 2
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
-                        header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
-                        writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
-                        await writer.drain()
+                        frame_crc = zlib.crc32(jpeg_bytes)
+                        is_dirty = (frame_crc != _last_frame_crc)
+                        if is_dirty:
+                            _last_activity_time = now_mono
+                            _last_frame_crc = frame_crc
+
+                        # Send if frame is dirty, or user recently interacted, or 1s elapsed since last frame
+                        should_send = is_dirty or (now_mono - _last_activity_time < 2.0) or (now_mono - _last_frame_send_time >= 1.0)
+                        if should_send:
+                            header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
+                            writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
+                            await writer.drain()
+                            _last_frame_send_time = now_mono
                 except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError):
                     break
                 except Exception:
                     pass
 
                 elapsed = time.time() - t0
+                target_delay = idle_delay if (is_idle and not is_dirty) else active_delay
                 sleep_time = max(0.005, target_delay - elapsed)
                 await asyncio.sleep(sleep_time)
 
@@ -1259,6 +1283,7 @@ async def handle_client(reader, writer):
             evt_type = data.get('t') or data.get('action')
 
             if evt_type in ('mouse_move', 'mouse_down', 'mouse_up', 'mouse_click', 'wheel', 'key_down', 'key_up', 'special_key', 'type_text'):
+                _last_activity_time = time.monotonic()
                 _global_wake_manager.tickle(session_token)
 
             if evt_type == 'mouse_move':
@@ -1310,10 +1335,18 @@ async def handle_client(reader, writer):
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
                     execute_mouse_move(target_x, target_y)
-                dy = data.get('dy', 0)
-                scroll_units = -int(dy / 20) if dy != 0 else 0
-                if scroll_units != 0:
-                    native_scroll(scroll_units)
+                dy = float(data.get('dy', 0))
+                dx = float(data.get('dx', 0))
+                _accumulated_scroll_y += dy
+                _accumulated_scroll_x += dx
+
+                # Smooth fractional wheel accumulator (prevents small mobile touchmoves from truncating to 0)
+                SCROLL_THRESHOLD = 8.0
+                if abs(_accumulated_scroll_y) >= SCROLL_THRESHOLD:
+                    units_y = -int(_accumulated_scroll_y / SCROLL_THRESHOLD)
+                    _accumulated_scroll_y += units_y * SCROLL_THRESHOLD
+                    if units_y != 0:
+                        native_scroll(units_y)
 
             elif evt_type == 'key_down':
                 raw_key = data.get('key', '')
@@ -1423,6 +1456,26 @@ async def handle_client(reader, writer):
             elif evt_type == 'ping':
                 writer.write(make_ws_frame(json.dumps({'t': 'pong'})))
                 await writer.drain()
+
+            elif evt_type == 'lock_screen':
+                print("[Power] Locking host screen on remote request")
+                if PLATFORM == 'darwin':
+                    try:
+                        login_lib = ctypes.cdll.LoadLibrary('/System/Library/PrivateFrameworks/login.framework/Versions/Current/login')
+                        login_lib.SACLockScreenImmediate()
+                    except Exception:
+                        try: subprocess.run(['pmset', 'displaysleepnow'], check=False)
+                        except Exception: pass
+                elif PLATFORM == 'win32':
+                    try:
+                        ctypes.windll.user32.LockWorkStation()
+                    except Exception as err:
+                        print(f"[!] Win32 LockWorkStation error: {err}")
+                elif PLATFORM == 'linux':
+                    try: subprocess.run(['loginctl', 'lock-session'], check=False)
+                    except Exception:
+                        try: subprocess.run(['xdg-screensaver', 'lock'], check=False)
+                        except Exception: pass
 
     except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError):
         print(f"[-] Browser disconnected ({client_ip})")

@@ -21,6 +21,7 @@ const STORAGE_HOST_NAME = 'p2p-host-name';
 const STORAGE_HOST_PIN = 'p2p-host-pin';
 const STORAGE_HOST_WHITELIST = 'p2p-host-authorized-clients';
 const STORAGE_HOST_WHITELIST_ENABLED = 'p2p-host-whitelist-enabled';
+const STORAGE_HOST_AUTO_LOCK = 'p2p-host-auto-lock';
 const STORAGE_BRIDGE_TOKEN = 'p2p_bridge_token';
 
 // Password complexity rules: 8–24 chars, min 1 uppercase, min 1 lowercase, min 1 digit, min 1 special char
@@ -80,6 +81,7 @@ const dom = {
   hostStatusText: document.getElementById('host-status-text'),
   hostNameInput: document.getElementById('host-name-input'),
   hostPinInput: document.getElementById('host-pin-input'),
+  hostAutoLockChk: document.getElementById('host-auto-lock-chk'),
   pinStatusBadge: document.getElementById('pin-status-badge'),
   btnTogglePinVisibility: document.getElementById('btn-toggle-pin-visibility'),
   btnGeneratePin: document.getElementById('btn-generate-pin'),
@@ -242,6 +244,13 @@ async function initHostIdentity() {
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>` :
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
   });
+
+  if (dom.hostAutoLockChk) {
+    dom.hostAutoLockChk.checked = localStorage.getItem(STORAGE_HOST_AUTO_LOCK) === 'true';
+    dom.hostAutoLockChk.addEventListener('change', () => {
+      localStorage.setItem(STORAGE_HOST_AUTO_LOCK, dom.hostAutoLockChk.checked ? 'true' : 'false');
+    });
+  }
 
   renderPairingQR();
   updateCaptureUI(false);
@@ -1109,6 +1118,17 @@ async function ensureDesktopCapture() {
 }
 
 // ── 4. Unattended Signaling & Auto-Accept ───────────────────────────
+function maybeAutoLockHost() {
+  if (dom.hostAutoLockChk?.checked && bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    try {
+      bridgeWs.send(JSON.stringify({ t: 'lock_screen' }));
+      console.log('[Host Security] Auto-lock triggered on session disconnect');
+    } catch (e) {
+      console.warn('[Host Security] Auto-lock error:', e);
+    }
+  }
+}
+
 async function initSignaling() {
   updateWhitelistFilter();
 
@@ -1308,6 +1328,7 @@ async function initSignaling() {
               if (nativeStreamActive) {
                 stopNativeOnDemandCapture();
               }
+              maybeAutoLockHost();
               if (activeSession) {
                 try { activeSession.close({ stopTracks: false }); } catch {}
                 activeSession = null;
@@ -1416,6 +1437,7 @@ async function initSignaling() {
             if (nativeStreamActive) {
               stopNativeOnDemandCapture();
             }
+            maybeAutoLockHost();
             if (activeSession) {
               try { activeSession.close({ stopTracks: false }); } catch {}
               activeSession = null;
@@ -1499,6 +1521,7 @@ async function initSignaling() {
             if (nativeStreamActive) {
               stopNativeOnDemandCapture();
             }
+            maybeAutoLockHost();
             if (activeSession) {
               try { activeSession.close({ stopTracks: false }); } catch {}
               activeSession = null;

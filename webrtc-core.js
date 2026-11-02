@@ -1145,6 +1145,34 @@ export const PeerSession = (() => {
     /** @returns {RTCPeerConnection} raw peer connection (escape hatch) */
     function getRawPC() { return pc; }
 
+    /**
+     * Trigger an in-band ICE restart to seamlessly recover from network changes (e.g. Wi-Fi to cellular).
+     * @returns {Promise<boolean>}
+     */
+    async function restartIce() {
+      if (pc.signalingState === 'closed') return false;
+      log('Triggering ICE restart...');
+      if (typeof pc.restartIce === 'function') {
+        try { pc.restartIce(); } catch {}
+      }
+      if (dcSig && dcSig.readyState === 'open') {
+        try {
+          makingOffer = true;
+          const offer = await pc.createOffer({ iceRestart: true });
+          if (pc.signalingState !== 'stable') return false;
+          await pc.setLocalDescription(offer);
+          dcSig.send(JSON.stringify({ _sig: 'offer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }, iceRestart: true }));
+          log('Sent ICE restart offer via Signaling DataChannel');
+          return true;
+        } catch (e) {
+          log(`In-band ICE restart error: ${e.message}`, 'warn');
+        } finally {
+          makingOffer = false;
+        }
+      }
+      return false;
+    }
+
     return {
       createOffer,
       acceptOffer,
@@ -1162,6 +1190,7 @@ export const PeerSession = (() => {
       isChannelOpen,
       waitForOpen,
       getState,
+      restartIce,
       close,
       getRawPC,
       pc,
