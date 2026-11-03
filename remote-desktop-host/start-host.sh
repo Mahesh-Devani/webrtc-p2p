@@ -129,6 +129,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
           --disable-background-timer-throttling \
           --disable-renderer-backgrounding \
           --disable-backgrounding-occluded-windows \
+          --disable-features=WebRtcDtlsStunPiggybacking,PaintHolding \
           --allow-insecure-localhost \
           --use-fake-ui-for-media-stream \
           --autoplay-policy=no-user-gesture-required \
@@ -178,6 +179,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
               --disable-background-timer-throttling \
               --disable-renderer-backgrounding \
               --disable-backgrounding-occluded-windows \
+              --disable-features=WebRtcDtlsStunPiggybacking,PaintHolding \
               --allow-insecure-localhost \
               --use-fake-ui-for-media-stream \
               --autoplay-policy=no-user-gesture-required \

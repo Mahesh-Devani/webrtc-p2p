@@ -5693,6 +5693,19 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>
       `;
       attachDisplaysMenuListeners();
+
+      // Graceful fallback if target enumeration is delayed or bridge is capturing display 0 directly
+      setTimeout(() => {
+        if (dom.rdDisplaysMenu && !dom.rdDisplaysMenu.querySelector('[data-target]')) {
+          dom.rdDisplaysMenu.innerHTML = `
+            <div style="font-size:0.68rem;font-weight:700;color:var(--c-text-dim);padding:4px 8px;text-transform:uppercase;">Physical Displays</div>
+            <button class="rd-key-item" data-target="display" data-id="0">🖥️ Primary Display (Default)</button>
+            <div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
+            <button class="rd-key-item" data-action="reselect">🖥️ Reselect on Host</button>
+          `;
+          attachDisplaysMenuListeners();
+        }
+      }, 2000);
     }
     sendRdInput({ t: 'get_targets' });
   });

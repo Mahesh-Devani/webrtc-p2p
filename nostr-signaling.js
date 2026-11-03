@@ -128,9 +128,10 @@ export const NostrSignaling = (() => {
         let data = '';
         try {
             candidates = peerSession.getLocalCandidates();
+            const freshLocalDesc = (peerSession.pc && peerSession.pc.localDescription) ? peerSession.pc.localDescription : offer;
             // Compress SDP + candidates (+ optional extra data like pin / unattended)
             const payload = {
-                sdp: { type: offer.type, sdp: offer.sdp },
+                sdp: { type: freshLocalDesc.type, sdp: freshLocalDesc.sdp },
                 candidates: candidates.map(c => ({
                     candidate: c.candidate,
                     sdpMid: c.sdpMid,

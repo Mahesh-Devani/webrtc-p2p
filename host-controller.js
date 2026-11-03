@@ -1746,9 +1746,10 @@ async function initSignaling() {
         await new Promise(r => setTimeout(r, 1500));
         const localCandidates = peerSession.getLocalCandidates();
 
-        // Send answer
+        // Send answer with fresh local description (ensuring DTLS parameters and gathering state match)
+        const freshLocalDesc = (peerSession.pc && peerSession.pc.localDescription) ? peerSession.pc.localDescription : answer;
         const answerData = compressSignal({
-          sdp: { type: answer.type, sdp: answer.sdp },
+          sdp: { type: freshLocalDesc.type, sdp: freshLocalDesc.sdp },
           candidates: localCandidates.map(c => ({
             candidate: c.candidate,
             sdpMid: c.sdpMid,

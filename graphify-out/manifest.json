@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793683005.518582,
-    "seen": 1793683143.796562,
-    "ast_hash": "9dbeed5e5af45f393f0e8f9d82a3df55",
+    "mtime": 1793692242.971315,
+    "seen": 1793692409.573765,
+    "ast_hash": "c80ec0cb0f1733900d476f7bec188403",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -30,9 +30,9 @@
     "semantic_hash": ""
   },
   "nostr-signaling.js": {
-    "mtime": 1793688030.59671,
-    "seen": 1793688133.026658,
-    "ast_hash": "01e0ed6c1dbae87e902ea14f82469064",
+    "mtime": 1793692260.665673,
+    "seen": 1793692409.573767,
+    "ast_hash": "dc399f4f35d185153ee5dc675c9f9dfd",
     "semantic_hash": ""
   },
   "nostr-transport.js": {
@@ -90,9 +90,9 @@
     "semantic_hash": "77ab2ff645b70f470e7fc93f7b69706f"
   },
   "remote-desktop-host/start-host.sh": {
-    "mtime": 1793682961.2982059,
-    "seen": 1793683143.79657,
-    "ast_hash": "4a4553e5d5488a7089a09112a829209e",
+    "mtime": 1793692303.4239187,
+    "seen": 1793692409.573772,
+    "ast_hash": "35894e2fa0e07866b2ae25a4d12c22cf",
     "semantic_hash": ""
   },
   "remote-desktop-host/uninstall-service.sh": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793688064.2052073,
-    "seen": 1793688133.026677,
-    "ast_hash": "43a83278a145fb0b72c4a54777896b06",
+    "mtime": 1793692273.59702,
+    "seen": 1793692409.573785,
+    "ast_hash": "37357fcdcc7cd4dae053a9d399ca95e5",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793688091.3247235,
-    "seen": 1793688133.026685,
-    "ast_hash": "e28fe621a599b97f00e8c1d6edafe422",
+    "mtime": 1793692332.036637,
+    "seen": 1793692409.573791,
+    "ast_hash": "7ea7b62e42cf857546863648ab35b05f",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793688086.0191033,
-    "seen": 1793688133.026685,
-    "ast_hash": "a64a584fe86714d82d3d4b82c62c2c72",
+    "mtime": 1793692338.3148193,
+    "seen": 1793692409.573792,
+    "ast_hash": "7c0e533e913b9a14a44c14aa968886ce",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
