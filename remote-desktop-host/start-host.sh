@@ -123,8 +123,8 @@ if [ "$IS_BRIDGE_ONLY" -eq 1 ]; then
     trap cleanup SIGTERM SIGINT SIGHUP
 
     while true; do
-        if [ -f /tmp/p2p-bridge.pid ] && ! kill -0 "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null; then
-            echo "[!] Native bridge crashed! Reviving..."
+        if ! nc -z 127.0.0.1 9999 2>/dev/null; then
+            echo "[!] Native bridge not listening on 9999! Reviving..."
             python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
             echo $! > /tmp/p2p-bridge.pid
         fi
@@ -152,10 +152,11 @@ elif [ "$IS_DAEMON" -eq 1 ]; then
     if [ -n "$CHROME_BIN" ]; then
         cleanup_stale_chrome_lock
         "$CHROME_BIN" \
-          --headless=new \
-          --remote-debugging-port=9222 \
+          --app="$DAEMON_URL" \
+          --window-position=-30000,-30000 \
           --window-size=1920,1080 \
           --user-data-dir="$HOST_PROFILE" \
+          --remote-debugging-port=9222 \
           --disable-background-timer-throttling \
           --disable-renderer-backgrounding \
           --disable-backgrounding-occluded-windows \
@@ -167,12 +168,12 @@ elif [ "$IS_DAEMON" -eq 1 ]; then
           --v=1 \
           --no-first-run \
           --no-default-browser-check \
-          "$DAEMON_URL" > /tmp/p2p-headless.log 2>&1 &
+          > /tmp/p2p-daemon.log 2>&1 &
         CHROME_PID=$!
         echo $CHROME_PID > /tmp/p2p-chrome.pid
-        echo "✓ Silent Headless Host Worker active (PID $CHROME_PID)"
+        echo "✓ Silent Background Host Worker active (Refined Approach A, PID $CHROME_PID)"
     else
-        echo "[!] Warning: Chrome binary not found. Cannot launch headless host worker."
+        echo "[!] Warning: Chrome binary not found. Cannot launch host worker."
     fi
 
     cleanup() {
@@ -185,27 +186,30 @@ elif [ "$IS_DAEMON" -eq 1 ]; then
     trap cleanup SIGTERM SIGINT SIGHUP
 
     echo "=========================================================="
-    echo " ✅ P2P Connect Host 24/7 Supervisor Running"
-    echo "    - Mode:        Silent Headless (Zero Windows / Tabs)"
+    echo " ✅ P2P Connect Host 24/7 Supervisor Running (Refined Approach A)"
+    echo "    - Mode:        Silent App Mode (Offscreen Window, Dedicated Profile)"
     echo "    - Dashboard:   http://localhost:8080/host.html"
     echo "    - Input Port:  ws://127.0.0.1:9999"
+    echo "    - Log File:    /tmp/p2p-daemon.log"
     echo "=========================================================="
 
-    # Supervise loop: automatically revives bridge.py or Headless Chrome if either ever crashes
+    # Supervise loop: automatically revives bridge.py or Chrome Worker if either ever crashes
     while true; do
-        if [ -f /tmp/p2p-bridge.pid ] && ! kill -0 "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null; then
-            echo "[!] Native bridge crashed! Reviving..."
+        if ! nc -z 127.0.0.1 9999 2>/dev/null; then
+            echo "[!] Native bridge not listening on 9999! Reviving..."
             python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
             echo $! > /tmp/p2p-bridge.pid
         fi
 
         if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then
-            echo "[!] Headless Host worker crashed! Reviving..."
+            echo "[!] Background Host worker crashed! Reviving..."
             cleanup_stale_chrome_lock
             "$CHROME_BIN" \
-              --headless=new \
+              --app="$DAEMON_URL" \
+              --window-position=-30000,-30000 \
               --window-size=1920,1080 \
               --user-data-dir="$HOST_PROFILE" \
+              --remote-debugging-port=9222 \
               --disable-background-timer-throttling \
               --disable-renderer-backgrounding \
               --disable-backgrounding-occluded-windows \
@@ -217,7 +221,7 @@ elif [ "$IS_DAEMON" -eq 1 ]; then
               --v=1 \
               --no-first-run \
               --no-default-browser-check \
-              "$DAEMON_URL" >> /tmp/p2p-headless.log 2>&1 &
+              >> /tmp/p2p-daemon.log 2>&1 &
             CHROME_PID=$!
             echo $CHROME_PID > /tmp/p2p-chrome.pid
         fi
