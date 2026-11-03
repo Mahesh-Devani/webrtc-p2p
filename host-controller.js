@@ -1224,7 +1224,7 @@ function isHostStreamLive() {
     const tracks = hostStream.getVideoTracks();
     if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
   }
-  if ((hostMode !== 'interactive' || isDaemonWorker) && bridgeConnected && nativeStreamActive && nativeCanvasStream && nativeCanvasStream.active) {
+  if (bridgeConnected && nativeStreamActive && nativeCanvasStream && nativeCanvasStream.active) {
     const tracks = nativeCanvasStream.getVideoTracks();
     if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
   }
@@ -1530,12 +1530,10 @@ async function initSignaling() {
         return;
       }
 
-      // In Background/Headless mode, ensure native on-demand capture is active
+      // In Native Bridge mode, start native on-demand capture automatically if browser capture is not active
       const hasLiveHostStream = hostStream && hostStream.getVideoTracks().some(t => t.readyState === 'live');
-      if (!hasLiveHostStream && (hostMode !== 'interactive' || isDaemonWorker)) {
-        if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
-          ensureNativeOnDemandCapture();
-        }
+      if (!hasLiveHostStream && bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+        ensureNativeOnDemandCapture();
       }
 
       // Reject if host desktop capture is not active
