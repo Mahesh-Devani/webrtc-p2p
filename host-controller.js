@@ -1491,8 +1491,27 @@ async function initSignaling() {
               }, 200);
             }
           },
+          onInputChannelOpen: () => {
+            console.log('[Host] Input DataChannel opened, broadcasting control_granted and host_status');
+            peerSession.sendInput({
+              t: 'control_granted',
+              hostName: dom.hostNameInput?.value?.trim() || 'Remote Host',
+              hasVideo: isHostStreamLive(),
+              bridgeActive: bridgeConnected
+            });
+            peerSession.sendInput({
+              t: 'host_status',
+              bridgeActive: bridgeConnected,
+              hasVideo: isHostStreamLive(),
+              warning: !bridgeConnected ? 'Host OS Bridge is disconnected — input control is paused (view-only).' : ''
+            });
+            if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+              try { bridgeWs.send(JSON.stringify({ t: 'get_targets' })); } catch {}
+            }
+          },
           onInputEvent: (evt) => {
             if (evt.t === 'session_ended') {
+              if (activeSession !== peerSession) return;
               console.log('[Host] Remote controller finished session');
               dom.hostConnectedPeer.textContent = 'None';
               dom.hostStatusBadge.className = 'host-status-badge badge--connected';
@@ -1602,6 +1621,7 @@ async function initSignaling() {
             }
           },
           onCallEnded: () => {
+            if (activeSession !== peerSession) return;
             console.log('[Host] Remote controller ended call');
             dom.hostConnectedPeer.textContent = 'None';
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';
@@ -1686,6 +1706,7 @@ async function initSignaling() {
             dom.hostStatusText.textContent = 'Active Remote Session';
           },
           onChannelClose: () => {
+            if (activeSession !== peerSession) return;
             console.log('[Host] Controller disconnected');
             dom.hostConnectedPeer.textContent = 'None';
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';

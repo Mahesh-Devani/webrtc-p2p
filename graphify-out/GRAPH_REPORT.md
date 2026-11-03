@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 55 files · ~139,223 words
+- 55 files · ~139,559 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `83dd13ea`
+- Built from commit: `01b8c9ad`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

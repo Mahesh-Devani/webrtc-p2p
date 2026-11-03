@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793657540.8758311,
-    "seen": 1793657621.673695,
-    "ast_hash": "2d1eeca98a5e74878c10585640837f8c",
+    "mtime": 1793674684.5434618,
+    "seen": 1793674916.026057,
+    "ast_hash": "eb34f28a687519f2a857bd60e56ee39d",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793655168.0160968,
-    "seen": 1793655320.594827,
-    "ast_hash": "b2fd63339268bdb1b12bb357b95f54a1",
+    "mtime": 1793674696.9806824,
+    "seen": 1793674916.026062,
+    "ast_hash": "d397dc84166ac58cf61dc41c6b61f1eb",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -78,9 +78,9 @@
     "semantic_hash": "82c5e2a9e3f98bd640b81d99b709c634"
   },
   "remote-desktop-host/install-service.sh": {
-    "mtime": 1793654855.9640338,
-    "seen": 1793655320.5948281,
-    "ast_hash": "6b00b3b68a949a7092b9d19a539fc463",
+    "mtime": 1793674800.2078872,
+    "seen": 1793674916.026064,
+    "ast_hash": "dbd9cfee81cc26ff2ca0bb6920b67175",
     "semantic_hash": ""
   },
   "remote-desktop-host/package.json": {
@@ -90,9 +90,9 @@
     "semantic_hash": "77ab2ff645b70f470e7fc93f7b69706f"
   },
   "remote-desktop-host/start-host.sh": {
-    "mtime": 1793657562.4767637,
-    "seen": 1793657621.6737049,
-    "ast_hash": "0159ef38d63a3f87e3f3939d7aafd27a",
+    "mtime": 1793674850.2151144,
+    "seen": 1793674916.0260649,
+    "ast_hash": "9f912ea8f17a509ab1102121064e12a1",
     "semantic_hash": ""
   },
   "remote-desktop-host/uninstall-service.sh": {
@@ -114,15 +114,15 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793657492.396704,
-    "seen": 1793657621.673718,
-    "ast_hash": "fc84970054013f6b5eaa14b4772812d6",
+    "mtime": 1793674784.0124998,
+    "seen": 1793674916.026077,
+    "ast_hash": "741ca6068bd5244ea477a544e3df6f19",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1793643540.5832129,
-    "seen": 1793643908.452756,
-    "ast_hash": "a01a6d51593564a5bb71fcdb86acaaf1",
+    "mtime": 1793674646.2215865,
+    "seen": 1793674916.026077,
+    "ast_hash": "ea5a963f5b101646dacc5772734140c8",
     "semantic_hash": ""
   },
   "AGENTS.md": {

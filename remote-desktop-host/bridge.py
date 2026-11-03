@@ -926,6 +926,8 @@ class NativeFrameCapturer:
         if PLATFORM == 'darwin':
             d_id = int(display_id) if (display_id and int(display_id) > 0) else self.cg.CGMainDisplayID()
             img = self.cg.CGDisplayCreateImage(d_id)
+            if not img and d_id != self.cg.CGMainDisplayID():
+                img = self.cg.CGDisplayCreateImage(self.cg.CGMainDisplayID())
             return self._compress_cg_image(img)
         return None, 0, 0
 

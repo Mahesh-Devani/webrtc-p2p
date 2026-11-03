@@ -11,6 +11,20 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+# Auto-sync latest web assets and bridge if running from persistent install with access to project root
+if [ -f "$DIR/.project_root" ]; then
+    P_ROOT="$(cat "$DIR/.project_root")"
+    if [ -d "$P_ROOT" ] && [ -f "$P_ROOT/host.html" ]; then
+        cp "$P_ROOT/host.html" "$DIR/web/" 2>/dev/null || true
+        cp "$P_ROOT"/*.js "$DIR/web/" 2>/dev/null || true
+        cp "$P_ROOT"/*.css "$DIR/web/" 2>/dev/null || true
+        if [ -f "$P_ROOT/remote-desktop-host/bridge.py" ]; then
+            cp "$P_ROOT/remote-desktop-host/bridge.py" "$DIR/bridge.py" 2>/dev/null || true
+        fi
+    fi
+fi
+
 if [ -d "$DIR/web" ]; then
     WEB_DIR="$DIR/web"
 elif [ -f "$DIR/../host.html" ]; then
@@ -97,6 +111,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
     if [ -n "$CHROME_BIN" ]; then
         "$CHROME_BIN" \
           --headless=new \
+          --window-size=1920,1080 \
           --user-data-dir="$HOST_PROFILE" \
           --disable-background-timer-throttling \
           --disable-renderer-backgrounding \
@@ -142,6 +157,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
             echo "[!] Headless Host worker crashed! Reviving..."
             "$CHROME_BIN" \
               --headless=new \
+              --window-size=1920,1080 \
               --user-data-dir="$HOST_PROFILE" \
               --disable-background-timer-throttling \
               --disable-renderer-backgrounding \

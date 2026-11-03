@@ -67,6 +67,8 @@ export const PeerSession = (() => {
     let dcFiles = null;
     /** @type {RTCDataChannel|null} */
     let dcInput = null;
+    /** @type {Array<object>} queued input messages sent before p2p-input is open */
+    let pendingInputQueue = [];
 
     /** @type {MediaStream|null} */
     let localStream = null;
@@ -374,6 +376,10 @@ export const PeerSession = (() => {
         dcInput = channel;
         dcInput.onopen = () => {
           log('Input DataChannel open (Remote Desktop enabled)', 'success');
+          while (pendingInputQueue.length > 0) {
+            const item = pendingInputQueue.shift();
+            try { dcInput.send(JSON.stringify(item)); } catch {}
+          }
           if (cfg.onInputChannelOpen) cfg.onInputChannelOpen();
         };
         dcInput.onclose = () => {
@@ -1080,7 +1086,12 @@ export const PeerSession = (() => {
      * @returns {boolean} true if sent
      */
     function sendInput(evt) {
-      if (!dcInput || dcInput.readyState !== 'open') return false;
+      if (!dcInput || dcInput.readyState !== 'open') {
+        if (evt && typeof evt === 'object' && (evt.t === 'control_granted' || evt.t === 'host_status' || evt.t === 'quality_ack' || evt.t === 'targets' || evt.t === 'monitors' || evt.t === 'select_target')) {
+          pendingInputQueue.push(evt);
+        }
+        return false;
+      }
       try {
         dcInput.send(JSON.stringify(evt));
         return true;

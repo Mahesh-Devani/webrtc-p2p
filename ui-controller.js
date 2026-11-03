@@ -2830,8 +2830,15 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
 
     const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
-    const clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
-    const clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
+    let clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
+    let clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
+
+    if (rdZoomScale > 1.02) {
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      clientX = centerX + (clientX - centerX - rdPanX) / rdZoomScale;
+      clientY = centerY + (clientY - centerY - rdPanY) / rdZoomScale;
+    }
 
     // Discard only if event occurred far outside the video container
     if (clientX < rect.left - 40 || clientX > rect.right + 40 || clientY < rect.top - 40 || clientY > rect.bottom + 40) {
@@ -3417,8 +3424,15 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       return;
     }
 
-    const pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
-    const pixelY = rect.top + offsetY + (virtualCursor.y * actualHeight);
+    let pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
+    let pixelY = rect.top + offsetY + (virtualCursor.y * actualHeight);
+
+    if (rdZoomScale > 1.02) {
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      pixelX = centerX + (pixelX - centerX) * rdZoomScale + rdPanX;
+      pixelY = centerY + (pixelY - centerY) * rdZoomScale + rdPanY;
+    }
 
     show(dom.rdVirtualCursor);
     dom.rdVirtualCursor.style.left = `${pixelX}px`;
@@ -4010,10 +4024,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           lastTrackpadY = t0.clientY;
 
           const { actualWidth, actualHeight } = getVideoActualDimensions(v);
-          const sens = 1.3;
+          const sens = 1.4;
+          const zoomDiv = Math.max(1.0, rdZoomScale);
 
-          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / actualWidth));
-          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / actualHeight));
+          virtualCursor.x = Math.max(0, Math.min(1, virtualCursor.x + (dx * sens) / (actualWidth * zoomDiv)));
+          virtualCursor.y = Math.max(0, Math.min(1, virtualCursor.y + (dy * sens) / (actualHeight * zoomDiv)));
           renderVirtualCursor();
 
           // Handle double-tap drag on trackpad

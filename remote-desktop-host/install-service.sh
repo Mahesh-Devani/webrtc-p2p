@@ -34,6 +34,7 @@ fi
 echo "▶ Deploying host daemon to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/web"
+echo "$PROJECT_ROOT" > "$INSTALL_DIR/.project_root"
 
 cp "$DIR/bridge.py" "$INSTALL_DIR/bridge.py"
 cp "$DIR/start-host.sh" "$INSTALL_DIR/start-host.sh"
