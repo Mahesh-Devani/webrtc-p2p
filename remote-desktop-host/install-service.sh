@@ -58,7 +58,21 @@ fi
 chmod +x "$INSTALL_DIR/start-host.sh" "$INSTALL_DIR/bridge.py"
 echo "✓ Host daemon deployed to $INSTALL_DIR"
 
-# Generate LaunchAgent plist file pointing to $INSTALL_DIR/start-host.sh --daemon
+IS_BRIDGE_ONLY=0
+for arg in "$@"; do
+    if [ "$arg" = "--bridge-only" ] || [ "$arg" = "-b" ]; then
+        IS_BRIDGE_ONLY=1
+    fi
+done
+
+SERVICE_ARG="--daemon"
+SERVICE_DESC="Silent Headless (Zero Windows / Tabs)"
+if [ "$IS_BRIDGE_ONLY" -eq 1 ]; then
+    SERVICE_ARG="--bridge-only"
+    SERVICE_DESC="Bridge-Only (Interactive Browser Tabs)"
+fi
+
+# Generate LaunchAgent plist file pointing to $INSTALL_DIR/start-host.sh
 cat <<EOF > "$TARGET_PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -70,7 +84,7 @@ cat <<EOF > "$TARGET_PLIST"
     <array>
         <string>/bin/bash</string>
         <string>$INSTALL_DIR/start-host.sh</string>
-        <string>--daemon</string>
+        <string>$SERVICE_ARG</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$INSTALL_DIR</string>
@@ -96,8 +110,8 @@ echo "✓ Service loaded into macOS launchd!"
 
 echo ""
 echo "=========================================================="
-echo " ✅ Background Service Installed & Running (Approach A)!"
-echo "    - Mode:        Silent Headless (Zero Windows / Tabs)"
+echo " ✅ Background Service Installed & Running!"
+echo "    - Mode:        $SERVICE_DESC"
 echo "    - Auto-starts: YES (on user login & crash recovery)"
 echo "    - Web App:     http://localhost:8080/host.html"
 echo "    - Log files:   /tmp/p2pconnect-host.log"

@@ -526,6 +526,7 @@ HOST_CONFIG_DIR = os.path.expanduser("~/.p2p-connect-host")
 HOST_CONFIG_FILE = os.path.join(HOST_CONFIG_DIR, "host-config.json")
 _cached_host_config = None
 _active_daemon_writer = None
+_primary_interactive_writer = None
 _connected_control_clients = set()
 
 def load_host_config():
@@ -1147,7 +1148,7 @@ async def read_ws_frame(reader):
     return opcode, payload
 
 async def handle_client(reader, writer):
-    global latest_mouse_coord, latest_mouse_updated, current_x, current_y, _active_daemon_writer
+    global latest_mouse_coord, latest_mouse_updated, current_x, current_y, _active_daemon_writer, _primary_interactive_writer
     peer = writer.get_extra_info('peername')
     client_ip = peer[0] if peer else 'unknown'
 
@@ -1535,6 +1536,25 @@ async def handle_client(reader, writer):
                         try: client.write(status_msg)
                         except Exception: pass
 
+            elif evt_type == 'claim_host_focus':
+                _primary_interactive_writer = writer
+                print(f"[+] Interactive browser tab claimed primary hosting focus ({client_ip})")
+                if _active_daemon_writer and _active_daemon_writer != writer:
+                    try: _active_daemon_writer.write(make_ws_frame(json.dumps({'t': 'daemon_standby'})))
+                    except Exception: pass
+                writer.write(make_ws_frame(json.dumps({'t': 'host_focus_claimed', 'primary': True})))
+                await writer.drain()
+
+            elif evt_type == 'release_host_focus':
+                if _primary_interactive_writer == writer:
+                    _primary_interactive_writer = None
+                print(f"[-] Interactive browser tab released primary hosting focus ({client_ip})")
+                if _active_daemon_writer:
+                    try: _active_daemon_writer.write(make_ws_frame(json.dumps({'t': 'daemon_resume'})))
+                    except Exception: pass
+                writer.write(make_ws_frame(json.dumps({'t': 'host_focus_released'})))
+                await writer.drain()
+
             elif evt_type == 'save_host_config':
                 new_cfg = data.get('config', {})
                 if new_cfg and isinstance(new_cfg, dict):
@@ -1552,6 +1572,12 @@ async def handle_client(reader, writer):
     finally:
         if writer in _connected_control_clients:
             _connected_control_clients.remove(writer)
+        if _primary_interactive_writer == writer:
+            _primary_interactive_writer = None
+            print(f"[-] Interactive browser tab disconnected, released primary focus ({client_ip})")
+            if _active_daemon_writer:
+                try: _active_daemon_writer.write(make_ws_frame(json.dumps({'t': 'daemon_resume'})))
+                except Exception: pass
         if _active_daemon_writer == writer:
             _active_daemon_writer = None
             print("[-] Headless Host Daemon unregistered from bridge")

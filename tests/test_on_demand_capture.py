@@ -237,6 +237,28 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('def is_screen_locked(self, max_age=1.0):', self.bridge_content)
         self.assertIn('self.jpeg_opts', self.bridge_content)
 
+    def test_interactive_fallback_mode_and_focus_coordination(self):
+        """Host and Bridge must support interactive tab fallback mode and focus arbitration."""
+        # 1. UI controls and banners in host.html
+        host_html = (PROJECT_ROOT / 'host.html').read_text(encoding='utf-8')
+        self.assertIn('btn-mode-interactive', host_html)
+        self.assertIn('btn-mode-headless', host_html)
+        self.assertIn('host-interactive-banner', host_html)
+
+        # 2. Host mode management and focus signaling in host-controller.js
+        self.assertIn('STORAGE_HOST_MODE', self.host_content)
+        self.assertIn('setHostMode', self.host_content)
+        self.assertIn('claim_host_focus', self.host_content)
+        self.assertIn('release_host_focus', self.host_content)
+        self.assertIn('daemonStandby', self.host_content)
+
+        # 3. Focus arbitration and daemon standby/resume in bridge.py
+        self.assertIn('claim_host_focus', self.bridge_content)
+        self.assertIn('release_host_focus', self.bridge_content)
+        self.assertIn('_primary_interactive_writer', self.bridge_content)
+        self.assertIn('daemon_standby', self.bridge_content)
+        self.assertIn('daemon_resume', self.bridge_content)
+
 
 if __name__ == '__main__':
     unittest.main()

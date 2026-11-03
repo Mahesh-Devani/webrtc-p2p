@@ -6,7 +6,6 @@
   "11": "remote-desktop-host/package.json",
   "31": "install-linux-service.sh",
   "32": "install-macos-agent.sh",
-  "33": "install-service.sh",
   "34": "start-host.sh",
   "35": "uninstall-service.sh"
 }

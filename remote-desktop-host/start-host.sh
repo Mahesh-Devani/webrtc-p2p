@@ -96,13 +96,42 @@ mkdir -p "$HOST_PROFILE"
 
 OS="$(uname -s)"
 IS_DAEMON=0
+IS_BRIDGE_ONLY=0
 for arg in "$@"; do
     if [ "$arg" = "--daemon" ] || [ "$arg" = "-d" ]; then
         IS_DAEMON=1
+    elif [ "$arg" = "--bridge-only" ] || [ "$arg" = "-b" ]; then
+        IS_BRIDGE_ONLY=1
     fi
 done
 
-if [ "$IS_DAEMON" -eq 1 ]; then
+if [ "$IS_BRIDGE_ONLY" -eq 1 ]; then
+    # ── Bridge-Only Supervisor Mode (Background Native Bridge for Interactive Tabs) ──
+    echo "=========================================================="
+    echo " 🔌 P2P Connect — Bridge-Only Background Supervisor"
+    echo "    - Web Server:  http://localhost:8080"
+    echo "    - Native Port: ws://127.0.0.1:9999"
+    echo "    - Mode:        Ready for Interactive Browser Tabs"
+    echo "=========================================================="
+
+    cleanup() {
+        echo "[Supervisor] Terminating services..."
+        [ -f /tmp/p2p-http.pid ] && kill "$(cat /tmp/p2p-http.pid)" 2>/dev/null || true
+        [ -f /tmp/p2p-bridge.pid ] && kill "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null || true
+        exit 0
+    }
+    trap cleanup SIGTERM SIGINT SIGHUP
+
+    while true; do
+        if [ -f /tmp/p2p-bridge.pid ] && ! kill -0 "$(cat /tmp/p2p-bridge.pid)" 2>/dev/null; then
+            echo "[!] Native bridge crashed! Reviving..."
+            python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
+            echo $! > /tmp/p2p-bridge.pid
+        fi
+        sleep 3
+    done
+
+elif [ "$IS_DAEMON" -eq 1 ]; then
     # ── Daemon Mode (Approach A: Headless 24/7 Background Service) ─────────
     echo "▶ Launching Silent Headless Host Worker (Approach A)..."
     DAEMON_URL="http://localhost:8080/host.html?daemon=1"

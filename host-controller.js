@@ -113,23 +113,57 @@ const dom = {
   btnModalDismissCapture: document.getElementById('btn-modal-dismiss-capture'),
   hostDaemonBanner: document.getElementById('host-daemon-banner'),
   btnRestartDaemon: document.getElementById('btn-restart-daemon'),
+  btnModeInteractive: document.getElementById('btn-mode-interactive'),
+  btnModeHeadless: document.getElementById('btn-mode-headless'),
+  interactiveModeBanner: document.getElementById('host-interactive-banner'),
 };
 
+const STORAGE_HOST_MODE = 'p2p-host-mode';
 const isDaemonWorker = new URLSearchParams(window.location.search).get('daemon') === '1';
 let isDaemonActive = false;
+let hostMode = localStorage.getItem(STORAGE_HOST_MODE) || 'interactive';
+let daemonStandby = false;
 
-function updateDaemonUI(active) {
-  if (isDaemonWorker) return;
-  if (dom.hostDaemonBanner) {
-    dom.hostDaemonBanner.style.display = active ? 'block' : 'none';
-  }
-  if (dom.hostStatusText) {
-    if (active) {
-      dom.hostStatusText.textContent = 'Service Active (24/7 Background)';
+function setHostMode(mode) {
+  hostMode = mode;
+  localStorage.setItem(STORAGE_HOST_MODE, mode);
+  updateHostModeUI();
+  if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    if (mode === 'interactive') {
+      try { bridgeWs.send(JSON.stringify({ t: 'claim_host_focus' })); } catch {}
     } else {
-      dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+      try { bridgeWs.send(JSON.stringify({ t: 'release_host_focus' })); } catch {}
     }
   }
+}
+
+function updateHostModeUI() {
+  if (isDaemonWorker) return;
+  const isInteractive = (hostMode === 'interactive');
+  if (dom.btnModeInteractive) {
+    dom.btnModeInteractive.className = isInteractive ? 'btn btn--small btn--primary' : 'btn btn--small btn--outline';
+  }
+  if (dom.btnModeHeadless) {
+    dom.btnModeHeadless.className = !isInteractive ? 'btn btn--small btn--primary' : 'btn btn--small btn--outline';
+  }
+  if (dom.interactiveModeBanner) {
+    dom.interactiveModeBanner.style.display = isInteractive ? 'block' : 'none';
+  }
+  if (dom.hostDaemonBanner) {
+    dom.hostDaemonBanner.style.display = (!isInteractive && isDaemonActive) ? 'block' : 'none';
+  }
+  if (dom.hostStatusText) {
+    if (!isInteractive && isDaemonActive) {
+      dom.hostStatusText.textContent = 'Service Active (24/7 Background)';
+    } else {
+      dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening (Interactive Tab)';
+    }
+  }
+}
+
+function updateDaemonUI(active) {
+  isDaemonActive = active;
+  updateHostModeUI();
 }
 
 function updatePinValidationUI(val) {
@@ -778,10 +812,20 @@ function connectBridge(force = false) {
               try {
                 bridgeWs.send(JSON.stringify({ t: 'register_daemon' }));
               } catch {}
+            } else if (hostMode === 'interactive') {
+              try {
+                bridgeWs.send(JSON.stringify({ t: 'claim_host_focus' }));
+              } catch {}
             }
           } else if (msg.t === 'daemon_status') {
             isDaemonActive = !!msg.daemon_active;
             updateDaemonUI(isDaemonActive);
+          } else if (msg.t === 'daemon_standby') {
+            daemonStandby = true;
+            console.log('[Host Daemon] Entered standby — interactive browser tab has claimed hosting focus');
+          } else if (msg.t === 'daemon_resume') {
+            daemonStandby = false;
+            console.log('[Host Daemon] Resumed active hosting — interactive tab released focus');
           } else if (msg.t === 'host_config_updated') {
             if (msg.config) {
               applyHostConfigFromBridge(msg.config);
@@ -1405,26 +1449,30 @@ async function initSignaling() {
     if (type === 'unattended_offer') {
       console.log(`[Host] Incoming connection request from ${senderPubKey.slice(0, 8)}... (session: ${sessionId?.slice(0, 8)})`);
 
-      // Staleness check: ignore offers older than 45 seconds (e.g. from relay resubscription history)
+      // Staleness check: ignore offers older than 45 seconds (e.g. from relay history)
       const offerAgeSec = signal.ts ? (Date.now() - signal.ts) / 1000 : 0;
       if (offerAgeSec > 45) {
         console.log(`[Host] Dropped stale unattended_offer (${offerAgeSec.toFixed(1)}s old)`);
         return;
       }
 
-      // Duplicate offer check: if this session is already active or in progress, ignore
+      // Duplicate offer check
       if (activeSession && activeSessionId === sessionId) {
         console.log(`[Host] Ignoring duplicate unattended_offer for active session ${sessionId?.slice(0, 8)}`);
         return;
       }
       if (activeSession && (activeSession.getState() === 'connected' || activeSession.isChannelOpen())) {
-        console.log(`[Host] Ignoring unattended_offer (session: ${sessionId?.slice(0, 8)}) — session ${activeSessionId?.slice(0, 8)} is already active and connected (state: ${activeSession.getState()})`);
+        console.log(`[Host] Ignoring unattended_offer — session ${activeSessionId?.slice(0, 8)} is already connected`);
         return;
       }
 
-      // If this is an interactive UI browser tab and a background daemon is active, let the daemon handle connections
-      if (!isDaemonWorker && isDaemonActive) {
-        console.log(`[Host] Ignoring unattended_offer in interactive UI tab — headless daemon is actively handling connections`);
+      // Standby / hosting mode routing
+      if (isDaemonWorker && daemonStandby) {
+        console.log('[Host Daemon] Ignoring unattended_offer — daemon is in standby');
+        return;
+      }
+      if (!isDaemonWorker && isDaemonActive && hostMode !== 'interactive') {
+        console.log(`[Host] Ignoring unattended_offer in interactive UI tab — headless daemon active (hostMode: ${hostMode})`);
         return;
       }
 
@@ -2070,9 +2118,19 @@ document.getElementById('btn-host-download-logpkg')?.addEventListener('click', a
   }
 });
 
+dom.btnModeInteractive?.addEventListener('click', () => setHostMode('interactive'));
+dom.btnModeHeadless?.addEventListener('click', () => setHostMode('headless'));
+
+window.addEventListener('beforeunload', () => {
+  if (hostMode === 'interactive' && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    try { bridgeWs.send(JSON.stringify({ t: 'release_host_focus' })); } catch {}
+  }
+});
+
 // Auto-init on load
 (async () => {
   try {
+    updateHostModeUI();
     await initHostIdentity();
     updateWhitelistFilter();
     renderAuthorizedClients();
