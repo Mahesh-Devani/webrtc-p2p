@@ -1007,14 +1007,12 @@ function initNativeCanvas() {
 }
 
 function ensureNativeOnDemandCapture() {
+  if (hostStream && hostStream.getVideoTracks().some(t => t.readyState === 'live')) {
+    console.log('[Host] Preserving active browser hostStream; skipping native canvas capture');
+    return hostStream;
+  }
   const stream = initNativeCanvas();
   nativeStreamActive = true;
-  if (hostStream) {
-    for (const t of hostStream.getTracks()) {
-      try { t.stop(); } catch {}
-    }
-    hostStream = null;
-  }
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
       bridgeWs.send(JSON.stringify({
@@ -1145,8 +1143,9 @@ async function renderNativeFrameToCanvas(blob, w, h) {
       dom.hostScreenVideo.srcObject = nativeCanvasStream;
     }
 
-    // Also ensure activeSession is streaming nativeCanvasStream (not old hostStream)
-    if (activeSession && nativeCanvasStream && activeSession.getLocalStream && activeSession.getLocalStream() !== nativeCanvasStream) {
+    // Also ensure activeSession is streaming nativeCanvasStream (only when not streaming browser hostStream)
+    const hasLiveHostStream = hostStream && hostStream.getVideoTracks().some(t => t.readyState === 'live');
+    if (!hasLiveHostStream && activeSession && nativeCanvasStream && activeSession.getLocalStream && activeSession.getLocalStream() !== nativeCanvasStream) {
       activeSession.addLocalStream(nativeCanvasStream);
       console.log('[Host Canvas] Switched active WebRTC session from hostStream to nativeCanvasStream');
     }
@@ -1156,19 +1155,25 @@ async function renderNativeFrameToCanvas(blob, w, h) {
 }
 
 function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
+  const isBrowserCapture = !!(hostStream && hostStream.active && hostStream.getVideoTracks().some(t => t.readyState === 'live'));
+
   if (dom.captureStatusBadge) {
     if (bridgeConnected && !active) {
       dom.captureStatusBadge.className = 'badge badge--connected';
-      dom.captureStatusBadge.textContent = '⚡ Ready (Native On-Demand Sleep & Wake)';
+      dom.captureStatusBadge.textContent = (hostMode === 'interactive') ? '🔴 Inactive (Click Start)' : '⚡ Ready (Native On-Demand Sleep & Wake)';
     } else {
       dom.captureStatusBadge.className = 'badge ' + (active ? 'badge--connected' : 'badge--idle');
-      dom.captureStatusBadge.textContent = active
-        ? (bridgeConnected ? '🟢 Streaming (Native 60 FPS Capture)' : '🟢 Active (Manual View-Only Capture)')
-        : '🔴 Inactive (Click Start for View-Only)';
+      if (active) {
+        dom.captureStatusBadge.textContent = isBrowserCapture
+          ? '🟢 Streaming (Browser 60 FPS Capture)'
+          : (bridgeConnected ? '🟢 Streaming (Native 60 FPS Capture)' : '🟢 Active (Manual View-Only Capture)');
+      } else {
+        dom.captureStatusBadge.textContent = '🔴 Inactive (Click Start)';
+      }
     }
   }
   if (dom.btnToggleCapture) {
-    if (bridgeConnected && !active) {
+    if (bridgeConnected && !active && hostMode !== 'interactive') {
       dom.btnToggleCapture.textContent = 'Manual Capture Fallback';
       dom.btnToggleCapture.className = 'btn btn--small btn--outline';
     } else {
@@ -1179,11 +1184,11 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
 
   // Preview button visibility & text
   if (dom.btnTogglePreview) {
-    dom.btnTogglePreview.style.display = (active && bridgeConnected) ? 'inline-flex' : 'none';
+    dom.btnTogglePreview.style.display = (active && !isBrowserCapture && bridgeConnected) ? 'inline-flex' : 'none';
     dom.btnTogglePreview.textContent = showPreviewOnHost ? '🙈 Hide Preview' : '👁️ Show Preview';
   }
 
-  const shouldShowVideo = active && (showPreviewOnHost || (!bridgeConnected && !!hostStream));
+  const shouldShowVideo = active && (isBrowserCapture || showPreviewOnHost || (!bridgeConnected && !!hostStream));
 
   if (dom.hostScreenPlaceholder) {
     dom.hostScreenPlaceholder.classList.toggle('hidden', shouldShowVideo);
@@ -1198,7 +1203,7 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
       dom.hostScreenPlaceholder.innerHTML = `
         <div style="font-size: 2.4rem; margin-bottom: 8px;">🖥️</div>
         <strong style="color: var(--c-text); font-size: 1.05rem;">Desktop Capture is Inactive</strong><br>
-        <span style="font-size: 0.8rem; color: var(--c-text-dim); margin-top: 6px; display: inline-block;">When a remote controller connects, native capture starts automatically. Or click <strong>"Manual Capture Fallback"</strong> above to capture via browser picker.</span>
+        <span style="font-size: 0.8rem; color: var(--c-text-dim); margin-top: 6px; display: inline-block;">Click <strong>"Start Desktop Capture"</strong> above (or click here) so remote clients can see and control this screen unattended.</span>
       `;
     }
   }
@@ -1215,13 +1220,16 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
 }
 
 function isHostStreamLive() {
-  if (bridgeConnected && nativeStreamActive && nativeCanvasStream && nativeCanvasStream.active) {
+  if (hostStream && hostStream.active) {
+    const tracks = hostStream.getVideoTracks();
+    if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
+  }
+  if ((hostMode !== 'interactive' || isDaemonWorker) && bridgeConnected && nativeStreamActive && nativeCanvasStream && nativeCanvasStream.active) {
     const tracks = nativeCanvasStream.getVideoTracks();
     if (tracks.length > 0 && tracks[0].readyState === 'live') return true;
   }
   if (!hostStream || !hostStream.active) return false;
-  const tracks = hostStream.getVideoTracks();
-  return tracks.length > 0 && tracks[0].readyState === 'live';
+  return false;
 }
 
 function showStartCaptureModal() {
@@ -1281,7 +1289,7 @@ async function stopDesktopCapture() {
 }
 
 async function ensureDesktopCapture() {
-  if (isHostStreamLive()) {
+  if (hostStream && hostStream.active && hostStream.getVideoTracks().some(t => t.readyState === 'live')) {
     console.log('[Host] Reusing existing active desktop capture stream');
     hideStartCaptureModal();
     return hostStream;
@@ -1344,6 +1352,10 @@ async function ensureDesktopCapture() {
 
     if (!stream) {
       return null;
+    }
+
+    if (nativeStreamActive) {
+      stopNativeOnDemandCapture();
     }
 
     hostStream = stream;
@@ -1518,9 +1530,12 @@ async function initSignaling() {
         return;
       }
 
-      // In Native Bridge mode, ensure native on-demand capture is active
-      if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
-        ensureNativeOnDemandCapture();
+      // In Background/Headless mode, ensure native on-demand capture is active
+      const hasLiveHostStream = hostStream && hostStream.getVideoTracks().some(t => t.readyState === 'live');
+      if (!hasLiveHostStream && (hostMode !== 'interactive' || isDaemonWorker)) {
+        if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+          ensureNativeOnDemandCapture();
+        }
       }
 
       // Reject if host desktop capture is not active
