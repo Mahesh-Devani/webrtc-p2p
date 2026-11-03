@@ -30,9 +30,9 @@
     "semantic_hash": ""
   },
   "nostr-signaling.js": {
-    "mtime": 1792311485.2931318,
-    "seen": 1792311645.7662551,
-    "ast_hash": "02e205d0c60a9c8521cd625d6897f107",
+    "mtime": 1793688030.59671,
+    "seen": 1793688133.026658,
+    "ast_hash": "01e0ed6c1dbae87e902ea14f82469064",
     "semantic_hash": ""
   },
   "nostr-transport.js": {
@@ -114,15 +114,15 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793674784.0124998,
-    "seen": 1793674916.026077,
-    "ast_hash": "741ca6068bd5244ea477a544e3df6f19",
+    "mtime": 1793688064.2052073,
+    "seen": 1793688133.026677,
+    "ast_hash": "43a83278a145fb0b72c4a54777896b06",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1793674646.2215865,
-    "seen": 1793674916.026077,
-    "ast_hash": "ea5a963f5b101646dacc5772734140c8",
+    "mtime": 1793688037.6061225,
+    "seen": 1793688133.026678,
+    "ast_hash": "f846b0dba347d7ddde57a95e7dfaa839",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793683027.6685889,
-    "seen": 1793683143.7965891,
-    "ast_hash": "da33377a1870d2358566ba8fb1701b94",
+    "mtime": 1793688091.3247235,
+    "seen": 1793688133.026685,
+    "ast_hash": "e28fe621a599b97f00e8c1d6edafe422",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793683038.50008,
-    "seen": 1793683143.79659,
-    "ast_hash": "016a45012160b21867e9563c63197ecb",
+    "mtime": 1793688086.0191033,
+    "seen": 1793688133.026685,
+    "ast_hash": "a64a584fe86714d82d3d4b82c62c2c72",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {

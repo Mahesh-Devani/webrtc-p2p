@@ -301,6 +301,13 @@ export const NostrSignaling = (() => {
             return;
         }
 
+        // Deduplicate duplicate answer events arriving concurrently from multiple Nostr relays
+        if (sessionEntry.answerHandled || sessionEntry.state === 'connecting' || sessionEntry.state === 'connected') {
+            _log(`[Signaling] Duplicate answer for session ${sessionId.slice(0, 8)} — safely ignored`, 'info');
+            return;
+        }
+        sessionEntry.answerHandled = true;
+
         try {
             const { sdp, candidates } = _decompressSignalData(compressedData);
 
@@ -313,6 +320,11 @@ export const NostrSignaling = (() => {
             sessionEntry.state = 'connecting';
             _log(`[Signaling] Answer accepted (${candidates?.length || 0} ICE candidates)`, 'info');
         } catch (err) {
+            // Benign duplicate answer race: if state is already stable or connected, ignore safely
+            if (sessionEntry.session?.getState?.() === 'connected' || /called in wrong state: stable|already stable/i.test(err.message)) {
+                _log(`[Signaling] Answer collision with already stable session (${err.message}) — ignoring`, 'info');
+                return;
+            }
             _log(`[Signaling] Failed to handle answer: ${err.message}`, 'error');
             if (_onError) _onError(sessionId, err.message);
         }

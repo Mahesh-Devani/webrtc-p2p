@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 55 files · ~139,666 words
+- 55 files · ~139,780 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8f6b0f89`
+- Built from commit: `e39bffc7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,7 +61,7 @@
 - ThreadedMockBridge
 - P2P Connect — High-Level Design
 - TestWebRtcContracts
-- 4. Dual Connection Modes & Protocols
+- 5. Future Roadmap & Proposed Improvements
 - mock_relay.py
 - P2P Connect — Architecture
 - DisplayWakeManager
@@ -69,27 +69,27 @@
 - TestMobileLifecycle
 - P2P Connect — Roadmap
 - P2P Connect — Native OS Remote Desktop Host Agent
-- 5. Future Roadmap & Proposed Improvements
+- P2P Connect — System Design
 - 🚀 1. Recommended Triage Prompts
 - appendChatBubble
+- 4. `nostr-transport.js` — NostrTransport
+- 8. AI Agent Guardrails: Graphify & Invariant Verifier
 - initNostr
 - run.sh
 - QuietHTTPHandler
 - run-regressions.py
+- 1. `webrtc-core.js` — PeerSession
 - loadRemoteDevices
+- 8. `chat-store.js` — ChatStore
+- 4. Dual Connection Modes & Protocols
+- 3. `nostr-relay.js` — NostrRelay
+- 7. `ui-controller.js` — UI Controller
 - closeQrScanner
 - ColoredTextTestResult
 - DevHandler
-- 8. AI Agent Guardrails: Graphify & Invariant Verifier
 - classifyKind
 - ai-diagnostic-agent.py
-- P2P Connect — System Design
-- 4. `nostr-transport.js` — NostrTransport
 - createCipher
-- 1. `webrtc-core.js` — PeerSession
-- 8. `chat-store.js` — ChatStore
-- 3. `nostr-relay.js` — NostrRelay
-- 7. `ui-controller.js` — UI Controller
 
 ## God Nodes (most connected - your core abstractions)
 1. `toast()` - 40 edges
@@ -248,9 +248,9 @@ Nodes (3): MockHostBridge, ThreadedMockBridge, _run()
 Cohesion: 0.14
 Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4. Feature Set, 5. Security Model, 6. Technology Stack, 7. File Map, Key Properties (+5 more)
 
-### Community 45 - "4. Dual Connection Modes & Protocols"
-Cohesion: 0.50
-Nodes (4): 4. Dual Connection Modes & Protocols, In-Band Renegotiation (Perfect Negotiation Pattern), Mode A: Nostr Auto-Signaling (`kind: 24133`), Mode B: Manual Token Exchange (`P2P2-`)
+### Community 45 - "5. Future Roadmap & Proposed Improvements"
+Cohesion: 0.08
+Nodes (26): 10. Ultrawide Aspect Ratio (32:9) Stream Downscaling Distortion (INV-12), 11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams, 12. macOS Spaces (Virtual Desktops) WindowServer Limitation, 1. Executive Summary & Evolution, 2. In-Band WebRTC ICE Restart (Near-Term), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. Deep-Dive: Root Causes & Lessons Learned, 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term) (+18 more)
 
 ### Community 46 - "mock_relay.py"
 Cohesion: 0.10
@@ -272,9 +272,9 @@ Nodes (8): 💡 Backlog / Ideas, P2P Connect — Roadmap, ✅ Phase 0: Foundatio
 Cohesion: 0.07
 Nodes (28): 1. Install & Start Service, 1. Install & Start Service, 1. Install via Batch Script (Recommended), 2. Manage the Service, 2. Manual Setup via PowerShell / Command Prompt, 2. Useful systemd Commands, 3. Manage & Check Status, 3. Uninstall (+20 more)
 
-### Community 53 - "5. Future Roadmap & Proposed Improvements"
-Cohesion: 0.08
-Nodes (26): 10. Ultrawide Aspect Ratio (32:9) Stream Downscaling Distortion (INV-12), 11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams, 12. macOS Spaces (Virtual Desktops) WindowServer Limitation, 1. Executive Summary & Evolution, 2. In-Band WebRTC ICE Restart (Near-Term), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. Deep-Dive: Root Causes & Lessons Learned, 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term) (+18 more)
+### Community 53 - "P2P Connect — System Design"
+Cohesion: 0.25
+Nodes (7): 2. `nostr-crypto.js` — NostrCrypto, 6. `token-codec.js` — TokenCodec, 9. External Dependencies (CDN), Functions, Module Dependency Graph, P2P Connect — System Design, Token Format (v2)
 
 ### Community 54 - "🚀 1. Recommended Triage Prompts"
 Cohesion: 0.25
@@ -284,6 +284,14 @@ Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Op
 Cohesion: 0.16
 Nodes (21): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDate(), formatDiagnosticBubbleHtml() (+13 more)
 
+### Community 56 - "4. `nostr-transport.js` — NostrTransport"
+Cohesion: 0.25
+Nodes (8): 4. `nostr-transport.js` — NostrTransport, Constants, Encrypted Payload Schema, Inbound Event Processing Pipeline, Nostr Event Format, Public API, Publish Failover Flow, Storage Keys
+
+### Community 57 - "8. AI Agent Guardrails: Graphify & Invariant Verifier"
+Cohesion: 0.33
+Nodes (6): 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 3. Custom Antigravity Skill & Subagent, 8. AI Agent Guardrails: Graphify & Invariant Verifier, Headless Chrome E2E Suites in `tests/e2e/`, Test Suites in `tests/`
+
 ### Community 58 - "initNostr"
 Cohesion: 0.19
 Nodes (14): 2. Where We Stand vs. Initial Plan, getHostStatusDisplay(), handleAppResume(), initNostr(), pingAllRemoteDevices(), renderRelayList(), setBadge(), showNextMessageRequest() (+6 more)
@@ -292,17 +300,33 @@ Nodes (14): 2. Where We Stand vs. Initial Plan, getHostStatusDisplay(), handleAp
 Cohesion: 0.15
 Nodes (8): get_modified_files(), main(), run_tests(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main(), print_inbox()
 
+### Community 63 - "1. `webrtc-core.js` — PeerSession"
+Cohesion: 0.40
+Nodes (5): 1. `webrtc-core.js` — PeerSession, DataChannels, File Transfer Protocol, Public API, Renegotiation (Perfect Negotiation Pattern)
+
 ### Community 65 - "loadRemoteDevices"
 Cohesion: 0.26
 Nodes (15): addOrUpdateRemoteDevice(), checkUrlRemoteHostParam(), connectToRemoteDevice(), deriveKey(), exportFleet(), exportKey(), importFleet(), importKey() (+7 more)
 
+### Community 69 - "8. `chat-store.js` — ChatStore"
+Cohesion: 0.40
+Nodes (5): 8. `chat-store.js` — ChatStore, Constants, Message Schema, Public API, Storage Format
+
+### Community 72 - "4. Dual Connection Modes & Protocols"
+Cohesion: 0.50
+Nodes (4): 4. Dual Connection Modes & Protocols, In-Band Renegotiation (Perfect Negotiation Pattern), Mode A: Nostr Auto-Signaling (`kind: 24133`), Mode B: Manual Token Exchange (`P2P2-`)
+
+### Community 75 - "3. `nostr-relay.js` — NostrRelay"
+Cohesion: 0.50
+Nodes (4): 3. `nostr-relay.js` — NostrRelay, Key Behaviors, Protocol Messages, States (`RelayState`)
+
+### Community 76 - "7. `ui-controller.js` — UI Controller"
+Cohesion: 0.50
+Nodes (4): 7. `ui-controller.js` — UI Controller, Chat Message Protocol, localStorage Keys Used, Responsibilities
+
 ### Community 77 - "closeQrScanner"
 Cohesion: 0.83
 Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
-
-### Community 83 - "8. AI Agent Guardrails: Graphify & Invariant Verifier"
-Cohesion: 0.33
-Nodes (6): 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Runner (`run-regressions.py`) & Invariant Verifier, 3. Custom Antigravity Skill & Subagent, 8. AI Agent Guardrails: Graphify & Invariant Verifier, Headless Chrome E2E Suites in `tests/e2e/`, Test Suites in `tests/`
 
 ### Community 84 - "classifyKind"
 Cohesion: 0.40
@@ -312,33 +336,9 @@ Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedR
 Cohesion: 0.14
 Nodes (11): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_whitelist() (+3 more)
 
-### Community 86 - "P2P Connect — System Design"
-Cohesion: 0.25
-Nodes (7): 2. `nostr-crypto.js` — NostrCrypto, 6. `token-codec.js` — TokenCodec, 9. External Dependencies (CDN), Functions, Module Dependency Graph, P2P Connect — System Design, Token Format (v2)
-
-### Community 87 - "4. `nostr-transport.js` — NostrTransport"
-Cohesion: 0.25
-Nodes (8): 4. `nostr-transport.js` — NostrTransport, Constants, Encrypted Payload Schema, Inbound Event Processing Pipeline, Nostr Event Format, Public API, Publish Failover Flow, Storage Keys
-
 ### Community 88 - "createCipher"
 Cohesion: 0.40
 Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCipher()
-
-### Community 90 - "1. `webrtc-core.js` — PeerSession"
-Cohesion: 0.40
-Nodes (5): 1. `webrtc-core.js` — PeerSession, DataChannels, File Transfer Protocol, Public API, Renegotiation (Perfect Negotiation Pattern)
-
-### Community 91 - "8. `chat-store.js` — ChatStore"
-Cohesion: 0.40
-Nodes (5): 8. `chat-store.js` — ChatStore, Constants, Message Schema, Public API, Storage Format
-
-### Community 102 - "3. `nostr-relay.js` — NostrRelay"
-Cohesion: 0.50
-Nodes (4): 3. `nostr-relay.js` — NostrRelay, Key Behaviors, Protocol Messages, States (`RelayState`)
-
-### Community 103 - "7. `ui-controller.js` — UI Controller"
-Cohesion: 0.50
-Nodes (4): 7. `ui-controller.js` — UI Controller, Chat Message Protocol, localStorage Keys Used, Responsibilities
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`

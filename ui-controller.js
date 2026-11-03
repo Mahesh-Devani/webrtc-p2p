@@ -2445,16 +2445,18 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           recordRdSessionStart(remotePubKey);
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
-          dom.remoteVideo.srcObject = stream;
-          dom.remoteVideo.muted = true;
-          applySavedRemoteAudioSettings();
-          const playPromise = dom.remoteVideo.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(err => {
-              console.warn('[RD Video] Autoplay with audio was prevented, retrying muted:', err);
-              dom.remoteVideo.muted = true;
-              dom.remoteVideo.play().catch(e => console.warn('[RD Video] Muted play also failed:', e));
-            });
+          if (dom.remoteVideo.srcObject !== stream) {
+            dom.remoteVideo.srcObject = stream;
+            dom.remoteVideo.muted = true;
+            applySavedRemoteAudioSettings();
+            const playPromise = dom.remoteVideo.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(err => {
+                console.warn('[RD Video] Autoplay with audio was prevented, retrying muted:', err);
+                dom.remoteVideo.muted = true;
+                dom.remoteVideo.play().catch(e => console.warn('[RD Video] Muted play also failed:', e));
+              });
+            }
           }
           hide(dom.remoteNoVideo);
           if (!dom.remoteVideo._rdVideoReadyBound) {
@@ -6629,6 +6631,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         },
         onError: (sessionId, errMsg) => {
           if (sessionId !== nostrActiveSessionId) return;
+          // Guard against benign duplicate answer race when connection is already established
+          if (/called in wrong state: stable|already stable/i.test(errMsg) && (session?.getState?.() === 'connected' || mediaActive)) {
+            console.log('[Remote Desktop] Ignored benign duplicate answer race error while session is active');
+            return;
+          }
           hide(dom.connectBanner);
           hide(dom.rdTextBar);
           if (activeRemoteDesktopDevice) {

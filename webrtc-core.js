@@ -812,24 +812,25 @@ export const PeerSession = (() => {
     async function acceptAnswer(answerSdp) {
       const state = pc.signalingState;
       if (state === 'stable') {
-        // Connection may have already been negotiated via another path
-        log('Signaling state already stable — connection may be established, adding remote description as informational');
-        // Still try — some browsers allow re-setting in stable state
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
-          log('Remote answer accepted (from stable state)');
-        } catch {
-          log('Remote description skipped (already stable) — waiting for ICE connectivity');
-        }
-        stateChange('connecting');
+        // Connection may have already been negotiated via another path or earlier relay response
+        log('Signaling state already stable — duplicate answer safely ignored');
         return;
       }
       if (state !== 'have-local-offer') {
-        throw new Error(`Cannot accept answer in signaling state "${state}" (expected "have-local-offer"). Try creating a new session.`);
+        log(`acceptAnswer called in signaling state "${state}" — safely ignored`, 'warn');
+        return;
       }
-      await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
-      log('Remote answer accepted');
-      stateChange('connecting');
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
+        log('Remote answer accepted');
+        stateChange('connecting');
+      } catch (err) {
+        if (pc.signalingState === 'stable' || /called in wrong state: stable|already stable/i.test(err.message)) {
+          log('setRemoteDescription resolved or already stable — duplicate answer race safely ignored');
+          return;
+        }
+        throw err;
+      }
     }
 
     /**
