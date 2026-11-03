@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 55 files · ~139,868 words
+- 55 files · ~139,903 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1387 nodes · 2650 edges · 92 communities (55 shown, 37 thin omitted)
+- 1387 nodes · 2651 edges · 95 communities (55 shown, 40 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 113 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0c3ed621`
+- Built from commit: `8eb3d557`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -32,7 +32,7 @@
 - .analyze
 - 5. `nostr-signaling.js` — NostrSignaling
 - verifyEvent
-- test_remote_desktop_capture_e2e.py
+- pathlib
 - TestDiagnosticSystem
 - assertNumber
 - test_token_codec.py
@@ -77,7 +77,7 @@
 - initNostr
 - run.sh
 - QuietHTTPHandler
-- run-regressions.py
+- serve-https.py
 - 1. `webrtc-core.js` — PeerSession
 - loadRemoteDevices
 - 8. `chat-store.js` — ChatStore
@@ -85,8 +85,11 @@
 - 3. `nostr-relay.js` — NostrRelay
 - 7. `ui-controller.js` — UI Controller
 - closeQrScanner
+- ThreadedMockRelay
+- ._handle_client
 - ColoredTextTestResult
-- DevHandler
+- .handle_client
+- make_close_frame
 - classifyKind
 - ai-diagnostic-agent.py
 - createCipher
@@ -118,7 +121,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (92 total, 37 thin omitted)
+## Communities (95 total, 40 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.11
@@ -180,13 +183,17 @@ Nodes (11): 7. Local Development & Verification, Running the Application Locally
 Cohesion: 0.14
 Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
 
+### Community 16 - "pathlib"
+Cohesion: 0.12
+Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
+
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
 Nodes (13): alphabet(), assertNumber(), bech32Polymod(), bechChecksum(), convertRadix(), convertRadix2(), genBech32(), decode2() (+5 more)
 
 ### Community 19 - "test_token_codec.py"
-Cohesion: 0.14
-Nodes (4): analyze_file(), python_compress_token(), python_decompress_token(), TestTokenCodec
+Cohesion: 0.18
+Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
 ### Community 21 - "bytes3"
 Cohesion: 0.17
@@ -209,8 +216,8 @@ Cohesion: 0.12
 Nodes (16): 10. Remote Desktop Aspect Ratio & Stream Quality Encoding (INV-12), 1. ES Module Singleton Integrity (DO NOT BREAK), 2. Zero-Build Philosophy, 3. Media Track Replacement vs Renegotiation, 4. Storage Usage & Separation, 5. Mobile Background Suspensions & Auto-Reconnection, 6. Critical Invariants for AI Agents (MUST FOLLOW), 6. STUN/TURN Architecture & NAT Traversal (+8 more)
 
 ### Community 28 - "HeadlessChromeSession"
-Cohesion: 0.11
-Nodes (5): HeadlessChromeSession, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
+Cohesion: 0.09
+Nodes (6): find_chrome_binary(), HeadlessChromeSession, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ReusableTCPServer, TestTwoPeerHandshakeE2E
 
 ### Community 30 - "decode"
 Cohesion: 0.11
@@ -219,10 +226,6 @@ Nodes (23): calcPaddedLen(), concatBytes3(), decode(), decodePayload(), decrypt3
 ### Community 36 - "get"
 Cohesion: 0.29
 Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
-
-### Community 37 - "MockNostrRelay"
-Cohesion: 0.07
-Nodes (4): ThreadedMockRelay, ThreadedMockRelay, MockNostrRelay, _run_cli()
 
 ### Community 38 - "toast"
 Cohesion: 0.17
@@ -253,8 +256,8 @@ Cohesion: 0.08
 Nodes (26): 10. Ultrawide Aspect Ratio (32:9) Stream Downscaling Distortion (INV-12), 11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams, 12. macOS Spaces (Virtual Desktops) WindowServer Limitation, 1. Executive Summary & Evolution, 2. In-Band WebRTC ICE Restart (Near-Term), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. Deep-Dive: Root Causes & Lessons Learned, 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term) (+18 more)
 
 ### Community 46 - "mock_relay.py"
-Cohesion: 0.10
-Nodes (8): make_ws_frame(), read_ws_frame(), event_matches_any_filter(), event_matches_filter(), make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame()
+Cohesion: 0.18
+Nodes (5): event_matches_any_filter(), event_matches_filter(), make_pong_frame(), make_ws_frame(), _run_cli()
 
 ### Community 47 - "P2P Connect — Architecture"
 Cohesion: 0.04
@@ -296,9 +299,9 @@ Nodes (6): 1. Structural Knowledge Graph (Graphify), 2. Mandatory Regression Run
 Cohesion: 0.19
 Nodes (14): 2. Where We Stand vs. Initial Plan, getHostStatusDisplay(), handleAppResume(), initNostr(), pingAllRemoteDevices(), renderRelayList(), setBadge(), showNextMessageRequest() (+6 more)
 
-### Community 62 - "run-regressions.py"
-Cohesion: 0.15
-Nodes (8): get_modified_files(), main(), run_tests(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main(), print_inbox()
+### Community 62 - "serve-https.py"
+Cohesion: 0.17
+Nodes (4): DevHandler, ensure_certificate(), get_local_ip_addresses(), main()
 
 ### Community 63 - "1. `webrtc-core.js` — PeerSession"
 Cohesion: 0.40
@@ -333,8 +336,8 @@ Cohesion: 0.40
 Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
 
 ### Community 85 - "ai-diagnostic-agent.py"
-Cohesion: 0.14
-Nodes (11): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_whitelist() (+3 more)
+Cohesion: 0.13
+Nodes (12): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ### Community 88 - "createCipher"
 Cohesion: 0.40
@@ -343,7 +346,7 @@ Nodes (6): bool2(), checkOpts(), createCipher(), isAligned32(), number3(), runCi
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 508 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **37 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **40 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

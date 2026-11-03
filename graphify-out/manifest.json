@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793692242.971315,
-    "seen": 1793692409.573765,
-    "ast_hash": "c80ec0cb0f1733900d476f7bec188403",
+    "mtime": 1793698196.7853901,
+    "seen": 1793698316.2460768,
+    "ast_hash": "e2427f68db2a7334033909dc771e325a",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -174,9 +174,9 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793692332.036637,
-    "seen": 1793692409.573791,
-    "ast_hash": "7ea7b62e42cf857546863648ab35b05f",
+    "mtime": 1793698234.0744233,
+    "seen": 1793698316.2461052,
+    "ast_hash": "571b3f58c777fe2f07396d2f3de57ce0",
     "semantic_hash": ""
   },
   "index.html": {
@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "tests/test_on_demand_capture.py": {
-    "mtime": 1793458849.5848463,
-    "seen": 1793458926.3148851,
-    "ast_hash": "605e8a02d06522df2865fd82201cd8d2",
+    "mtime": 1793698208.6226068,
+    "seen": 1793698316.2460952,
+    "ast_hash": "3eec531c705a3c3b2fdcef26f56b3def",
     "semantic_hash": ""
   },
   "tests/e2e/test_remote_desktop_capture_e2e.py": {

@@ -132,6 +132,21 @@ function updateDaemonUI(active) {
   }
 }
 
+function updatePinValidationUI(val) {
+  const res = validatePasswordComplexity(val);
+  if (!dom.pinValidationMsg) return res.valid;
+  if (res.valid) {
+    dom.pinValidationMsg.textContent = '✓ Strong password (meets complexity rules)';
+    dom.pinValidationMsg.style.color = 'var(--c-primary)';
+    dom.hostPinInput.style.borderColor = 'var(--c-primary)';
+  } else {
+    dom.pinValidationMsg.textContent = `⚠️ ${res.error}`;
+    dom.pinValidationMsg.style.color = 'var(--c-danger, #ef4444)';
+    dom.hostPinInput.style.borderColor = 'var(--c-danger, #ef4444)';
+  }
+  return res.valid;
+}
+
 function applyHostConfigFromBridge(cfg) {
   if (!cfg || typeof cfg !== 'object') return;
   if (cfg.host_privkey && cfg.host_pubkey) {
@@ -250,21 +265,6 @@ async function initHostIdentity() {
   }
   dom.hostPinInput.value = savedPin;
   updatePinValidationUI(savedPin);
-
-  function updatePinValidationUI(val) {
-    const res = validatePasswordComplexity(val);
-    if (!dom.pinValidationMsg) return res.valid;
-    if (res.valid) {
-      dom.pinValidationMsg.textContent = '✓ Strong password (meets complexity rules)';
-      dom.pinValidationMsg.style.color = 'var(--c-primary)';
-      dom.hostPinInput.style.borderColor = 'var(--c-primary)';
-    } else {
-      dom.pinValidationMsg.textContent = `⚠️ ${res.error}`;
-      dom.pinValidationMsg.style.color = 'var(--c-danger, #ef4444)';
-      dom.hostPinInput.style.borderColor = 'var(--c-danger, #ef4444)';
-    }
-    return res.valid;
-  }
 
   let pinSaveTimer = null;
   function triggerPinSavedAnimation() {
@@ -790,7 +790,9 @@ function connectBridge(force = false) {
           if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors' || msg.t === 'targets' || msg.t === 'target_selected')) {
             try { activeSession.sendInput(msg); } catch {}
           }
-        } catch {}
+        } catch (err) {
+          console.error('[Host Bridge] Error processing bridge message:', err);
+        }
       };
 
       ws.onclose = () => {
@@ -914,7 +916,7 @@ function initNativeCanvas() {
   if (!nativeCanvas) {
     nativeCanvas = document.createElement('canvas');
     nativeCanvas.id = 'native-stream-canvas';
-    nativeCanvas.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-9999;';
+    nativeCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;opacity:0.99;pointer-events:none;z-index:-9999;';
     document.body.appendChild(nativeCanvas);
 
     let targetW = lastReportedScreenSize.w || 1920;
@@ -936,7 +938,7 @@ function initNativeCanvas() {
     nativeCanvasCtx.fillRect(0, 0, targetW, targetH);
   }
   if (!nativeCanvasStream) {
-    nativeCanvasStream = nativeCanvas.captureStream(30);
+    nativeCanvasStream = nativeCanvas.captureStream(0);
     nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
     if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
       nativeCanvasTrack.contentHint = 'detail';
@@ -989,6 +991,8 @@ function stopNativeOnDemandCapture() {
   }
 }
 
+let nativeFramesRenderedCount = 0;
+
 async function renderNativeFrameToCanvas(blob, w, h) {
   if (!nativeCanvas) initNativeCanvas();
 
@@ -1019,7 +1023,7 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     // and causes transient ICE disconnects or session teardowns.
     // Only create stream/track if missing or ended:
     if (!nativeCanvasStream || !nativeCanvasTrack || nativeCanvasTrack.readyState === 'ended') {
-      nativeCanvasStream = nativeCanvas.captureStream(30);
+      nativeCanvasStream = nativeCanvas.captureStream(0);
       nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
       if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
         nativeCanvasTrack.contentHint = 'detail';
@@ -1050,6 +1054,10 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     bitmap.close();
     if (nativeCanvasTrack && typeof nativeCanvasTrack.requestFrame === 'function') {
       try { nativeCanvasTrack.requestFrame(); } catch {}
+    }
+    nativeFramesRenderedCount++;
+    if (nativeFramesRenderedCount === 1 || nativeFramesRenderedCount % 300 === 0) {
+      console.log(`[Host Canvas] Frame #${nativeFramesRenderedCount} rendered & requestFrame() dispatched (${nativeCanvas.width}x${nativeCanvas.height})`);
     }
     nativeStreamActive = true;
     updateCaptureUI(true, nativeCanvas.width, nativeCanvas.height, false);

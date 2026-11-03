@@ -122,7 +122,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('renderNativeFrameToCanvas', self.host_content)
         self.assertIn('createImageBitmap', self.host_content)
         self.assertIn('requestFrame', self.host_content)
-        self.assertIn('captureStream(30)', self.host_content)
+        self.assertIn('captureStream(0)', self.host_content)
         self.assertIn('acquireScreenWakeLock', self.host_content)
         self.assertIn('releaseScreenWakeLock', self.host_content)
         self.assertIn('enableHostAudioKeepAlive', self.host_content)
