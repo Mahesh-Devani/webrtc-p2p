@@ -1207,15 +1207,16 @@ async def handle_client(reader, writer):
 
         # Send connected confirmation frame immediately with fresh screen bounds and persistent host config
         ox, oy, sw, sh = get_screen_bounds(force=True)
+        cfg = load_host_config()
         connected_payload = {
             't': 'connected',
             'screen': [sw, sh],
             'origin': [ox, oy],
             'daemon_active': (_active_daemon_writer is not None),
-            'has_config': (_cached_host_config is not None)
+            'has_config': (cfg is not None)
         }
-        if _cached_host_config:
-            connected_payload['config'] = _cached_host_config
+        if cfg:
+            connected_payload['config'] = cfg
         writer.write(make_ws_frame(json.dumps(connected_payload)))
         await writer.drain()
 
@@ -1357,7 +1358,7 @@ async def handle_client(reader, writer):
                     execute_mouse_move(target_x, target_y)
                 native_mouse_up(btn, current_x, current_y)
 
-            elif evt_type == 'mouse_click':
+            elif evt_type in ('mouse_click', 'click'):
                 btn = int(data.get('btn', 0))
                 clicks = 2 if data.get('dbl') else 1
                 if 'x' in data and 'y' in data:

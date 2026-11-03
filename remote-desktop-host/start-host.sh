@@ -108,7 +108,20 @@ if [ "$IS_DAEMON" -eq 1 ]; then
     DAEMON_URL="http://localhost:8080/host.html?daemon=1"
     CHROME_PID=""
 
+    # Defensively clear stale Chrome singleton lock if process is dead
+    cleanup_stale_chrome_lock() {
+        if [ -f "$HOST_PROFILE/SingletonLock" ] || [ -L "$HOST_PROFILE/SingletonLock" ]; then
+            LOCK_TARGET="$(readlink "$HOST_PROFILE/SingletonLock" 2>/dev/null || true)"
+            LOCK_PID="$(echo "$LOCK_TARGET" | awk -F'-' '{print $NF}')"
+            if [ -z "$LOCK_PID" ] || ! kill -0 "$LOCK_PID" 2>/dev/null; then
+                echo "[!] Clearing stale Chrome profile lock (PID ${LOCK_PID:-unknown})"
+                rm -f "$HOST_PROFILE"/Singleton* 2>/dev/null || true
+            fi
+        fi
+    }
+
     if [ -n "$CHROME_BIN" ]; then
+        cleanup_stale_chrome_lock
         "$CHROME_BIN" \
           --headless=new \
           --window-size=1920,1080 \
@@ -119,6 +132,8 @@ if [ "$IS_DAEMON" -eq 1 ]; then
           --allow-insecure-localhost \
           --use-fake-ui-for-media-stream \
           --autoplay-policy=no-user-gesture-required \
+          --enable-logging=stderr \
+          --v=1 \
           --no-first-run \
           --no-default-browser-check \
           "$DAEMON_URL" > /tmp/p2p-headless.log 2>&1 &
@@ -155,6 +170,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
 
         if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then
             echo "[!] Headless Host worker crashed! Reviving..."
+            cleanup_stale_chrome_lock
             "$CHROME_BIN" \
               --headless=new \
               --window-size=1920,1080 \
@@ -165,6 +181,8 @@ if [ "$IS_DAEMON" -eq 1 ]; then
               --allow-insecure-localhost \
               --use-fake-ui-for-media-stream \
               --autoplay-policy=no-user-gesture-required \
+              --enable-logging=stderr \
+              --v=1 \
               --no-first-run \
               --no-default-browser-check \
               "$DAEMON_URL" >> /tmp/p2p-headless.log 2>&1 &

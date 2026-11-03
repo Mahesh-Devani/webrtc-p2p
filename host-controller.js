@@ -156,7 +156,10 @@ function applyHostConfigFromBridge(cfg) {
   }
   if (cfg.host_pin) {
     localStorage.setItem(STORAGE_HOST_PIN, cfg.host_pin);
-    if (dom.hostPinInput) dom.hostPinInput.value = cfg.host_pin;
+    if (dom.hostPinInput) {
+      dom.hostPinInput.value = cfg.host_pin;
+      updatePinValidationUI(cfg.host_pin);
+    }
   }
   if (Array.isArray(cfg.authorized_clients)) {
     localStorage.setItem(STORAGE_HOST_WHITELIST, JSON.stringify(cfg.authorized_clients));
@@ -720,13 +723,20 @@ function connectBridge(force = false) {
         if (currentGen !== bridgeConnectGeneration) return;
 
         // Native binary video frame from bridge.py
-        if (evt.data instanceof ArrayBuffer) {
-          if (evt.data.byteLength > 14) {
-            const view = new DataView(evt.data);
-            const w = view.getUint32(6);
-            const h = view.getUint32(10);
-            const jpegBlob = new Blob([new Uint8Array(evt.data, 14)], { type: 'image/jpeg' });
-            renderNativeFrameToCanvas(jpegBlob, w, h);
+        if (evt.data instanceof ArrayBuffer || evt.data instanceof Blob) {
+          const processFrameBuffer = (buffer) => {
+            if (buffer.byteLength > 14) {
+              const view = new DataView(buffer);
+              const w = view.getUint32(6);
+              const h = view.getUint32(10);
+              const jpegBlob = new Blob([new Uint8Array(buffer, 14)], { type: 'image/jpeg' });
+              renderNativeFrameToCanvas(jpegBlob, w, h);
+            }
+          };
+          if (evt.data instanceof ArrayBuffer) {
+            processFrameBuffer(evt.data);
+          } else {
+            evt.data.arrayBuffer().then(processFrameBuffer).catch(() => {});
           }
           return;
         }
@@ -904,7 +914,7 @@ function initNativeCanvas() {
   if (!nativeCanvas) {
     nativeCanvas = document.createElement('canvas');
     nativeCanvas.id = 'native-stream-canvas';
-    nativeCanvas.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:100px;height:100px;opacity:0.01;pointer-events:none;z-index:-9999;';
+    nativeCanvas.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-9999;';
     document.body.appendChild(nativeCanvas);
 
     let targetW = lastReportedScreenSize.w || 1920;
