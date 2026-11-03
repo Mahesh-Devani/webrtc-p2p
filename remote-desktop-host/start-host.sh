@@ -124,6 +124,7 @@ if [ "$IS_DAEMON" -eq 1 ]; then
         cleanup_stale_chrome_lock
         "$CHROME_BIN" \
           --headless=new \
+          --remote-debugging-port=9222 \
           --window-size=1920,1080 \
           --user-data-dir="$HOST_PROFILE" \
           --disable-background-timer-throttling \

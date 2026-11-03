@@ -59,6 +59,7 @@ console.log('[P2P Connect] v7 - Multi-File Flow Control & Unified Singletons Act
     btnDeleteFromEdit: $('#btn-delete-from-edit'),
     btnCancelEditRemoteDevice: $('#btn-cancel-edit-remote-device'),
     btnSaveEditRemoteDevice: $('#btn-save-edit-remote-device'),
+    btnConnectFromEdit: $('#btn-connect-from-edit'),
     btnCreateSession: $('#btn-create-session'),
     btnJoinSession: $('#btn-join-session'),
     // Chat panel
@@ -1251,10 +1252,12 @@ ${clarification}
       dots[1]?.classList.add('active');
     }
 
+    const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth <= 768;
     try {
       nostrActiveSessionId = await NostrSignaling.startSession(device.pubkey, {
         pin,
         isUnattended: true,
+        isMobile: isMobileDevice,
       });
       sessionRemotePubKey = device.pubkey;
       if (dots) {
@@ -2446,6 +2449,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
           mediaActive = true;
           isWaitingForRemoteDesktop = false;
           if (dom.remoteVideo.srcObject !== stream) {
+            dom.remoteVideo.setAttribute('playsinline', '');
+            dom.remoteVideo.setAttribute('webkit-playsinline', '');
             dom.remoteVideo.srcObject = stream;
             dom.remoteVideo.muted = true;
             applySavedRemoteAudioSettings();
@@ -2457,6 +2462,12 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
                 dom.remoteVideo.play().catch(e => console.warn('[RD Video] Muted play also failed:', e));
               });
             }
+            sendRdInput({
+              t: 'client_capabilities',
+              isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth <= 768,
+              screenWidth: window.screen.width,
+              screenHeight: window.screen.height
+            });
           }
           hide(dom.remoteNoVideo);
           if (!dom.remoteVideo._rdVideoReadyBound) {
@@ -5247,6 +5258,29 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       hide(dom.editRemoteDeviceModal);
       toast(`Saved changes for "${name}"!`);
     }
+  });
+
+  dom.btnConnectFromEdit?.addEventListener('click', () => {
+    const pk = dom.editRemoteDeviceOriginalPubkey?.value;
+    if (!pk) return;
+    const name = dom.editRemoteDeviceNickname?.value.trim() || `Host-${pk.slice(0, 6)}`;
+    const icon = dom.editRemoteDeviceIcon?.value || '🖥️';
+    const pin = dom.editRemoteDevicePin?.value?.trim() || '';
+
+    const devices = loadRemoteDevices();
+    let dev = devices.find(d => d.pubkey === pk);
+    if (dev) {
+      dev.name = name;
+      dev.icon = icon;
+      dev.pin = pin;
+      saveRemoteDevices(devices);
+    } else {
+      dev = { pubkey: pk, name, icon, pin, addedAt: Date.now() };
+      devices.push(dev);
+      saveRemoteDevices(devices);
+    }
+    hide(dom.editRemoteDeviceModal);
+    connectToRemoteDevice(dev);
   });
 
   function checkUrlRemoteHostParam() {

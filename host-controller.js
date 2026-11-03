@@ -912,6 +912,8 @@ setInterval(async () => {
   } catch {}
 }, 15000);
 
+let isMobileClient = false;
+
 function initNativeCanvas() {
   if (!nativeCanvas) {
     nativeCanvas = document.createElement('canvas');
@@ -923,8 +925,13 @@ function initNativeCanvas() {
     let targetH = lastReportedScreenSize.h || 1080;
     const MAX_STREAM_WIDTH = 3840;
     const MAX_STREAM_HEIGHT = 2160;
-    if (targetW > MAX_STREAM_WIDTH || targetH > MAX_STREAM_HEIGHT) {
-      const scale = Math.min(MAX_STREAM_WIDTH / targetW, MAX_STREAM_HEIGHT / targetH);
+    const MOBILE_MAX_STREAM_WIDTH = 1920;
+    const MOBILE_MAX_STREAM_HEIGHT = 1080;
+    const effectiveMaxWidth = isMobileClient ? MOBILE_MAX_STREAM_WIDTH : MAX_STREAM_WIDTH;
+    const effectiveMaxHeight = isMobileClient ? MOBILE_MAX_STREAM_HEIGHT : MAX_STREAM_HEIGHT;
+
+    if (targetW > effectiveMaxWidth || targetH > effectiveMaxHeight) {
+      const scale = Math.min(effectiveMaxWidth / targetW, effectiveMaxHeight / targetH);
       targetW = Math.round(targetW * scale);
       targetH = Math.round(targetH * scale);
     }
@@ -999,10 +1006,15 @@ async function renderNativeFrameToCanvas(blob, w, h) {
   // Scale down dimensions to fit mobile WebRTC limits (max 3840x2160, even dimensions)
   const MAX_STREAM_WIDTH = 3840;
   const MAX_STREAM_HEIGHT = 2160;
+  const MOBILE_MAX_STREAM_WIDTH = 1920;
+  const MOBILE_MAX_STREAM_HEIGHT = 1080;
+  const effectiveMaxWidth = isMobileClient ? MOBILE_MAX_STREAM_WIDTH : MAX_STREAM_WIDTH;
+  const effectiveMaxHeight = isMobileClient ? MOBILE_MAX_STREAM_HEIGHT : MAX_STREAM_HEIGHT;
+
   let targetW = w;
   let targetH = h;
-  if (targetW > MAX_STREAM_WIDTH || targetH > MAX_STREAM_HEIGHT) {
-    const scale = Math.min(MAX_STREAM_WIDTH / targetW, MAX_STREAM_HEIGHT / targetH);
+  if (targetW > effectiveMaxWidth || targetH > effectiveMaxHeight) {
+    const scale = Math.min(effectiveMaxWidth / targetW, effectiveMaxHeight / targetH);
     targetW = Math.round(targetW * scale);
     targetH = Math.round(targetH * scale);
   }
@@ -1013,7 +1025,7 @@ async function renderNativeFrameToCanvas(blob, w, h) {
   const dimsChanged = targetW > 0 && targetH > 0 && (Math.abs(nativeCanvas.width - targetW) > 2 || Math.abs(nativeCanvas.height - targetH) > 2);
 
   if (dimsChanged) {
-    console.log(`[Host Canvas] Resizing canvas from ${nativeCanvas.width}x${nativeCanvas.height} to ${targetW}x${targetH}`);
+    console.log(`[Host Canvas] Resizing canvas from ${nativeCanvas.width}x${nativeCanvas.height} to ${targetW}x${targetH} (isMobile: ${isMobileClient})`);
     nativeCanvas.width = targetW;
     nativeCanvas.height = targetH;
     nativeCanvasCtx = nativeCanvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -1039,6 +1051,9 @@ async function renderNativeFrameToCanvas(blob, w, h) {
           activeSession.addLocalStream(nativeCanvasStream);
           if (activeSession.setVideoQuality) {
             activeSession.setVideoQuality(12_000_000, 60).catch(() => {});
+            if (isMobileClient) {
+              activeSession.setVideoQuality(4_000_000, 30).catch(() => {});
+            }
           }
           console.log('[Host Canvas] Pushed new canvas stream to active WebRTC session');
         } catch (e) {
@@ -1454,6 +1469,12 @@ async function initSignaling() {
         const decompressed = decompressSignal(data);
         const { sdp, candidates, pin } = decompressed;
 
+        if (typeof decompressed.isMobile === 'boolean') {
+          isMobileClient = decompressed.isMobile;
+        } else if (signal && signal.data && typeof signal.data.isMobile === 'boolean') {
+          isMobileClient = signal.data.isMobile;
+        }
+
         // Verify Password / PIN dynamically
         const currentPin = dom.hostPinInput?.value?.trim() || localStorage.getItem(STORAGE_HOST_PIN) || '';
         if (currentPin && pin !== currentPin) {
@@ -1528,6 +1549,16 @@ async function initSignaling() {
             }
           },
           onInputEvent: (evt) => {
+            if (evt.t === 'client_capabilities') {
+              if (typeof evt.isMobile === 'boolean') {
+                const wasMobile = isMobileClient;
+                isMobileClient = evt.isMobile;
+                if (!wasMobile && isMobileClient && peerSession?.setVideoQuality) {
+                  peerSession.setVideoQuality(4_000_000, 30).catch(() => {});
+                }
+              }
+              return;
+            }
             if (evt.t === 'session_ended') {
               if (activeSession !== peerSession) return;
               console.log('[Host] Remote controller finished session');
@@ -1660,6 +1691,9 @@ async function initSignaling() {
             // Immediately configure high-bitrate video stream (12 Mbps / 60 FPS) for crisp text and fluid movement
             if (peerSession?.setVideoQuality) {
               peerSession.setVideoQuality(12_000_000, 60).catch(() => {});
+              if (isMobileClient) {
+                peerSession.setVideoQuality(4_000_000, 30).catch(() => {});
+              }
             }
 
             // Proactively ensure bridge is connected or connecting

@@ -1237,11 +1237,13 @@ async def handle_client(reader, writer):
             nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
             nonlocal _last_activity_time, _last_frame_crc, _last_frame_send_time
             active_delay = 1.0 / max(1, min(60, capture_fps))
-            idle_delay = 0.5  # Check twice a second when screen is idle and static
+            idle_delay = 0.2  # Maintain at least 5 FPS heartbeat to prevent WebRTC congestion control starvation
+            stream_start_time = time.monotonic()
             while capture_active:
                 t0 = time.time()
                 now_mono = time.monotonic()
                 is_idle = (now_mono - _last_activity_time) > 2.0
+                is_startup = (now_mono - stream_start_time) < 4.0
                 is_dirty = True
 
                 try:
@@ -1261,8 +1263,8 @@ async def handle_client(reader, writer):
                             _last_activity_time = now_mono
                             _last_frame_crc = frame_crc
 
-                        # Send if frame is dirty, or user recently interacted, or 1s elapsed since last frame
-                        should_send = is_dirty or (now_mono - _last_activity_time < 2.0) or (now_mono - _last_frame_send_time >= 1.0)
+                        # Send if frame is dirty, or during initial stream burst, or user recently interacted, or 0.2s elapsed since last frame
+                        should_send = is_dirty or is_startup or (now_mono - _last_activity_time < 2.0) or (now_mono - _last_frame_send_time >= 0.2)
                         if should_send:
                             header = struct.pack('!BBIII', 1, t_code, int(capture_target_id or 0), int(w), int(h))
                             writer.write(make_ws_frame(header + jpeg_bytes, opcode=0x02))
@@ -1274,7 +1276,7 @@ async def handle_client(reader, writer):
                     pass
 
                 elapsed = time.time() - t0
-                target_delay = idle_delay if (is_idle and not is_dirty) else active_delay
+                target_delay = idle_delay if (is_idle and not is_dirty and not is_startup) else active_delay
                 sleep_time = max(0.005, target_delay - elapsed)
                 await asyncio.sleep(sleep_time)
 

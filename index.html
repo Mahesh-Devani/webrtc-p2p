@@ -962,13 +962,16 @@
             </div>
           </div>
 
-          <div class="modal__actions" style="margin-top: 18px; justify-content: space-between;">
+          <div class="modal__actions" style="margin-top: 18px; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <button type="button" id="btn-delete-from-edit" class="btn btn--small" style="background: rgba(239, 68, 68, 0.1); color: var(--c-danger, #ef4444); border: 1px solid rgba(239, 68, 68, 0.3);">
               Delete
             </button>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button type="button" id="btn-cancel-edit-remote-device" class="btn btn--outline">Cancel</button>
-              <button type="button" id="btn-save-edit-remote-device" class="btn btn--primary">Save Changes</button>
+              <button type="button" id="btn-save-edit-remote-device" class="btn btn--outline">Save</button>
+              <button type="button" id="btn-connect-from-edit" class="btn btn--primary" style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                <span>⚡</span> Connect Now
+              </button>
             </div>
           </div>
         </div>
@@ -1193,7 +1196,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=63"></script>
+  <script type="module" src="ui-controller.js?v=64"></script>
 </body>
 
 </html>

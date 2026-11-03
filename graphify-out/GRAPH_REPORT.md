@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 55 files · ~139,903 words
+- 55 files · ~140,182 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1387 nodes · 2651 edges · 95 communities (55 shown, 40 thin omitted)
+- 1387 nodes · 2652 edges · 95 communities (55 shown, 40 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 113 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8eb3d557`
+- Built from commit: `9fa70351`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -100,7 +100,7 @@
 3. `TestDiagnosticSystem` - 30 edges
 4. `initNostr()` - 29 edges
 5. `show()` - 28 edges
-6. `buildNostrSessionConfig()` - 24 edges
+6. `buildNostrSessionConfig()` - 25 edges
 7. `MockNostrRelay` - 23 edges
 8. `weierstrass()` - 21 edges
 9. `handle_client()` - 20 edges
