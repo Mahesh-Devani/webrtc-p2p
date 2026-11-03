@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793728378.8124952,
-    "seen": 1793728449.5418482,
-    "ast_hash": "1dc2287e64ca3f411b9a341a3a471067",
+    "mtime": 1793731543.2534258,
+    "seen": 1793731595.823375,
+    "ast_hash": "38f32b570745efc42c63078b6e96c856",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -126,15 +126,15 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1793542176.5237625,
-    "seen": 1793542237.757376,
-    "ast_hash": "a40296ce688b4962da3ff59fdcbccaf5",
+    "mtime": 1793733495.207749,
+    "seen": 1793733584.9460008,
+    "ast_hash": "5e14596c7c651baaf56fa0c07702b744",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792594145.1206853,
-    "seen": 1792594161.178684,
-    "ast_hash": "7f952a25c7edb4f90f2bc976a7a45d94",
+    "mtime": 1793733471.0960813,
+    "seen": 1793733584.946002,
+    "ast_hash": "60a3d4abc30491cbe28014dc70a5e218",
     "semantic_hash": ""
   },
   "docs/architecture.md": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "docs/roadmap.md": {
-    "mtime": 1791973427.8617969,
-    "seen": 1792181424.2872949,
-    "ast_hash": "76b841a6fa35f698310ffabb9bfeb1ba",
+    "mtime": 1793733452.8300061,
+    "seen": 1793733584.946005,
+    "ast_hash": "27c6621c020a2e4f875b8a71490e5096",
     "semantic_hash": ""
   },
   "docs/system-design.md": {
@@ -174,9 +174,9 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793728394.0806398,
-    "seen": 1793728449.541877,
-    "ast_hash": "85516e7818dcb2a78574987b109c4a4d",
+    "mtime": 1793733570.2464926,
+    "seen": 1793733584.946006,
+    "ast_hash": "02a3f48ec5ff33c051b161d288bb7590",
     "semantic_hash": ""
   },
   "index.html": {
@@ -186,9 +186,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
-    "mtime": 1792854298.3674037,
-    "seen": 1792854330.753314,
-    "ast_hash": "77bee2683de3c39e1d129da7704506b7",
+    "mtime": 1793733434.9288826,
+    "seen": 1793733584.946007,
+    "ast_hash": "0a8e66a7cd0c711f771995b0d25f1f2e",
     "semantic_hash": ""
   },
   ".agents/skills/regression-testing/scripts/run.sh": {
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "docs/remote-desktop-knowledge-base.md": {
-    "mtime": 1793655294.5716825,
-    "seen": 1793655320.594847,
-    "ast_hash": "39a220027c63bd32cab77a0beaa150e9",
+    "mtime": 1793733395.558114,
+    "seen": 1793733584.946005,
+    "ast_hash": "4a7de7575e45d810677d5bbe02356e8e",
     "semantic_hash": ""
   },
   "remote-desktop-host/switch-to-headless.sh": {

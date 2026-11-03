@@ -39,6 +39,31 @@ This directory provides the companion agent that turns **P2P Connect** into a fu
 
 ---
 
+## Recommended Operational Workflow & Background Hosting Roadmap
+
+> [!TIP]
+> ### ⭐ Recommended Operational Workflow (Current Production Mode)
+> **Run `bridge.py` manually in a Terminal window, and keep `host.html` open in a regular browser tab:**
+> ```bash
+> cd remote-desktop-host
+> python3 bridge.py
+> ```
+> *(Open `http://localhost:8080/host.html` or `https://mahesh-devani.github.io/webrtc-p2p/host.html` in Chrome/Edge)*.
+>
+> **Why is this the recommended workflow today?**
+> When executed inside your interactive Terminal shell (`zsh` / `bash`), Python directly inherits your terminal emulator's established macOS TCC security session. macOS grants full **Screen Recording** (`can_capture: true`) and **Accessibility** permissions, enabling instant 60 FPS desktop capture, display/window target switching, on-demand display wake, and remote lock-screen login with zero permission friction.
+
+> [!NOTE]
+> ### 🎯 Selected Target Architecture for 24/7 Unattended Hosting: Approach B
+> We have chosen **Approach B: Native macOS Menu Bar Companion (`P2P Connect Host.app`)** as the official target architecture for permanent, unattended background hosting:
+> - **Native macOS Menu Bar Status Item (`NSStatusItem`)**: Sits cleanly in the top menu bar (`🖥️ P2P: Online`). Cannot be accidentally closed; runs 24/7.
+> - **First-Class Permanent TCC Permissions**: Packaged as a standard macOS application bundle with Bundle ID `com.p2pconnect.host`. macOS prompts for Screen Recording and Accessibility natively on first launch, permanently granting permissions in System Settings without needing terminal windows or manual binary path overrides.
+> - **Embedded `WKWebView`**: Uses Apple's native WebKit engine built into macOS, eliminating any dependency on Google Chrome and consuming only ~45–60 MB RAM (vs 250MB+ for Chromium).
+> - **1-Click Menu Bar Dropdown**: View host status, click-to-copy Host PIN, show pairing QR code, manage authorized clients, and pause/resume hosting.
+> - **Cross-Platform Roadmap**: Native Swift/PyObjC for macOS, C#/WPF with WebView2 for Windows System Tray, and Python/GTK Ayatana with WebKitGTK for Linux.
+
+---
+
 ## How to Download & Run the Host Agent
 
 You only need `bridge.py` running on the **computer you want to control**. Choose whichever method is easiest:
@@ -143,11 +168,17 @@ The host bridge incorporates multiple layers of security to prevent unauthorized
 
 ## Running as a Persistent Background Service
 
-To use your computer like a true remote machine (comparable to Chrome Remote Desktop or TeamViewer), you can install P2P Connect Host as an **automatic background service**. It will start automatically when your computer powers on or logs in, keep running silently without an open terminal, and automatically restart if closed.
+To use your computer like a true remote machine (comparable to Chrome Remote Desktop or TeamViewer), you can configure persistent background hosting.
+
+> [!NOTE]
+> **macOS Background Notice (TCC Security Sandbox)**:  
+> Background processes managed purely by macOS `launchd` without an active GUI window or app bundle are restricted by macOS WindowServer security (`kTCCServiceScreenCapture`), which causes display capture to return black frames unless the exact Python binary path (`/opt/homebrew/bin/python3`) is explicitly granted Screen Recording access in System Settings.  
+> **Current Recommendation**: Run `python3 bridge.py` manually in your Terminal for seamless permission inheritance.  
+> **Upcoming Solution**: **Approach B (Native macOS Menu Bar Companion)** will package the host as a native `.app` bundle that permanently solves TCC permission management with zero terminal windows required.
 
 ---
 
-### macOS (LaunchAgent)
+### macOS (LaunchAgent — Approach A Experimental)
 
 macOS manages background user services via `launchd`. We provide automated install and uninstall scripts:
 

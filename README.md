@@ -50,13 +50,10 @@ P2P Connect can turn any computer into an unattended remote desktop host without
 3. Paste the Host Public Key, enter the password, and click **Save Computer**.
 4. Click **⚡ Connect** to immediately take full interactive control!
 
-### 3. Optional: Run as a Persistent Background Service (24/7 Access)
-If you want your host computer to always be accessible remotely without keeping a terminal open:
-- **macOS:** `cd remote-desktop-host && ./install-service.sh` (LaunchAgent)
-- **Linux:** `cd remote-desktop-host && ./install-linux-service.sh` (systemd user unit)
-- **Windows:** Double-click `remote-desktop-host/install-windows-service.bat` (Task Scheduler with `pythonw.exe`)
-
-See [remote-desktop-host/README.md](remote-desktop-host/README.md#running-as-a-persistent-background-service) for complete management commands (logs, restart, and uninstallation).
+### 3. Background Hosting & Unattended Access (Roadmap)
+- **Current Recommended Workflow**: Run `python3 bridge.py` manually in your Terminal (`cd remote-desktop-host && python3 bridge.py`) and keep `host.html` open in a browser tab. Running in Terminal cleanly inherits macOS Screen Recording and Accessibility permissions, guaranteeing verified 60 FPS hardware capture, multi-monitor/window target switching, and display wake without background sandbox restrictions.
+- **Target Architecture (Approach B)**: A native macOS Menu Bar Companion (`P2P Connect Host.app`) with embedded Apple `WKWebView` is on the roadmap to deliver permanent 24/7 background hosting with native system permission management and zero browser windows needed.
+- For experimental LaunchAgent (macOS), systemd (Linux), or Task Scheduler (Windows), see [remote-desktop-host/README.md](remote-desktop-host/README.md#running-as-a-persistent-background-service).
 
 ---
 

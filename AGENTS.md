@@ -205,6 +205,13 @@ ArrayBuffer (16KB chunk) × N                        → push chunk; update prog
 - **Proactive Bitrate Allocation**: Chrome starts WebRTC video senders at ~1.5 Mbps unless explicitly configured. `host-controller.js` must invoke `peerSession.setVideoQuality(12_000_000, 60)` immediately upon channel connection.
 - **Hardware JPEG Compression Quality**: In `bridge.py`, ImageIO JPEG compression on macOS must pre-allocate `kCGImageDestinationLossyCompressionQuality = 0.85` rather than default `None` (~0.55).
 
+### 11. Remote Desktop Hosting Modes & macOS TCC Boundaries
+- **Current Operational Recommendation**: Run `python3 remote-desktop-host/bridge.py` manually in a Terminal window, and keep `host.html` open in a regular browser tab.
+  - **Reason**: Running inside an interactive user terminal shell cleanly inherits the terminal's established macOS TCC security credentials for **Screen Recording** (`can_capture: true`) and **Accessibility**, guaranteeing 100% reliable 60 FPS hardware capture, multi-monitor and window switching, display wake, and remote lock-screen login.
+- **Background Hosting Architecture (Approach B)**:
+  - Non-GUI background services spawned by `launchd` (PID 1) lack a Mach GUI bootstrap port and are denied Screen Recording by macOS WindowServer TCC (`kTCCServiceScreenCapture`), resulting in black frames (`#202020`).
+  - **Target Architecture**: **Approach B (Native macOS Menu Bar Companion `P2P Connect Host.app`)** with embedded `WKWebView` is the chosen architecture for 24/7 background hosting. Packaging as an app bundle (`LSUIElement=true`, bundle ID `com.p2pconnect.host`) enables macOS to prompt the user natively on first launch, permanently anchoring permissions in System Settings with ~50MB RAM and zero Chrome dependency.
+
 ---
 
 ## 7. Local Development & Verification

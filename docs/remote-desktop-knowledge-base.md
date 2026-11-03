@@ -74,7 +74,9 @@ The system operates across two distinct modes:
 | **Extended UX D: Encrypted Fleet Export/Import** | Export/import saved computers with optional PBKDF2 / AES-256-GCM encryption. | ✅ **Completed** | Full JSON export/import modal with password encryption. |
 | **Extended UX E: 24/7 Power & Sleep Guidance** | Interactive modal explaining OS power settings for unattended access. | ✅ **Completed** | Accessible directly from the Reachability box on computer cards. |
 | **Extended UX F: Transient Disconnect Auto-Resume** | In-stream auto-resume banner with countdown when network blips. | ✅ **Completed** | 4-second transient disconnect banner with automatic Nostr reconnection. |
-| **Approach A: 24/7 Silent Headless Host Service** | Run host silently in background without open browser tabs or windows; auto-restarts on crash/reboot. | ✅ **Completed** | LaunchAgent executes `start-host.sh --daemon` with supervisor loop, Headless Chrome host worker, and persistent `~/.p2p-connect-host/host-config.json` identity sync. |
+| **Approach A: 24/7 Silent Headless Host Service** | Run host silently in background via LaunchAgent + headless browser without open tabs. | ⚠️ **Evaluated / Deprecated** | Tested via `start-host.sh --daemon`. Headless Chrome/launchd daemons are denied `kTCCServiceScreenCapture` by macOS TCC sandbox, returning black frames (`#202020`). Replaced by Approach B. |
+| **Current Operational Mode: Manual Terminal Bridge** | Run `python3 bridge.py` in Terminal + open `host.html` in browser. | ✅ **Active & Verified** | Inherits Terminal TCC session (`can_capture: true`), 100% reliable 60 FPS capture, dynamic display/window switching, display wake, and input injection. |
+| **Approach B: Native macOS Menu Bar Companion** | Lightweight macOS status item menu (`P2P Connect Host.app`) with embedded `WKWebView`. | 🎯 **Selected Target Architecture** | Native app bundle with permanent macOS TCC permissions, ~50MB RAM, zero Chrome dependency, top menu bar controls (PIN, status, QR, pause). Roadmap item. |
 
 ---
 
@@ -116,6 +118,14 @@ Across our development and real-world field testing (including multi-hour produc
 - **Symptom**: Installing the macOS background service via `./install-service.sh` resulted in `launchctl list` reporting exit code `126`, `/tmp/p2pconnect-host.err` logging `/bin/bash: .../start-host.sh: Operation not permitted`, and the host bridge failing to start.
 - **Root Cause**: macOS TCC (Transparency, Consent, and Control) privacy controls protect user folders (`~/Documents`, `~/Desktop`, `~/Downloads`). Background LaunchAgents managed by `launchd` run without interactive user TCC tokens and are strictly denied permission to execute scripts or read files residing in `~/Documents`.
 - **Lesson / Rule**: Never configure macOS LaunchAgent plists to execute scripts directly from `~/Documents`, `~/Desktop`, or `~/Downloads`. Always deploy the daemon files to a dedicated application directory such as `~/.p2p-connect-host/`, where `launchd` has full read and execution rights without TCC restrictions.
+
+#### 7. macOS TCC Screen Recording Denial for Background Daemons (The Black Frame Bug)
+- **Symptom**: When the host was launched as a 24/7 background service via LaunchAgent (`start-host.sh --daemon`), the remote controller connected successfully, reached `🟢 STREAMING (NATIVE 60 FPS CAPTURE)`, but the video stream and host preview were completely black / solid dark gray (`#202020`).
+- **Root Cause**: macOS WindowServer enforces strict TCC (`kTCCServiceScreenCapture`) boundaries. Non-GUI processes spawned by `launchd` (PID 1) do not have an active Mach GUI bootstrap context or an associated application bundle. When `bridge.py` invoked `CGDisplayCreateImage()` and `CGWindowListCreateImage()`, macOS silently denied screen access without prompting the user. Window titles were redacted to empty strings (`""`), display captures returned solid `#202020`, and `can_capture` reported `false`.
+  - In stark contrast, when `bridge.py` is started manually in Terminal (`python3 bridge.py`), Python inherits the user's interactive Terminal session, which already has Screen Recording and Accessibility authorization (`can_capture: true`).
+- **Lesson / Architecture Decision**:
+  - **Immediate Operational Recommendation**: Run `python3 remote-desktop-host/bridge.py` manually in a terminal window, with `host.html` open in a regular browser tab. This cleanly inherits interactive TCC rights and provides 100% reliable 60 FPS hardware capture, window switching, display wake, and input injection.
+  - **Long-Term Background Solution (Approach B)**: Raw background scripts spawned by `launchd` cannot reliably bypass macOS TCC without fragile binary whitelist hacking. The robust, professional solution is **Approach B: Native macOS Menu Bar Companion** (`P2P Connect Host.app`). Because it is a packaged macOS application bundle with an `Info.plist` and Bundle Identifier (`com.p2pconnect.host`), macOS natively prompts the user on first launch to allow Screen Recording and Accessibility, permanently anchoring the permission in System Settings.
 
 ---
 
@@ -207,7 +217,8 @@ Based on comprehensive system analysis, the following high-impact enhancements a
 
 ```mermaid
 flowchart TD
-    subgraph NearTerm["1. Near-Term (Stability & Bandwidth)"]
+    subgraph NearTerm["1. Priority Architecture & Near-Term"]
+        B0["Approach B: Native macOS Menu Bar Companion (P2P Connect Host.app)"]
         N1["Dirty-Frame Detection & Adaptive FPS (1-60 FPS)"]
         N2["Session Reconnect Handshake & In-Band ICE Restart"]
         N3["Re-introduce Package 5: Host Auto-Lock (Opt-In)"]
@@ -217,6 +228,7 @@ flowchart TD
         M1["Native WebCodecs Video Pipeline (H.264 / AV1)"]
         M2["Virtual Display Driver for Headless Hosts (IddCx / CGVirtualDisplay)"]
         M3["Native macOS Audio Loopback Streaming (CoreAudio HAL)"]
+        M4["Windows & Linux System Tray Companions (WebView2 / WebKitGTK)"]
     end
 
     subgraph LongTerm["3. Long-Term (Enterprise & Multi-Device)"]
@@ -226,6 +238,64 @@ flowchart TD
 
     NearTerm --> MidTerm --> LongTerm
 ```
+
+### 0. Approach B: Native macOS Menu Bar Companion (`P2P Connect Host.app`) — Target Architecture
+
+- **Status**: 🎯 **Official Target Architecture for Unattended 24/7 Hosting**
+- **Immediate Interim Workflow**: Run `python3 remote-desktop-host/bridge.py` manually in a Terminal window with `host.html` open in a regular browser tab. This cleanly inherits interactive terminal TCC permissions with verified 60 FPS capture and zero blank-screen issues.
+- **Why Approach B Solves macOS Background Hosting**:
+  1. **Permanent First-Class TCC Permissions**: Packaged as a standard macOS application bundle (`P2P Connect Host.app`, `LSUIElement=true`, bundle ID `com.p2pconnect.host`). On first launch, macOS natively displays standard system permission prompts for **Screen Recording** and **Accessibility**, permanently recording the grant in System Settings.
+  2. **Zero Google Chrome Dependency**: Hosts `host.html` directly inside Apple's native **`WKWebView`**, eliminating the need for an installed third-party browser or command-line flags (`--headless=new`, `--use-fake-ui-for-media-stream`).
+  3. **Minimal Footprint**: Operates in **~45–60 MB RAM** (vs 250MB+ for a headless Chromium process).
+  4. **Unclosable Menu Bar Presence**: Sits in the top-right macOS menu bar status area (`NSStatusItem`). Cannot be accidentally closed by quitting Chrome or closing browser tabs.
+  5. **Direct Bridge Lifecycle Management**: The companion app automatically spawns, monitors, and restarts `bridge.py` (or bundles it as a compiled helper binary), ensuring the input/capture bridge is always alive.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│    File  Edit  ...  [🔋 98%]  [📶 Wi-Fi]  [🖥️ P2P: Online]  Tue 9:45  │
+└──────────────────────────────────────────────┬─────────────────────────┘
+                                               │ Click Status Item
+┌──────────────────────────────────────────────▼─────────────────────────┐
+│  🖥️  P2P Connect — Remote Desktop Host                                 │
+│  ────────────────────────────────────────────────────────────────────  │
+│  Status: 🟢 Online & Listening (Relays 3/3)                            │
+│  Active Session: None (Waiting for remote client)                      │
+│                                                                        │
+│  Host Access PIN: [ A&ytCvf&_93M ]  (Click to Copy)                    │
+│  Device Name: Mac-Studio-M2-Max                                        │
+│  ────────────────────────────────────────────────────────────────────  │
+│  📋 Copy 1-Click Connect Link                                          │
+│  📱 Show Pairing QR Code...                                            │
+│  🛡️ Authorized Clients (1 Allowed)                                     │
+│  ⏸️ Pause Remote Hosting                                               │
+│  ────────────────────────────────────────────────────────────────────  │
+│  ⚙️ Preferences...                                                     │
+│  🚪 Quit P2P Connect Host                                              │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Technical Implementation Details for Approach B
+- **Runtime**: Swift (or PyObjC standalone app).
+- **Background App Configuration**: `Info.plist` includes `<key>LSUIElement</key><true/>` so the app runs without a Dock icon, appearing exclusively in the menu bar.
+- **App Nap & Background Suspension Prevention**:
+  ```swift
+  let activity = ProcessInfo.processInfo.beginActivity(
+      options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+      reason: "P2P Connect Unattended Remote Desktop Hosting"
+  )
+  ```
+- **WKWebView WebRTC Configuration**:
+  ```swift
+  let config = WKWebViewConfiguration()
+  config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+  config.allowsAirPlayForMediaPlayback = false
+  // Enable media capture in WebKit
+  config.mediaTypesRequiringUserActionForPlayback = []
+  ```
+- **Cross-Platform Roadmap for Approach B Companions**:
+  - **macOS**: Native Swift / PyObjC Menu Bar App (`NSStatusItem` + `WKWebView`).
+  - **Windows**: C# / WPF or PyWebView System Tray with Microsoft Edge `WebView2`.
+  - **Linux**: Python / GTK Ayatana AppIndicator with `WebKitGTK`.
 
 ### 1. Dirty-Frame Detection & Adaptive FPS (Near-Term)
 - **Goal**: Slash host CPU and network bandwidth during static desktop viewing.

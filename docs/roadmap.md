@@ -55,14 +55,34 @@ Architecture notes:
 - Practical limit: ~4-5 participants (bandwidth/CPU constraint of mesh)
 - New `call-manager.js` module for multi-peer call state
 
-### 📱 Phase 3: Native Applications
-Goal: Extend P2P Connect beyond the browser for features not possible on the web.
+### 📱 Phase 3: Native Applications & Unattended Host Companions
+Goal: Extend P2P Connect beyond the browser for features not possible on the web, including native 24/7 background hosting.
+
+#### 🖥️ Remote Desktop Host: Native Menu Bar Companion (Approach B — Target Architecture)
+*Selected target architecture to replace terminal execution and overcome macOS LaunchAgent TCC background sandbox limits.*
 
 Key features:
+- **macOS Menu Bar App (`P2P Connect Host.app`)**:
+  - Sits permanently in macOS menu bar (`NSStatusItem`, `LSUIElement=true` without Dock clutter).
+  - Uses Apple's built-in **`WKWebView`** (no dependency on Google Chrome or Electron).
+  - **Permanent macOS TCC Authorization**: Packaged app bundle natively prompts once for Screen Recording and Accessibility, permanently anchoring permissions in System Settings.
+  - **Lightweight Footprint**: Consumes only ~45–60 MB RAM (vs 250MB+ for Chrome).
+  - **Zero Throttling**: Disables macOS App Nap via `NSProcessInfo.beginActivityWithOptions`.
+  - **Menu Bar Controls**: Instant status (`🟢 Online`, `🔵 In Session`), 1-click Host PIN copy, pairing QR code modal, pause/resume toggle, whitelist management, and graceful quit.
+  - **Supervised Bridge Lifecycle**: Automatically starts, monitors, and restarts `bridge.py`.
+- **Windows System Tray Companion**:
+  - Lightweight C# / WPF or PyWebView app using Microsoft Edge `WebView2`.
+  - Starts on boot with Task Scheduler or Startup folder, lives in notification area tray.
+- **Linux AppIndicator Companion**:
+  - Ayatana AppIndicator tray app with `WebKitGTK`.
+
+*(Current interim operational recommendation: Run `python3 remote-desktop-host/bridge.py` manually in a Terminal window with `host.html` open in a browser tab).*
+
+#### 📱 Mobile & Desktop Client Applications
 - **Android app** (Kotlin/Java) — background operation, push notifications, screen sharing system-wide
 - **iOS app** (Swift) — background calling, CallKit integration, system notifications
-- **Linux desktop app** (Electron or Tauri) — system tray, native file dialogs, screen recording
-- **Windows desktop app** (Electron or Tauri) — system tray, native notifications, auto-start
+- **Linux desktop app** (Tauri) — system tray, native file dialogs, screen recording
+- **Windows desktop app** (Tauri) — system tray, native notifications, auto-start
 
 Architecture notes:
 - Shared WebRTC core logic (consider WebView-based approach for code reuse)
