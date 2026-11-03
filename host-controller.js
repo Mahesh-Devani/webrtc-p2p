@@ -116,6 +116,7 @@ const dom = {
   btnModeInteractive: document.getElementById('btn-mode-interactive'),
   btnModeHeadless: document.getElementById('btn-mode-headless'),
   interactiveModeBanner: document.getElementById('host-interactive-banner'),
+  btnTogglePreview: document.getElementById('btn-toggle-preview'),
 };
 
 const STORAGE_HOST_MODE = 'p2p-host-mode';
@@ -123,6 +124,7 @@ const isDaemonWorker = new URLSearchParams(window.location.search).get('daemon')
 let isDaemonActive = false;
 let hostMode = localStorage.getItem(STORAGE_HOST_MODE) || 'interactive';
 let daemonStandby = false;
+let showPreviewOnHost = false;
 
 function setHostMode(mode) {
   hostMode = mode;
@@ -962,7 +964,7 @@ function initNativeCanvas() {
   if (!nativeCanvas) {
     nativeCanvas = document.createElement('canvas');
     nativeCanvas.id = 'native-stream-canvas';
-    nativeCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;opacity:0.99;pointer-events:none;z-index:-9999;';
+    nativeCanvas.style.cssText = 'position:fixed;top:-99999px;left:-99999px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999;';
     document.body.appendChild(nativeCanvas);
 
     let targetW = lastReportedScreenSize.w || 1920;
@@ -1039,6 +1041,19 @@ function stopNativeOnDemandCapture() {
       bridgeWs.send(JSON.stringify({ t: 'stop_capture', action: 'stop_capture' }));
       console.log('[Host] Requested native capture stop');
     } catch {}
+  }
+  if (nativeCanvasCtx && nativeCanvas) {
+    try {
+      nativeCanvasCtx.fillStyle = '#000000';
+      nativeCanvasCtx.fillRect(0, 0, nativeCanvas.width, nativeCanvas.height);
+    } catch {}
+  }
+  if (dom.hostScreenVideo) {
+    dom.hostScreenVideo.srcObject = null;
+    dom.hostScreenVideo.style.display = 'none';
+  }
+  if (!hostStream) {
+    updateCaptureUI(false);
   }
 }
 
@@ -1122,7 +1137,6 @@ async function renderNativeFrameToCanvas(blob, w, h) {
     updateCaptureUI(true, nativeCanvas.width, nativeCanvas.height, false);
     if (dom.hostScreenVideo && dom.hostScreenVideo.srcObject !== nativeCanvasStream) {
       dom.hostScreenVideo.srcObject = nativeCanvasStream;
-      dom.hostScreenVideo.style.display = 'block';
     }
 
     // Also ensure activeSession is streaming nativeCanvasStream (not old hostStream)
@@ -1156,12 +1170,34 @@ function updateCaptureUI(active, width = 0, height = 0, hasAudio = false) {
       dom.btnToggleCapture.className = 'btn btn--small ' + (active ? 'btn--outline' : 'btn--primary');
     }
   }
+
+  // Preview button visibility & text
+  if (dom.btnTogglePreview) {
+    dom.btnTogglePreview.style.display = (active && bridgeConnected) ? 'inline-flex' : 'none';
+    dom.btnTogglePreview.textContent = showPreviewOnHost ? '🙈 Hide Preview' : '👁️ Show Preview';
+  }
+
+  const shouldShowVideo = active && (showPreviewOnHost || (!bridgeConnected && !!hostStream));
+
   if (dom.hostScreenPlaceholder) {
-    dom.hostScreenPlaceholder.classList.toggle('hidden', active);
-    dom.hostScreenPlaceholder.style.display = active ? 'none' : 'flex';
+    dom.hostScreenPlaceholder.classList.toggle('hidden', shouldShowVideo);
+    dom.hostScreenPlaceholder.style.display = shouldShowVideo ? 'none' : 'flex';
+    if (active && !shouldShowVideo && bridgeConnected) {
+      dom.hostScreenPlaceholder.innerHTML = `
+        <div style="font-size: 2.2rem; margin-bottom: 8px;">🟢</div>
+        <strong style="color: var(--c-primary); font-size: 1.05rem;">Native Desktop Stream is Active</strong><br>
+        <span style="font-size: 0.8rem; color: var(--c-text-dim); margin-top: 6px; display: inline-block;">Screen is actively streaming to your remote device. Live preview on host is hidden to prevent mirror recursion. Click <strong>"👁️ Show Preview"</strong> above to inspect.</span>
+      `;
+    } else if (!active) {
+      dom.hostScreenPlaceholder.innerHTML = `
+        <div style="font-size: 2.4rem; margin-bottom: 8px;">🖥️</div>
+        <strong style="color: var(--c-text); font-size: 1.05rem;">Desktop Capture is Inactive</strong><br>
+        <span style="font-size: 0.8rem; color: var(--c-text-dim); margin-top: 6px; display: inline-block;">When a remote controller connects, native capture starts automatically. Or click <strong>"Manual Capture Fallback"</strong> above to capture via browser picker.</span>
+      `;
+    }
   }
   if (dom.hostScreenVideo) {
-    dom.hostScreenVideo.style.display = active ? 'block' : 'none';
+    dom.hostScreenVideo.style.display = shouldShowVideo ? 'block' : 'none';
   }
   if (dom.hostStreamRes) {
     dom.hostStreamRes.textContent = active ? `${width} x ${height}` : '0 x 0';
@@ -1904,6 +1940,12 @@ function decompressSignal(b64url) {
 }
 
 // ── 5. Event Listeners ──────────────────────────────────────────────
+dom.btnTogglePreview?.addEventListener('click', (e) => {
+  e.preventDefault();
+  showPreviewOnHost = !showPreviewOnHost;
+  updateCaptureUI(isHostStreamLive(), nativeCanvas?.width || 0, nativeCanvas?.height || 0, false);
+});
+
 dom.btnToggleCapture?.addEventListener('click', async (e) => {
   e.preventDefault();
   if (captureActionLock) return;

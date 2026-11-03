@@ -13,6 +13,7 @@
       overflow-y: auto !important;
       overflow-x: hidden !important;
       scroll-behavior: smooth;
+      background: var(--c-bg, #0b141a) !important;
     }
     @keyframes pinSavedPulse {
       0% { transform: scale(0.85); opacity: 0; }
@@ -446,7 +447,10 @@
           <h3 style="margin: 0;">🖥️ Active Desktop Capture</h3>
           <span id="capture-status-badge" class="badge badge--idle" style="font-size: 0.72rem; font-weight: 600;">🔴 Inactive (Click Start)</span>
         </div>
-        <button id="btn-toggle-capture" class="btn btn--small btn--primary">Start Desktop Capture</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" id="btn-toggle-preview" class="btn btn--small btn--outline" style="font-size: 0.72rem; display: none;">👁️ Show Preview</button>
+          <button id="btn-toggle-capture" class="btn btn--small btn--primary">Start Desktop Capture</button>
+        </div>
       </div>
       <div class="host-preview">
         <video id="host-screen-video" autoplay muted playsinline style="display: none;"></video>
@@ -686,7 +690,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- Host Controller -->
-  <script type="module" src="host-controller.js?v=51"></script>
+  <script type="module" src="host-controller.js?v=52"></script>
 </body>
 
 </html>

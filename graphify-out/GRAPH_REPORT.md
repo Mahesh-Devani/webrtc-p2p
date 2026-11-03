@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-11-03)
 
 ## Corpus Check
-- 57 files · ~141,340 words
+- 57 files · ~141,566 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1395 nodes · 2662 edges · 100 communities (64 shown, 36 thin omitted)
+- 1395 nodes · 2663 edges · 100 communities (64 shown, 36 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 113 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `105db649`
+- Built from commit: `13aec53d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -188,8 +188,8 @@ Cohesion: 0.14
 Nodes (14): getRepostedEvent(), getRepostedEventPointer(), isKind(), serializeEvent(), unpackEventFromToken(), validateEvent(), validateEvent2(), validateEventKind() (+6 more)
 
 ### Community 16 - "pathlib"
-Cohesion: 0.12
-Nodes (5): get_modified_files(), main(), run_tests(), select_test_modules(), analyze_file()
+Cohesion: 0.13
+Nodes (4): get_modified_files(), main(), run_tests(), select_test_modules()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
@@ -360,8 +360,8 @@ Cohesion: 0.40
 Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
 
 ### Community 85 - "ai-diagnostic-agent.py"
-Cohesion: 0.18
-Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
+Cohesion: 0.16
+Nodes (12): add_authorized_client(), analyze_file(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ### Community 86 - "5. Future Roadmap & Proposed Improvements"
 Cohesion: 0.04
