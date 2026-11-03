@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793722380.720816,
-    "seen": 1793722399.9646,
-    "ast_hash": "5762aa742285854487b7a22588953c1d",
+    "mtime": 1793728378.8124952,
+    "seen": 1793728449.5418482,
+    "ast_hash": "1dc2287e64ca3f411b9a341a3a471067",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793704699.425982,
-    "seen": 1793704928.388821,
-    "ast_hash": "66de91007085e68f2fad67827a664265",
+    "mtime": 1793728255.1289632,
+    "seen": 1793728449.541853,
+    "ast_hash": "59643c355122281b3a33888e66777354",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -90,9 +90,9 @@
     "semantic_hash": "77ab2ff645b70f470e7fc93f7b69706f"
   },
   "remote-desktop-host/start-host.sh": {
-    "mtime": 1793704870.1230962,
-    "seen": 1793704928.388823,
-    "ast_hash": "7327d7095a70e442ff540b6c00f94199",
+    "mtime": 1793727889.4063494,
+    "seen": 1793728449.541856,
+    "ast_hash": "41667a8956571d53c9816943ad91bbb6",
     "semantic_hash": ""
   },
   "remote-desktop-host/uninstall-service.sh": {
@@ -174,9 +174,9 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793722386.2026405,
-    "seen": 1793722399.964628,
-    "ast_hash": "63675510ff90ca322f6e127bfb861f2d",
+    "mtime": 1793728394.0806398,
+    "seen": 1793728449.541877,
+    "ast_hash": "85516e7818dcb2a78574987b109c4a4d",
     "semantic_hash": ""
   },
   "index.html": {
@@ -363,6 +363,12 @@
     "mtime": 1793704830.079729,
     "seen": 1793704928.3888252,
     "ast_hash": "bc4709536621fb60e2a24cba7a37f9a4",
+    "semantic_hash": ""
+  },
+  "remote-desktop-host/switch-to-daemon.sh": {
+    "mtime": 1793704834.6311424,
+    "seen": 1793725619.677763,
+    "ast_hash": "1a785c11023fb56091d805b7b85bf955",
     "semantic_hash": ""
   }
 }

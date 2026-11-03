@@ -195,10 +195,13 @@ elif [ "$IS_DAEMON" -eq 1 ]; then
 
     # Supervise loop: automatically revives bridge.py or Chrome Worker if either ever crashes
     while true; do
-        if ! nc -z 127.0.0.1 9999 2>/dev/null; then
-            echo "[!] Native bridge not listening on 9999! Reviving..."
-            python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
-            echo $! > /tmp/p2p-bridge.pid
+        BRIDGE_PID="$(cat /tmp/p2p-bridge.pid 2>/dev/null || true)"
+        if [ -z "$BRIDGE_PID" ] || ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+            if ! nc -z 127.0.0.1 9999 2>/dev/null; then
+                echo "[!] Native bridge not listening on 9999! Reviving..."
+                python3 -u "$DIR/bridge.py" >> /tmp/p2p-bridge.log 2>&1 &
+                echo $! > /tmp/p2p-bridge.pid
+            fi
         fi
 
         if [ -n "$CHROME_PID" ] && ! kill -0 "$CHROME_PID" 2>/dev/null; then

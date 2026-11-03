@@ -339,6 +339,15 @@
             </div>
           </div>
 
+          <!-- macOS Screen Recording Permission Warning -->
+          <div id="host-screen-perm-warning" style="display: none; margin-top: 10px; background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b; border-radius: var(--radius); padding: 10px 12px; font-size: 0.74rem; color: #fde68a; line-height: 1.45;">
+            <div style="font-weight: 600; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; color: #fbbf24; flex-wrap: wrap; gap: 6px;">
+              <span style="display: flex; align-items: center; gap: 6px;">⚠️ macOS Screen Recording Permission Required</span>
+              <button type="button" id="btn-open-screen-perm" class="btn btn--small btn--primary" style="font-size: 0.7rem; padding: 2px 8px;">Open System Settings</button>
+            </div>
+            macOS is blocking background screen capture. Please toggle <strong>Screen & System Audio Recording</strong> ON for Python or Terminal in macOS System Settings so remote clients don't see a blank screen.<br>
+          </div>
+
           <!-- Expandable setup instructions -->
           <details id="bridge-setup-details" style="margin-top: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 12px; font-size: 0.75rem; color: var(--c-text-dim);">
             <summary style="cursor: pointer; font-weight: 600; color: var(--c-primary); display: flex; align-items: center; gap: 6px; user-select: none;">
@@ -690,7 +699,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- Host Controller -->
-  <script type="module" src="host-controller.js?v=52"></script>
+  <script type="module" src="host-controller.js?v=53"></script>
 </body>
 
 </html>

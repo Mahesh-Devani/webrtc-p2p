@@ -89,6 +89,8 @@ const dom = {
   pinValidationMsg: document.getElementById('pin-validation-msg'),
   hostBridgePill: document.getElementById('host-bridge-pill'),
   hostHttpsWarning: document.getElementById('host-https-warning'),
+  hostScreenPermWarning: document.getElementById('host-screen-perm-warning'),
+  btnOpenScreenPerm: document.getElementById('btn-open-screen-perm'),
   btnRecheckBridge: document.getElementById('btn-recheck-bridge'),
   hostQrCanvas: document.getElementById('host-qr-canvas'),
   hostPubkeyBox: document.getElementById('host-pubkey-box'),
@@ -793,6 +795,10 @@ function connectBridge(force = false) {
             document.getElementById('bridge-setup-details')?.removeAttribute('open');
             broadcastBridgeStatus(true);
             updateCaptureUI(isHostStreamLive());
+
+            if (dom.hostScreenPermWarning) {
+              dom.hostScreenPermWarning.style.display = (msg.screen_capture_allowed === false) ? 'block' : 'none';
+            }
 
             if (Array.isArray(msg.screen) && msg.screen.length >= 2) {
               lastReportedScreenSize = { w: Number(msg.screen[0]), h: Number(msg.screen[1]) };
@@ -2002,6 +2008,12 @@ document.getElementById('btn-copy-connect-link')?.addEventListener('click', () =
 
 dom.btnRecheckBridge?.addEventListener('click', () => {
   connectBridge(true);
+});
+
+dom.btnOpenScreenPerm?.addEventListener('click', () => {
+  if (bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+    bridgeWs.send(JSON.stringify({ t: 'open_screen_recording_settings' }));
+  }
 });
 
 document.getElementById('btn-copy-curl-bridge')?.addEventListener('click', () => {

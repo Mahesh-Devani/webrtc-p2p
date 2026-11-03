@@ -1161,7 +1161,17 @@ async def handle_client(reader, writer):
 
     try:
         # Read HTTP GET handshake header
-        req_bytes = await reader.readuntil(b'\r\n\r\n')
+        try:
+            req_bytes = await reader.readuntil(b'\r\n\r\n')
+        except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError):
+            # Port probe (e.g. supervisor health check) or client disconnected before completing HTTP handshake
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+            return
+
         req_text = req_bytes.decode('utf-8', errors='replace')
         lines = req_text.split('\r\n')
         req_line = lines[0]
@@ -1209,12 +1219,16 @@ async def handle_client(reader, writer):
         # Send connected confirmation frame immediately with fresh screen bounds and persistent host config
         ox, oy, sw, sh = get_screen_bounds(force=True)
         cfg = load_host_config()
+        can_capture = True
+        if PLATFORM == 'darwin' and hasattr(_global_frame_capturer.cg, 'CGPreflightScreenCaptureAccess'):
+            can_capture = bool(_global_frame_capturer.cg.CGPreflightScreenCaptureAccess())
         connected_payload = {
             't': 'connected',
             'screen': [sw, sh],
             'origin': [ox, oy],
             'daemon_active': (_active_daemon_writer is not None),
-            'has_config': (cfg is not None)
+            'has_config': (cfg is not None),
+            'screen_capture_allowed': can_capture
         }
         if cfg:
             connected_payload['config'] = cfg
@@ -1449,6 +1463,25 @@ async def handle_client(reader, writer):
                 writer.write(make_ws_frame(json.dumps({'t': 'clipboard', 'text': curr_clip})))
                 await writer.drain()
 
+            elif evt_type == 'ping_diag':
+                can_cap = bool(cg.CGPreflightScreenCaptureAccess()) if 'cg' in globals() and hasattr(cg, 'CGPreflightScreenCaptureAccess') else None
+                diag = {
+                    't': 'pong_diag',
+                    'pid': os.getpid(),
+                    'can_capture': can_cap,
+                    'is_locked': _global_frame_capturer.is_screen_locked(),
+                    'targets': _global_frame_capturer.enumerate_targets()
+                }
+                writer.write(make_ws_frame(json.dumps(diag)))
+                await writer.drain()
+
+            elif evt_type == 'open_screen_recording_settings':
+                if PLATFORM == 'darwin':
+                    try:
+                        subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'])
+                    except Exception:
+                        pass
+
             elif evt_type in ('start_capture', 'action') or data.get('action') == 'start_capture':
                 capture_target_type = data.get('target', 'display')
                 capture_target_id = int(data.get('id', 0))
@@ -1590,7 +1623,7 @@ async def handle_client(reader, writer):
         if capture_task and not capture_task.done():
             capture_task.cancel()
         release_all_modifiers()
-        _global_wake_manager.release(session_token, force=True)
+        _global_wake_manager.release(session_token)
         try:
             writer.close()
             await writer.wait_closed()
