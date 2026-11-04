@@ -1302,6 +1302,8 @@ async def handle_client(reader, writer):
         can_capture = True
         if PLATFORM == 'darwin' and hasattr(_global_frame_capturer.cg, 'CGPreflightScreenCaptureAccess'):
             can_capture = bool(_global_frame_capturer.cg.CGPreflightScreenCaptureAccess())
+            if not can_capture and hasattr(_global_frame_capturer.cg, 'CGRequestScreenCaptureAccess'):
+                can_capture = bool(_global_frame_capturer.cg.CGRequestScreenCaptureAccess())
         connected_payload = {
             't': 'connected',
             'screen': [sw, sh],
@@ -1740,6 +1742,19 @@ async def main(host, port, token, extra_origins, allow_all, bounds_ttl=None):
     print("    ✓ Emergency Stop: Available via Host UI & Disconnect button")
     print("    ✓ On-Demand Capture: READY (Display & Window hardware capture)")
     print("    ✓ Display Wake on Demand: ENABLED (Screen sleeps naturally when idle)")
+
+    if PLATFORM == 'darwin':
+        can_cap = True
+        if hasattr(_global_frame_capturer.cg, 'CGPreflightScreenCaptureAccess'):
+            can_cap = bool(_global_frame_capturer.cg.CGPreflightScreenCaptureAccess())
+            if not can_cap and hasattr(_global_frame_capturer.cg, 'CGRequestScreenCaptureAccess'):
+                can_cap = bool(_global_frame_capturer.cg.CGRequestScreenCaptureAccess())
+        if can_cap:
+            print("    ✓ macOS Screen Recording: GRANTED")
+        else:
+            print("    ❌ macOS Screen Recording: DENIED (Will capture black screen #202020!)")
+            print("       -> Open System Settings > Privacy & Security > Screen & System Audio Recording")
+            print("       -> Enable 'Terminal' (and/or 'Python'), then Quit & Reopen Terminal.")
     print("=" * 68)
     print("Ready! Waiting for authenticated browser remote control session...\n")
 

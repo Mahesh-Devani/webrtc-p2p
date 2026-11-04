@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-11-04)
 
 ## Corpus Check
-- 58 files · ~144,016 words
+- 58 files · ~144,093 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `53b2e0ee`
+- Built from commit: `b1862c27`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -61,7 +61,7 @@
 - ThreadedMockBridge
 - P2P Connect — High-Level Design
 - TestWebRtcContracts
-- 5. Future Roadmap & Proposed Improvements
+- Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
 - ThreadedMockRelay
 - 🤖 AI Support Agent & Developer Triage System
 - DisplayWakeManager
@@ -72,28 +72,28 @@
 - Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap
 - 🚀 1. Recommended Triage Prompts
 - appendChatBubble
-- get
+- 5. Future Roadmap & Proposed Improvements
 - 8. AI Agent Guardrails: Graphify & Invariant Verifier
 - initNostr
 - run.sh
 - P2P Connect — Architecture
 - serve-https.py
-- classifyKind
+- get
 - loadRemoteDevices
 - How to Download & Run the Host Agent
 - Windows (Task Scheduler & pythonw)
 - DevHandler
-- 5. Client Authorization Whitelist & Anti-Flooding Shield
+- classifyKind
 - closeQrScanner
 - 🔐 P2P Connect
 - DiagnosticServer
 - ColoredTextTestResult
-- Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
+- 5. Client Authorization Whitelist & Anti-Flooding Shield
 - ._handle_client
 - P2P Connect — Native OS Remote Desktop Host Agent
-- Operating System Permissions (First Run)
-- ai-diagnostic-agent.py
 - 5. Security Model
+- ai-diagnostic-agent.py
+- Operating System Permissions (First Run)
 
 ## God Nodes (most connected - your core abstractions)
 1. `toast()` - 40 edges
@@ -264,9 +264,9 @@ Nodes (3): MockHostBridge, ThreadedMockBridge, _run()
 Cohesion: 0.14
 Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4. Feature Set, 5. Security Model, 6. Technology Stack, 7. File Map, Key Properties (+5 more)
 
-### Community 45 - "5. Future Roadmap & Proposed Improvements"
-Cohesion: 0.25
-Nodes (8): 0. Approach B: Native macOS Menu Bar Companion (`P2P Connect Host.app`) — Target Architecture, 2. In-Band WebRTC ICE Restart (Near-Term), 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term), 4. Native WebCodecs H.264 / AV1 Pipeline (Mid-Term), 5. Future Roadmap & Proposed Improvements, 5. Virtual Display Emulation for Headless Hosts (Mid-Term), 6. Native macOS Audio Loopback Streaming (Mid-Term), Technical Implementation Details for Approach B
+### Community 45 - "Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)"
+Cohesion: 0.22
+Nodes (8): 1. 64-bit Pointer Truncation on ARM64 Apple Silicon (INV-11 / Bridge Stability), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. The macOS `loginwindow` Idle Override & Blank Lock Screen, 4. The Erroneous Frame Size Filter in Native Frame Capture, 5. WindowServer IPC Saturation from Unthrottled Status Queries (INV-11), 6. macOS TCC Sandbox & LaunchAgent Execution (`Operation not permitted` / Exit Code 126), 7. macOS TCC Screen Recording Denial for Background Daemons (The Black Frame Bug), Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
 
 ### Community 47 - "🤖 AI Support Agent & Developer Triage System"
 Cohesion: 0.18
@@ -296,9 +296,9 @@ Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Op
 Cohesion: 0.16
 Nodes (21): analyzeUserSupportComment(), appendChatBubble(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDate(), formatDiagnosticBubbleHtml() (+13 more)
 
-### Community 56 - "get"
-Cohesion: 0.29
-Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
+### Community 56 - "5. Future Roadmap & Proposed Improvements"
+Cohesion: 0.25
+Nodes (8): 0. Approach B: Native macOS Menu Bar Companion (`P2P Connect Host.app`) — Target Architecture, 2. In-Band WebRTC ICE Restart (Near-Term), 3. Re-introduce Package 5: Host Auto-Lock on Disconnect (Near-Term), 4. Native WebCodecs H.264 / AV1 Pipeline (Mid-Term), 5. Future Roadmap & Proposed Improvements, 5. Virtual Display Emulation for Headless Hosts (Mid-Term), 6. Native macOS Audio Loopback Streaming (Mid-Term), Technical Implementation Details for Approach B
 
 ### Community 57 - "8. AI Agent Guardrails: Graphify & Invariant Verifier"
 Cohesion: 0.33
@@ -316,9 +316,9 @@ Nodes (12): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. 
 Cohesion: 0.22
 Nodes (3): ensure_certificate(), get_local_ip_addresses(), main()
 
-### Community 63 - "classifyKind"
-Cohesion: 0.40
-Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
+### Community 63 - "get"
+Cohesion: 0.29
+Nodes (7): clone(), _cloneInto(), get(), parseConnectionString(), querySync(), subscribeMany(), subscribeManyEose()
 
 ### Community 65 - "loadRemoteDevices"
 Cohesion: 0.26
@@ -332,9 +332,9 @@ Nodes (6): How to Download & Run the Host Agent, macOS & Linux:, Method 1: Downl
 Cohesion: 0.40
 Nodes (5): 1. Install via Batch Script (Recommended), 2. Manual Setup via PowerShell / Command Prompt, 3. Manage & Check Status, 4. Uninstall, Windows (Task Scheduler & pythonw)
 
-### Community 76 - "5. Client Authorization Whitelist & Anti-Flooding Shield"
+### Community 76 - "classifyKind"
 Cohesion: 0.40
-Nodes (5): 5. Client Authorization Whitelist & Anti-Flooding Shield, CLI Whitelist Commands, Dual-Layer Defense Architecture, Storage & Privacy, Visual Management via Support Desk UI
+Nodes (6): classifyKind(), getFilterLimit(), isEphemeralKind(), isParameterizedReplaceableKind(), isRegularKind(), isReplaceableKind()
 
 ### Community 77 - "closeQrScanner"
 Cohesion: 0.83
@@ -344,25 +344,25 @@ Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
 Cohesion: 0.18
 Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Background Hosting & Unattended Access (Roadmap), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
 
-### Community 81 - "Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)"
-Cohesion: 0.22
-Nodes (8): 1. 64-bit Pointer Truncation on ARM64 Apple Silicon (INV-11 / Bridge Stability), 2. IOKit Power Assertion Token Idempotency & WindowServer Deadlock, 3. The macOS `loginwindow` Idle Override & Blank Lock Screen, 4. The Erroneous Frame Size Filter in Native Frame Capture, 5. WindowServer IPC Saturation from Unthrottled Status Queries (INV-11), 6. macOS TCC Sandbox & LaunchAgent Execution (`Operation not permitted` / Exit Code 126), 7. macOS TCC Screen Recording Denial for Background Daemons (The Black Frame Bug), Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)
+### Community 81 - "5. Client Authorization Whitelist & Anti-Flooding Shield"
+Cohesion: 0.40
+Nodes (5): 5. Client Authorization Whitelist & Anti-Flooding Shield, CLI Whitelist Commands, Dual-Layer Defense Architecture, Storage & Privacy, Visual Management via Support Desk UI
 
 ### Community 83 - "P2P Connect — Native OS Remote Desktop Host Agent"
 Cohesion: 0.25
 Nodes (5): Architecture Overview, P2P Connect — Native OS Remote Desktop Host Agent, Pairing & Unattended Remote Control, Recommended Operational Workflow & Background Hosting Roadmap, Security & Defense-in-Depth
 
-### Community 84 - "Operating System Permissions (First Run)"
+### Community 84 - "5. Security Model"
 Cohesion: 0.50
-Nodes (4): Linux, macOS, Operating System Permissions (First Run), Windows
+Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encrypted
 
 ### Community 85 - "ai-diagnostic-agent.py"
 Cohesion: 0.18
 Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
 
-### Community 89 - "5. Security Model"
+### Community 86 - "Operating System Permissions (First Run)"
 Cohesion: 0.50
-Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encrypted
+Nodes (4): Linux, macOS, Operating System Permissions (First Run), Windows
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
@@ -373,16 +373,16 @@ Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encryp
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `2. Where We Stand vs. Initial Plan` connect `initNostr` to `DisplayWakeManager`, `NativeFrameCapturer`, `Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap`, `attachRemoteVideoInputListeners`?**
-  _High betweenness centrality (0.400) - this node is a cross-community bridge._
+  _High betweenness centrality (0.399) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.10685483870967742 - nodes in this community are weakly interconnected._
-- **Why does `NativeFrameCapturer` connect `NativeFrameCapturer` to `Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)`, `initNostr`, `bridge.py`?**
-  _High betweenness centrality (0.204) - this node is a cross-community bridge._
+- **Why does `NativeFrameCapturer` connect `NativeFrameCapturer` to `initNostr`, `bridge.py`, `Category A: Native OS Subsystem & Low-Level Hardware (macOS & Windows)`?**
+  _High betweenness centrality (0.203) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.08078431372549019 - nodes in this community are weakly interconnected._
 - **Why does `DisplayWakeManager` connect `DisplayWakeManager` to `initNostr`, `bridge.py`?**
-  _High betweenness centrality (0.191) - this node is a cross-community bridge._
+  _High betweenness centrality (0.190) - this node is a cross-community bridge._
