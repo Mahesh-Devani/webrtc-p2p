@@ -20,6 +20,8 @@ Features:
 import sys
 import os
 import time
+import datetime
+import builtins
 import json
 import asyncio
 import argparse
@@ -34,6 +36,26 @@ import ctypes
 import ctypes.util
 import subprocess
 import zlib
+
+# ── Timestamped Logging Wrapper ───────────────────────────────────────────────
+_builtin_print = builtins.print
+
+def timestamped_print(*args, **kwargs):
+    if 'flush' not in kwargs:
+        kwargs['flush'] = True
+    dest_file = kwargs.get('file', None)
+    if dest_file is None or dest_file in (sys.stdout, sys.stderr):
+        now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if args and isinstance(args[0], str) and (args[0].startswith('=') or args[0].startswith('  ')):
+            _builtin_print(*args, **kwargs)
+        elif args:
+            _builtin_print(f'[{now_str}]', *args, **kwargs)
+        else:
+            _builtin_print(*args, **kwargs)
+    else:
+        _builtin_print(*args, **kwargs)
+
+builtins.print = timestamped_print
 
 # ── 1. Native OS Input Injection Engine (Zero-Dependency) ────────────────────
 SCREEN_WIDTH = 1920
@@ -776,6 +798,54 @@ class DisplayWakeManager:
                 pass
 
 
+def lock_host_screen():
+    """Lock the host operating system screen immediately."""
+    print("[Power] Locking host screen on remote disconnect...")
+    if PLATFORM == 'darwin':
+        locked = False
+        try:
+            login_lib = ctypes.cdll.LoadLibrary('/System/Library/PrivateFrameworks/login.framework/Versions/Current/login')
+            login_lib.SACLockScreenImmediate.restype = ctypes.c_int
+            login_lib.SACLockScreenImmediate.argtypes = []
+            res = login_lib.SACLockScreenImmediate()
+            print(f"[Power] SACLockScreenImmediate executed (return code: {res})")
+            locked = True
+        except Exception as e:
+            print(f"[Power] SACLockScreenImmediate failed: {e}")
+
+        if not locked:
+            try:
+                subprocess.run(['osascript', '-e', 'tell application "System Events" to keystroke "q" using {control down, command down}'], check=False, timeout=2.0)
+                print("[Power] Screen locked via osascript (Ctrl+Cmd+Q)")
+                locked = True
+            except Exception as e:
+                print(f"[Power] osascript lock failed: {e}")
+
+        # Always trigger display sleep as well to ensure display turns off / enters low power
+        try:
+            subprocess.run(['pmset', 'displaysleepnow'], check=False, timeout=2.0)
+            print("[Power] Display sleep triggered via pmset displaysleepnow")
+        except Exception as e:
+            print(f"[Power] pmset displaysleepnow failed: {e}")
+
+    elif PLATFORM == 'win32':
+        try:
+            ctypes.windll.user32.LockWorkStation()
+            print("[Power] Windows workstation locked via LockWorkStation")
+        except Exception as err:
+            print(f"[!] Win32 LockWorkStation error: {err}")
+    elif PLATFORM == 'linux':
+        try:
+            subprocess.run(['loginctl', 'lock-session'], check=False, timeout=2.0)
+            print("[Power] Linux session locked via loginctl")
+        except Exception:
+            try:
+                subprocess.run(['xdg-screensaver', 'lock'], check=False, timeout=2.0)
+                print("[Power] Linux session locked via xdg-screensaver")
+            except Exception as err:
+                print(f"[!] Linux lock error: {err}")
+
+
 # ── 6. Native Frame Capture Engine (Display, Window & Hardware JPEG) ─────────
 class NativeFrameCapturer:
     """
@@ -1507,6 +1577,9 @@ async def handle_client(reader, writer):
                     capture_task = None
                 _global_wake_manager.release(session_token)
                 print("[+] Stopped native capture")
+                if data.get('auto_lock'):
+                    print("[Power] auto_lock requested on stop_capture")
+                    lock_host_screen()
                 writer.write(make_ws_frame(json.dumps({'t': 'capture_stopped'})))
                 await writer.drain()
 
@@ -1541,24 +1614,8 @@ async def handle_client(reader, writer):
                 await writer.drain()
 
             elif evt_type == 'lock_screen':
-                print("[Power] Locking host screen on remote request")
-                if PLATFORM == 'darwin':
-                    try:
-                        login_lib = ctypes.cdll.LoadLibrary('/System/Library/PrivateFrameworks/login.framework/Versions/Current/login')
-                        login_lib.SACLockScreenImmediate()
-                    except Exception:
-                        try: subprocess.run(['pmset', 'displaysleepnow'], check=False)
-                        except Exception: pass
-                elif PLATFORM == 'win32':
-                    try:
-                        ctypes.windll.user32.LockWorkStation()
-                    except Exception as err:
-                        print(f"[!] Win32 LockWorkStation error: {err}")
-                elif PLATFORM == 'linux':
-                    try: subprocess.run(['loginctl', 'lock-session'], check=False)
-                    except Exception:
-                        try: subprocess.run(['xdg-screensaver', 'lock'], check=False)
-                        except Exception: pass
+                print("[Power] Received remote screen lock request")
+                lock_host_screen()
 
             elif evt_type == 'register_daemon':
                 _active_daemon_writer = writer

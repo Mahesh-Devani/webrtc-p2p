@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793731543.2534258,
-    "seen": 1793731595.823375,
-    "ast_hash": "38f32b570745efc42c63078b6e96c856",
+    "mtime": 1793761426.0373647,
+    "seen": 1793761472.733951,
+    "ast_hash": "84c0c9b314064b442eb176ee88218d3a",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793728255.1289632,
-    "seen": 1793728449.541853,
-    "ast_hash": "59643c355122281b3a33888e66777354",
+    "mtime": 1793761275.772348,
+    "seen": 1793761472.733956,
+    "ast_hash": "891d93f83d09450e66224d14ed7778eb",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793702916.4123552,
-    "seen": 1793702990.780844,
-    "ast_hash": "731f7d4c9bb3c03c791f9ed096716f4c",
+    "mtime": 1793761442.113463,
+    "seen": 1793761472.733974,
+    "ast_hash": "284e877f5b3fa09e3e9fdcb7f3ec1046",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793733570.2464926,
-    "seen": 1793733584.946006,
-    "ast_hash": "02a3f48ec5ff33c051b161d288bb7590",
+    "mtime": 1793761449.2918584,
+    "seen": 1793761472.7339818,
+    "ast_hash": "c1735b37c4abe0c4af6b66769b91d32c",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793704912.4587107,
-    "seen": 1793704928.388845,
-    "ast_hash": "b86f807ea252c7e5b76f3ece38aeb0bb",
+    "mtime": 1793761456.1204877,
+    "seen": 1793761472.7339818,
+    "ast_hash": "7be7a640c7c6df1bc7ed6044d23d5a80",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {

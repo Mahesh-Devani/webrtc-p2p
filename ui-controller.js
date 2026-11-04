@@ -4499,11 +4499,14 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         }
       }
     }
-    endMediaCall(true);
-    if (session) {
-      try { session.close(); } catch {}
-      session = null;
-    }
+    // Allow 100ms for session_ended DataChannel packet to flush across SCTP before closing WebRTC
+    setTimeout(() => {
+      endMediaCall(true);
+      if (session) {
+        try { session.close(); } catch {}
+        session = null;
+      }
+    }, 100);
     activeRemoteDesktopDevice = null;
     isWaitingForRemoteDesktop = false;
     exitRemoteDesktopMode();

@@ -223,14 +223,18 @@ function applyHostConfigFromBridge(cfg) {
     if (dom.hostWhitelistToggle) dom.hostWhitelistToggle.checked = cfg.whitelist_enabled;
   }
   if (typeof cfg.auto_lock === 'boolean') {
-    localStorage.setItem(STORAGE_HOST_AUTO_LOCK, cfg.auto_lock ? '1' : '0');
+    localStorage.setItem(STORAGE_HOST_AUTO_LOCK, cfg.auto_lock ? 'true' : 'false');
     if (dom.hostAutoLockChk) dom.hostAutoLockChk.checked = cfg.auto_lock;
   }
   renderPairingQR();
 }
 
 function isAutoLockEnabled() {
-  return localStorage.getItem(STORAGE_HOST_AUTO_LOCK) === 'true';
+  if (dom.hostAutoLockChk) {
+    return dom.hostAutoLockChk.checked;
+  }
+  const val = localStorage.getItem(STORAGE_HOST_AUTO_LOCK);
+  return val === 'true' || val === '1';
 }
 
 function saveHostConfigToBridge() {
@@ -374,7 +378,8 @@ async function initHostIdentity() {
   });
 
   if (dom.hostAutoLockChk) {
-    dom.hostAutoLockChk.checked = localStorage.getItem(STORAGE_HOST_AUTO_LOCK) === 'true';
+    const storedAutoLock = localStorage.getItem(STORAGE_HOST_AUTO_LOCK);
+    dom.hostAutoLockChk.checked = (storedAutoLock === 'true' || storedAutoLock === '1');
     dom.hostAutoLockChk.addEventListener('change', () => {
       localStorage.setItem(STORAGE_HOST_AUTO_LOCK, dom.hostAutoLockChk.checked ? 'true' : 'false');
       saveHostConfigToBridge();
@@ -1038,12 +1043,13 @@ function ensureNativeOnDemandCapture() {
   return stream;
 }
 
-function stopNativeOnDemandCapture() {
+function stopNativeOnDemandCapture(options = {}) {
   nativeStreamActive = false;
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
-      bridgeWs.send(JSON.stringify({ t: 'stop_capture', action: 'stop_capture' }));
-      console.log('[Host] Requested native capture stop');
+      const autoLock = (options.autoLock !== undefined) ? !!options.autoLock : isAutoLockEnabled();
+      bridgeWs.send(JSON.stringify({ t: 'stop_capture', action: 'stop_capture', auto_lock: autoLock }));
+      console.log('[Host] Requested native capture stop, auto_lock:', autoLock);
     } catch {}
   }
   if (nativeCanvasCtx && nativeCanvas) {
@@ -1416,10 +1422,12 @@ async function ensureDesktopCapture() {
 
 // ── 4. Unattended Signaling & Auto-Accept ───────────────────────────
 function maybeAutoLockHost() {
-  if (dom.hostAutoLockChk?.checked && bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+  const shouldLock = isAutoLockEnabled();
+  console.log(`[Host Security] maybeAutoLockHost check: shouldLock=${shouldLock}, bridgeConnected=${bridgeConnected}, wsOpen=${bridgeWs && bridgeWs.readyState === WebSocket.OPEN}`);
+  if (shouldLock && bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
-      bridgeWs.send(JSON.stringify({ t: 'lock_screen' }));
-      console.log('[Host Security] Auto-lock triggered on session disconnect');
+      bridgeWs.send(JSON.stringify({ t: 'lock_screen', reason: 'session_ended' }));
+      console.log('[Host Security] Auto-lock command sent to bridge on session disconnect');
     } catch (e) {
       console.warn('[Host Security] Auto-lock error:', e);
     }
@@ -1669,7 +1677,7 @@ async function initSignaling() {
               dom.hostStatusBadge.className = 'host-status-badge badge--connected';
               dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
               if (nativeStreamActive) {
-                stopNativeOnDemandCapture();
+                stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
               }
               maybeAutoLockHost();
               if (activeSession) {
@@ -1779,7 +1787,7 @@ async function initSignaling() {
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';
             dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
             if (nativeStreamActive) {
-              stopNativeOnDemandCapture();
+              stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
             }
             maybeAutoLockHost();
             if (activeSession) {
@@ -1867,7 +1875,7 @@ async function initSignaling() {
             dom.hostStatusBadge.className = 'host-status-badge badge--connected';
             dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
             if (nativeStreamActive) {
-              stopNativeOnDemandCapture();
+              stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
             }
             maybeAutoLockHost();
             if (activeSession) {
