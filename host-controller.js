@@ -946,7 +946,9 @@ document.addEventListener('click', () => {
 
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
-    if (!screenWakeLock) await acquireScreenWakeLock();
+    if (!screenWakeLock && (activeSession || hostStream)) {
+      await acquireScreenWakeLock();
+    }
     if (!activeSession && NostrTransport && typeof NostrTransport.ensureConnected === 'function') {
       await NostrTransport.ensureConnected();
     }
@@ -1045,6 +1047,7 @@ function ensureNativeOnDemandCapture() {
 
 function stopNativeOnDemandCapture(options = {}) {
   nativeStreamActive = false;
+  releaseScreenWakeLock();
   if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
     try {
       const autoLock = (options.autoLock !== undefined) ? !!options.autoLock : isAutoLockEnabled();
@@ -1422,6 +1425,7 @@ async function ensureDesktopCapture() {
 
 // ── 4. Unattended Signaling & Auto-Accept ───────────────────────────
 function maybeAutoLockHost() {
+  releaseScreenWakeLock();
   const shouldLock = isAutoLockEnabled();
   console.log(`[Host Security] maybeAutoLockHost check: shouldLock=${shouldLock}, bridgeConnected=${bridgeConnected}, wsOpen=${bridgeWs && bridgeWs.readyState === WebSocket.OPEN}`);
   if (shouldLock && bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
@@ -1798,6 +1802,9 @@ async function initSignaling() {
           },
           onChannelOpen: () => {
             console.log('[Host] P2P Connected with remote controller!');
+
+            // Keep screen awake strictly while a remote controller is actively connected
+            acquireScreenWakeLock().catch(() => {});
 
             // Immediately configure high-bitrate video stream (12 Mbps / 60 FPS) for crisp text and fluid movement
             if (peerSession?.setVideoQuality) {
@@ -2210,7 +2217,6 @@ window.addEventListener('beforeunload', () => {
     updateWhitelistFilter();
     renderAuthorizedClients();
     enableHostAudioKeepAlive();
-    acquireScreenWakeLock().catch(() => {});
     connectBridge();
     await initSignaling();
 

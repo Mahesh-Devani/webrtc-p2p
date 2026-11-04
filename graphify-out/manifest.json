@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1793761426.0373647,
-    "seen": 1793761472.733951,
-    "ast_hash": "84c0c9b314064b442eb176ee88218d3a",
+    "mtime": 1793769252.7816033,
+    "seen": 1793769378.084548,
+    "ast_hash": "2704e35e7fc63435736ef9f72b20ad18",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1793761275.772348,
-    "seen": 1793761472.733956,
-    "ast_hash": "891d93f83d09450e66224d14ed7778eb",
+    "mtime": 1793769340.1844711,
+    "seen": 1793769378.084553,
+    "ast_hash": "c8ede55e46ac7cbbacd17b49ebe1d4a7",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -174,9 +174,9 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793761449.2918584,
-    "seen": 1793761472.7339818,
-    "ast_hash": "c1735b37c4abe0c4af6b66769b91d32c",
+    "mtime": 1793769358.8166058,
+    "seen": 1793769378.084576,
+    "ast_hash": "47d763fcd205d42b7c2baa9155203368",
     "semantic_hash": ""
   },
   "index.html": {

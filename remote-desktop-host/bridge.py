@@ -22,6 +22,7 @@ import os
 import time
 import datetime
 import builtins
+import atexit
 import json
 import asyncio
 import argparse
@@ -652,7 +653,7 @@ class DisplayWakeManager:
             if self._caffeinate_proc is None or self._caffeinate_proc.poll() is not None:
                 try:
                     self._caffeinate_proc = subprocess.Popen(
-                        ['caffeinate', '-d', '-u'],
+                        ['caffeinate', '-w', str(os.getpid()), '-d', '-u'],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL
                     )
@@ -1182,6 +1183,15 @@ class NativeFrameCapturer:
 
 _global_wake_manager = DisplayWakeManager()
 _global_frame_capturer = NativeFrameCapturer()
+
+# Ensure any orphaned caffeinate from prior runs or unexpected kills is cleaned up
+if PLATFORM == 'darwin':
+    try:
+        subprocess.run(['pkill', '-f', 'caffeinate.*-d -u'], check=False, timeout=1.0)
+    except Exception:
+        pass
+
+atexit.register(lambda: _global_wake_manager.release(force=True))
 
 
 def make_ws_frame(payload, opcode=0x01):
