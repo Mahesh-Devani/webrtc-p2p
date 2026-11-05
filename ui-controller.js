@@ -3018,6 +3018,17 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       return;
     }
 
+    if (evt.t === 'screen_bounds') {
+      const sw = evt.w;
+      const sh = evt.h;
+      console.log(`[RD] Host screen bounds updated: ${sw}x${sh} (ox: ${evt.ox}, oy: ${evt.oy})`);
+      clampPan();
+      if (rdMode === 'control' || rdMode === 'pointer') {
+        renderVirtualCursor();
+      }
+      return;
+    }
+
     if (evt.t === 'quality_ack') {
       const desc = evt.preset === 'crisp' ? '15 Mbps / 30 FPS' : (evt.preset === 'low' ? '2 Mbps / 30 FPS' : '8 Mbps / 60 FPS');
       toast(`Host adjusted video stream to ${desc}`);
@@ -6793,6 +6804,16 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
   window.addEventListener('focus', () => {
     handleAppResume();
+  });
+
+  window.addEventListener('online', () => {
+    console.log('[Network] Browser went online (possible Wi-Fi <-> Cellular network switch)');
+    handleAppResume();
+    if (dom.callOverlay?.classList.contains('call-overlay--rd') && activeRemoteDesktopDevice) {
+      if (!session || session.getState() !== 'connected') {
+        attemptRdReconnect();
+      }
+    }
   });
 
   // ═══ INIT ═══

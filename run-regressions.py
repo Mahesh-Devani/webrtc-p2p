@@ -49,21 +49,25 @@ FILE_TO_TESTS_MAP = {
         'tests.test_host_security',
         'tests.test_invariants',
         'tests.test_on_demand_capture',
+        'tests.test_coordinate_mapping',
     ],
     'host.html': [
         'tests.test_host_security',
         'tests.test_invariants',
         'tests.test_on_demand_capture',
+        'tests.test_coordinate_mapping',
     ],
     'remote-desktop-host': [
         'tests.test_host_security',
         'tests.test_on_demand_capture',
+        'tests.test_coordinate_mapping',
     ],
     'ui-controller.js': [
         'tests.test_invariants',
         'tests.test_mobile_lifecycle',
         'tests.test_webrtc_contracts',
         'tests.test_on_demand_capture',
+        'tests.test_coordinate_mapping',
     ],
     'index.html': [
         'tests.test_invariants',
@@ -107,6 +111,7 @@ FILE_TO_TESTS_MAP = {
     'tests/e2e': [
         'tests.e2e.test_two_peer_handshake',
         'tests.e2e.test_remote_desktop_capture_e2e',
+        'tests.e2e.test_remote_desktop_lifecycle_e2e',
     ],
 }
 
@@ -119,6 +124,7 @@ ALL_TEST_MODULES = [
     'tests.test_diagnostics',
     'tests.test_mock_relay',
     'tests.test_on_demand_capture',
+    'tests.test_coordinate_mapping',
 ]
 
 
@@ -264,11 +270,16 @@ def main():
         modules_to_run = [
             'tests.e2e.test_two_peer_handshake',
             'tests.e2e.test_remote_desktop_capture_e2e',
+            'tests.e2e.test_remote_desktop_lifecycle_e2e',
         ]
     else:
         modules_to_run = select_test_modules(modified, force_all=force_all)
         if run_e2e:
-            for e2e_mod in ['tests.e2e.test_two_peer_handshake', 'tests.e2e.test_remote_desktop_capture_e2e']:
+            for e2e_mod in [
+                'tests.e2e.test_two_peer_handshake',
+                'tests.e2e.test_remote_desktop_capture_e2e',
+                'tests.e2e.test_remote_desktop_lifecycle_e2e',
+            ]:
                 if e2e_mod not in modules_to_run:
                     modules_to_run.append(e2e_mod)
 

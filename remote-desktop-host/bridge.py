@@ -104,6 +104,13 @@ if PLATFORM == 'darwin':
     cg.CFRelease.argtypes = [ctypes.c_void_p]
     cg.CFRelease.restype = None
 
+    # macOS Display Reconfiguration Callback
+    CGDisplayReconfigurationCallBack = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
+    cg.CGDisplayRegisterReconfigurationCallback.argtypes = [CGDisplayReconfigurationCallBack, ctypes.c_void_p]
+    cg.CGDisplayRegisterReconfigurationCallback.restype = ctypes.c_int32
+    cg.CGDisplayRemoveReconfigurationCallback.argtypes = [CGDisplayReconfigurationCallBack, ctypes.c_void_p]
+    cg.CGDisplayRemoveReconfigurationCallback.restype = ctypes.c_int32
+
     # CGEvent Types
     kCGEventLeftMouseDown = 1
     kCGEventLeftMouseUp = 2
@@ -380,10 +387,16 @@ def get_screen_bounds(display_id=None, force=False):
         return _cached_bounds
 
     if PLATFORM == 'darwin':
-        target_display = target_id if target_id is not None else cg.CGMainDisplayID()
+        target_display = target_id if (target_id is not None and int(target_id) > 0) else cg.CGMainDisplayID()
         _bounds = cg.CGDisplayBounds(target_display)
         w = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(target_display))
         h = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(target_display))
+        # If the target display returned 0x0 (e.g. display detached or powered down), fallback to CGMainDisplayID()
+        if (w <= 0 or h <= 0) and target_display != cg.CGMainDisplayID():
+            target_display = cg.CGMainDisplayID()
+            _bounds = cg.CGDisplayBounds(target_display)
+            w = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(target_display))
+            h = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(target_display))
         ox = int(_bounds.origin.x)
         oy = int(_bounds.origin.y)
         SCREEN_WIDTH = w if w > 0 else 1920
@@ -420,6 +433,47 @@ def get_screen_bounds(display_id=None, force=False):
 
 # Initialize screen bounds at startup
 get_screen_bounds(force=True)
+
+# ── macOS Display Reconfiguration Listener ──────────────────────────────────
+_display_reconfig_cb_ref = None
+
+def _on_display_reconfiguration(display, flags, user_info):
+    global _cached_bounds, _cached_bounds_time
+    # kCGDisplayBeginConfigurationFlag = 1
+    # Only act when the display configuration is finalized (post-configuration)
+    if not (flags & 1):
+        _cached_bounds = None
+        _cached_bounds_time = 0.0
+        ox, oy, sw, sh = get_screen_bounds(force=True)
+        print(f"[Display] Reconfiguration event: display={display}, flags=0x{flags:04x} -> active bounds: {sw}x{sh} at ({ox},{oy})")
+        if '_connected_control_clients' in globals() and 'make_ws_frame' in globals():
+            try:
+                frame = make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy, 'display': int(display)}))
+                for client in list(_connected_control_clients):
+                    try: client.write(frame)
+                    except Exception: pass
+            except Exception:
+                pass
+
+if PLATFORM == 'darwin' and 'cg' in globals() and 'CGDisplayReconfigurationCallBack' in globals():
+    try:
+        _display_reconfig_cb_ref = CGDisplayReconfigurationCallBack(_on_display_reconfiguration)
+        _reg_ret = cg.CGDisplayRegisterReconfigurationCallback(_display_reconfig_cb_ref, None)
+        if _reg_ret == 0:
+            print("[Display] Registered macOS hardware display reconfiguration callback (instant geometry sync)")
+    except Exception as e:
+        print(f"[Display] Failed to register display reconfiguration callback: {e}")
+
+def _cleanup_display_reconfig():
+    global _display_reconfig_cb_ref
+    if PLATFORM == 'darwin' and _display_reconfig_cb_ref and 'cg' in globals():
+        try:
+            cg.CGDisplayRemoveReconfigurationCallback(_display_reconfig_cb_ref, None)
+            _display_reconfig_cb_ref = None
+        except Exception:
+            pass
+
+atexit.register(_cleanup_display_reconfig)
 
 # ── Native Clipboard Functions ───────────────────────────────────────────────
 def native_set_clipboard(text):
@@ -584,11 +638,15 @@ latest_mouse_updated = False
 current_x = SCREEN_WIDTH // 2
 current_y = SCREEN_HEIGHT // 2
 
-def execute_mouse_move(x, y):
+def execute_mouse_move(x, y, target_id=None, is_window=False):
     global current_x, current_y
-    ox, oy, sw, sh = get_screen_bounds()
-    current_x = max(ox, min(ox + sw - 1, x))
-    current_y = max(oy, min(oy + sh - 1, y))
+    if is_window:
+        current_x = int(x)
+        current_y = int(y)
+    else:
+        ox, oy, sw, sh = get_screen_bounds(target_id)
+        current_x = max(ox, min(ox + sw - 1, int(x)))
+        current_y = max(oy, min(oy + sh - 1, int(y)))
     native_mouse_move(current_x, current_y)
 
 async def mouse_worker():
@@ -601,7 +659,9 @@ async def mouse_worker():
             latest_mouse_updated = False
             last_applied = target
             try:
-                execute_mouse_move(target[0], target[1])
+                target_id = target[2] if len(target) > 2 else None
+                is_win = bool(target[3]) if len(target) > 3 else False
+                execute_mouse_move(target[0], target[1], target_id, is_win)
             except Exception:
                 pass
         await asyncio.sleep(0.004)  # 250Hz loop
@@ -1354,6 +1414,17 @@ async def handle_client(reader, writer):
                         t_code = 2
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
+                        # Instant bounds sync fallback: if frame dimensions changed mid-stream, refresh cached bounds
+                        if w > 0 and h > 0 and capture_target_type == 'display':
+                            cur_b = _cached_bounds
+                            if cur_b and (int(w) != cur_b[2] or int(h) != cur_b[3]):
+                                get_screen_bounds(capture_target_id, force=True)
+                                if _cached_bounds:
+                                    ox_s, oy_s, sw_s, sh_s = _cached_bounds
+                                    try:
+                                        writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw_s, 'h': sh_s, 'ox': ox_s, 'oy': oy_s})))
+                                    except Exception:
+                                        pass
                         frame_crc = zlib.crc32(jpeg_bytes)
                         is_dirty = (frame_crc != _last_frame_crc)
                         if is_dirty:
@@ -1432,11 +1503,13 @@ async def handle_client(reader, writer):
                 _last_activity_time = time.monotonic()
                 _global_wake_manager.tickle(session_token)
 
+            is_win = (capture_target_type == 'window' and int(capture_target_id or 0) > 0)
+
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
                 ny = float(data.get('y', 0))
                 target_x, target_y = map_client_coords(nx, ny)
-                latest_mouse_coord = (target_x, target_y)
+                latest_mouse_coord = (target_x, target_y, capture_target_id, is_win)
                 latest_mouse_updated = True
 
             elif evt_type == 'mouse_down':
@@ -1445,7 +1518,7 @@ async def handle_client(reader, writer):
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
-                    execute_mouse_move(target_x, target_y)
+                    execute_mouse_move(target_x, target_y, capture_target_id, is_win)
                 native_mouse_down(btn, current_x, current_y)
 
             elif evt_type == 'mouse_up':
@@ -1454,7 +1527,7 @@ async def handle_client(reader, writer):
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
-                    execute_mouse_move(target_x, target_y)
+                    execute_mouse_move(target_x, target_y, capture_target_id, is_win)
                 native_mouse_up(btn, current_x, current_y)
 
             elif evt_type in ('mouse_click', 'click'):
@@ -1464,7 +1537,7 @@ async def handle_client(reader, writer):
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
-                    execute_mouse_move(target_x, target_y)
+                    execute_mouse_move(target_x, target_y, capture_target_id, is_win)
                 native_mouse_click(btn, clicks, current_x, current_y)
 
             elif evt_type == 'select_display':
@@ -1480,7 +1553,7 @@ async def handle_client(reader, writer):
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
-                    execute_mouse_move(target_x, target_y)
+                    execute_mouse_move(target_x, target_y, capture_target_id, is_win)
                 dy = float(data.get('dy', 0))
                 dx = float(data.get('dx', 0))
                 _accumulated_scroll_y += dy

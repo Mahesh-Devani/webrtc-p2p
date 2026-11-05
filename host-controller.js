@@ -844,7 +844,7 @@ function connectBridge(force = false) {
               applyHostConfigFromBridge(msg.config);
             }
           }
-          if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors' || msg.t === 'targets' || msg.t === 'target_selected')) {
+          if (activeSession && (msg.t === 'clipboard' || msg.t === 'clipboard_ack' || msg.t === 'monitors' || msg.t === 'targets' || msg.t === 'target_selected' || msg.t === 'screen_bounds')) {
             try { activeSession.sendInput(msg); } catch {}
           }
         } catch (err) {
@@ -1438,6 +1438,45 @@ function maybeAutoLockHost() {
   }
 }
 
+let disconnectTeardownTimer = null;
+
+function handleSessionTeardown(sessionToClose, isPreempted = false) {
+  if (disconnectTeardownTimer) {
+    clearTimeout(disconnectTeardownTimer);
+    disconnectTeardownTimer = null;
+  }
+  const isCurrent = (activeSession === sessionToClose || sessionToClose === null);
+  if (!isCurrent && activeSession !== null && sessionToClose !== activeSession) return;
+
+  const targetSession = sessionToClose || activeSession;
+  const shouldAutoLock = isAutoLockEnabled() && !isPreempted && !targetSession?._isPreempted;
+
+  console.log(`[Host] Tearing down remote session (isPreempted: ${isPreempted}, shouldAutoLock: ${shouldAutoLock})`);
+
+  if (dom.hostConnectedPeer) dom.hostConnectedPeer.textContent = 'None';
+  if (dom.hostStatusBadge) dom.hostStatusBadge.className = 'host-status-badge badge--connected';
+  if (dom.hostStatusText) dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
+
+  if (nativeStreamActive) {
+    stopNativeOnDemandCapture({ autoLock: shouldAutoLock });
+  }
+
+  if (shouldAutoLock) {
+    maybeAutoLockHost();
+  } else if (!isPreempted) {
+    // Release wake lock to allow macOS native idle timer to sleep display & lock screen naturally
+    releaseScreenWakeLock();
+  }
+
+  if (targetSession) {
+    try { targetSession.close({ stopTracks: false }); } catch {}
+  }
+  if (activeSession === targetSession || !activeSession) {
+    activeSession = null;
+    activeSessionId = null;
+  }
+}
+
 async function initSignaling() {
   updateWhitelistFilter();
 
@@ -1527,10 +1566,6 @@ async function initSignaling() {
         console.log(`[Host] Ignoring duplicate unattended_offer for active session ${sessionId?.slice(0, 8)}`);
         return;
       }
-      if (activeSession && (activeSession.getState() === 'connected' || activeSession.isChannelOpen())) {
-        console.log(`[Host] Ignoring unattended_offer — session ${activeSessionId?.slice(0, 8)} is already connected`);
-        return;
-      }
 
       // Standby / hosting mode routing
       if (isDaemonWorker && daemonStandby) {
@@ -1577,6 +1612,15 @@ async function initSignaling() {
           });
         } catch {}
         return;
+      }
+
+      // Preemption of stale / disconnected sessions for authorized clients:
+      // If a previous session is still registered in memory, an incoming offer with a new sessionId
+      // from an authorized client supersedes it without forcing a host page refresh or locking the screen.
+      if (activeSession && activeSessionId !== sessionId) {
+        console.log(`[Host Preemption] Authorized client ${senderPubKey.slice(0, 8)} superseding previous session ${activeSessionId?.slice(0, 8)}`);
+        handleSessionTeardown(activeSession, true);
+        acquireScreenWakeLock().catch(() => {});
       }
 
       try {
@@ -1677,18 +1721,7 @@ async function initSignaling() {
             if (evt.t === 'session_ended') {
               if (activeSession !== peerSession) return;
               console.log('[Host] Remote controller finished session');
-              dom.hostConnectedPeer.textContent = 'None';
-              dom.hostStatusBadge.className = 'host-status-badge badge--connected';
-              dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
-              if (nativeStreamActive) {
-                stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
-              }
-              maybeAutoLockHost();
-              if (activeSession) {
-                try { activeSession.close({ stopTracks: false }); } catch {}
-                activeSession = null;
-                activeSessionId = null;
-              }
+              handleSessionTeardown(peerSession, false);
               return;
             }
             if (evt.t === 'set_quality') {
@@ -1787,17 +1820,34 @@ async function initSignaling() {
           onCallEnded: () => {
             if (activeSession !== peerSession) return;
             console.log('[Host] Remote controller ended call');
-            dom.hostConnectedPeer.textContent = 'None';
-            dom.hostStatusBadge.className = 'host-status-badge badge--connected';
-            dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
-            if (nativeStreamActive) {
-              stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
+            handleSessionTeardown(peerSession, false);
+          },
+          onInputChannelClose: () => {
+            if (activeSession !== peerSession) return;
+            console.log('[Host] Input DataChannel closed');
+            if (peerSession.getState() !== 'connected') {
+              handleSessionTeardown(peerSession, false);
             }
-            maybeAutoLockHost();
-            if (activeSession) {
-              try { activeSession.close({ stopTracks: false }); } catch {}
-              activeSession = null;
-              activeSessionId = null;
+          },
+          onStateChange: (state) => {
+            if (activeSession !== peerSession) return;
+            console.log(`[Host] P2P Connection state changed: ${state}`);
+            if (state === 'failed' || state === 'closed') {
+              handleSessionTeardown(peerSession, false);
+            } else if (state === 'disconnected') {
+              // 4-second transient disconnect debounce (INV-5) for mobile network blips
+              if (disconnectTeardownTimer) clearTimeout(disconnectTeardownTimer);
+              disconnectTeardownTimer = setTimeout(() => {
+                if (activeSession === peerSession && peerSession.getState() === 'disconnected') {
+                  console.log('[Host] P2P stayed disconnected for 4s — tearing down session');
+                  handleSessionTeardown(peerSession, false);
+                }
+              }, 4000);
+            } else if (state === 'connected') {
+              if (disconnectTeardownTimer) {
+                clearTimeout(disconnectTeardownTimer);
+                disconnectTeardownTimer = null;
+              }
             }
           },
           onChannelOpen: () => {
@@ -1878,18 +1928,7 @@ async function initSignaling() {
           onChannelClose: () => {
             if (activeSession !== peerSession) return;
             console.log('[Host] Controller disconnected');
-            dom.hostConnectedPeer.textContent = 'None';
-            dom.hostStatusBadge.className = 'host-status-badge badge--connected';
-            dom.hostStatusText.textContent = isHostStreamLive() ? 'Online & Streaming (Ready)' : 'Online & Listening';
-            if (nativeStreamActive) {
-              stopNativeOnDemandCapture({ autoLock: isAutoLockEnabled() });
-            }
-            maybeAutoLockHost();
-            if (activeSession) {
-              try { activeSession.close({ stopTracks: false }); } catch {}
-              activeSession = null;
-              activeSessionId = null;
-            }
+            handleSessionTeardown(peerSession, false);
           }
         });
 
