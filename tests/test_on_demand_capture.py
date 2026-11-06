@@ -32,11 +32,13 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.ui_content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
 
     def test_bridge_display_wake_manager(self):
-        """bridge.py must define DisplayWakeManager with wake() and release() methods."""
+        """bridge.py must define DisplayWakeManager with wake(), release(), and pulse_wake() methods."""
         self.assertIn('class DisplayWakeManager', self.bridge_content)
         self.assertIn('def wake(', self.bridge_content)
         self.assertIn('def release(', self.bridge_content)
         self.assertIn('def tickle(', self.bridge_content)
+        self.assertIn('def pulse_wake(', self.bridge_content)
+        self.assertIn('kCGEventSourceStateHIDSystemState', self.bridge_content)
         self.assertIn('PreventUserIdleDisplaySleep', self.bridge_content)
         self.assertIn('IOPMAssertionDeclareUserActivity', self.bridge_content)
         self.assertIn('caffeinate', self.bridge_content)

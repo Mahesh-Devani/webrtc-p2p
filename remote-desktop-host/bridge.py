@@ -104,6 +104,17 @@ if PLATFORM == 'darwin':
     cg.CFRelease.argtypes = [ctypes.c_void_p]
     cg.CFRelease.restype = None
 
+    # CoreGraphics Hardware Event Source & Display Sleep APIs
+    kCGEventSourceStateHIDSystemState = 1
+    cg.CGEventSourceCreate.argtypes = [ctypes.c_int32]
+    cg.CGEventSourceCreate.restype = ctypes.c_void_p
+    cg.CGDisplayIsAsleep.argtypes = [ctypes.c_uint32]
+    cg.CGDisplayIsAsleep.restype = ctypes.c_bool
+
+    # Pre-allocate shared hardware HID event source to ensure all synthetic inputs
+    # are recognized by WindowServer as real hardware HID activity (waking display/lock screen)
+    _hid_event_source = cg.CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+
     # macOS Display Reconfiguration Callback
     CGDisplayReconfigurationCallBack = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
     cg.CGDisplayRegisterReconfigurationCallback.argtypes = [CGDisplayReconfigurationCallBack, ctypes.c_void_p]
@@ -172,7 +183,7 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventRightMouseDragged
         else:
             evt_type = kCGEventMouseMoved
-        evt = cg.CGEventCreateMouseEvent(None, evt_type, pt, 0)
+        evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, 0)
         if evt:
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
@@ -186,7 +197,7 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventOtherMouseDown
         else:
             evt_type = kCGEventLeftMouseDown
-        evt = cg.CGEventCreateMouseEvent(None, evt_type, pt, btn)
+        evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, btn)
         if evt:
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
@@ -200,7 +211,7 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventOtherMouseUp
         else:
             evt_type = kCGEventLeftMouseUp
-        evt = cg.CGEventCreateMouseEvent(None, evt_type, pt, btn)
+        evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, btn)
         if evt:
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
@@ -211,20 +222,20 @@ if PLATFORM == 'darwin':
         up_type = kCGEventRightMouseUp if btn == 2 else kCGEventLeftMouseUp
 
         for i in range(1, clicks + 1):
-            evt_down = cg.CGEventCreateMouseEvent(None, down_type, pt, btn)
+            evt_down = cg.CGEventCreateMouseEvent(_hid_event_source, down_type, pt, btn)
             if evt_down:
                 cg.CGEventSetIntegerValueField(evt_down, kCGMouseEventClickState, i)
                 cg.CGEventPost(kCGHIDEventTap, evt_down)
                 cg.CFRelease(evt_down)
 
-            evt_up = cg.CGEventCreateMouseEvent(None, up_type, pt, btn)
+            evt_up = cg.CGEventCreateMouseEvent(_hid_event_source, up_type, pt, btn)
             if evt_up:
                 cg.CGEventSetIntegerValueField(evt_up, kCGMouseEventClickState, i)
                 cg.CGEventPost(kCGHIDEventTap, evt_up)
                 cg.CFRelease(evt_up)
 
     def native_scroll(units):
-        evt = cg.CGEventCreateScrollWheelEvent(None, 0, 1, int(units))
+        evt = cg.CGEventCreateScrollWheelEvent(_hid_event_source, 0, 1, int(units))
         if evt:
             cg.CGEventPost(kCGHIDEventTap, evt)
             cg.CFRelease(evt)
@@ -233,7 +244,7 @@ if PLATFORM == 'darwin':
         # Release modifier keycodes: LeftShift (56), RightShift (60), LeftAlt (58), RightAlt (61),
         # LeftCtrl (59), RightCtrl (62), Command (55)
         for code in (56, 60, 58, 61, 59, 62, 55):
-            evt = cg.CGEventCreateKeyboardEvent(None, code, False)
+            evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, code, False)
             if evt:
                 cg.CGEventSetFlags(evt, 0)
                 cg.CGEventPost(kCGHIDEventTap, evt)
@@ -264,7 +275,7 @@ if PLATFORM == 'darwin':
             code = VK_MAP[key]
 
         if code is not None:
-            evt = cg.CGEventCreateKeyboardEvent(None, code, is_down)
+            evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, code, is_down)
             if evt:
                 flags = 0
                 if shift_pressed or (needs_shift and is_down):
@@ -285,7 +296,7 @@ if PLATFORM == 'darwin':
                 # If this was an auto-shifted character (e.g. 'A' or '!') and shift key is NOT physically held down:
                 # Post a keyup on shift code (56) with flags=0 so WindowServer immediately clears any latch
                 if needs_shift and not shift_pressed and not is_down:
-                    clr_evt = cg.CGEventCreateKeyboardEvent(None, 56, False)
+                    clr_evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, 56, False)
                     if clr_evt:
                         cg.CGEventSetFlags(clr_evt, 0)
                         cg.CGEventPost(kCGHIDEventTap, clr_evt)
@@ -293,7 +304,7 @@ if PLATFORM == 'darwin':
 
         elif len(key) == 1:
             # Fallback for unicode characters outside US layout
-            evt = cg.CGEventCreateKeyboardEvent(None, 0, is_down)
+            evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, 0, is_down)
             if evt:
                 flags = 0
                 if shift_pressed or (key.isupper() and is_down):
@@ -699,6 +710,80 @@ class DisplayWakeManager:
         else:
             self._active_tokens = {f"token-{i}" for i in range(val)}
 
+    def pulse_wake(self, reason="P2P Connect Remote Desktop Wake Pulse"):
+        """
+        Immediately wake sleeping display and pulse WindowServer via hardware HID event source & caffeinate.
+        Wakes DPMS sleeping monitors and locked loginwindow without altering password input fields.
+        """
+        if PLATFORM == 'darwin':
+            # 1. Non-blocking one-shot user activity assertion pulse (forces display on immediately)
+            try:
+                subprocess.Popen(
+                    ['caffeinate', '-u', '-t', '2'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
+
+            # 2. Declare local user activity via IOKit to wake sleeping display
+            try:
+                iokit_path = ctypes.util.find_library('IOKit')
+                cf_path = ctypes.util.find_library('CoreFoundation')
+                if iokit_path and cf_path:
+                    iokit = ctypes.cdll.LoadLibrary(iokit_path)
+                    cf = ctypes.cdll.LoadLibrary(cf_path)
+                    kCFStringEncodingUTF8 = 0x08000100
+                    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+                    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+                    cf.CFRelease.argtypes = [ctypes.c_void_p]
+                    cf.CFRelease.restype = None
+
+                    name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
+                    wake_aid = ctypes.c_uint32(0)
+                    iokit.IOPMAssertionDeclareUserActivity.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
+                    iokit.IOPMAssertionDeclareUserActivity.restype = ctypes.c_int
+                    iokit.IOPMAssertionDeclareUserActivity(name, 0, ctypes.byref(wake_aid))
+                    cf.CFRelease(name)
+            except Exception:
+                pass
+
+            # 3. Simulate hardware HID keyboard interaction (Left Shift keycode 56 down & up)
+            # using kCGEventSourceStateHIDSystemState (1) to wake loginwindow / DPMS monitor
+            try:
+                if 'cg' in globals() and hasattr(cg, 'CGEventCreateKeyboardEvent') and hasattr(cg, 'CGEventPost'):
+                    src = _hid_event_source if '_hid_event_source' in globals() else None
+                    # Left Shift key down & up: harmless modifier that wakes loginwindow without typing any character
+                    ev_down = cg.CGEventCreateKeyboardEvent(src, 56, True)
+                    if ev_down:
+                        cg.CGEventPost(kCGHIDEventTap, ev_down)
+                        cg.CFRelease(ev_down)
+                    ev_up = cg.CGEventCreateKeyboardEvent(src, 56, False)
+                    if ev_up:
+                        cg.CGEventPost(kCGHIDEventTap, ev_up)
+                        cg.CFRelease(ev_up)
+
+                    # Subtle mouse jiggle with non-zero delta to satisfy WindowServer movement threshold
+                    ox, oy, sw, sh = get_screen_bounds()
+                    pt1 = CGPoint(ox + sw // 2 + 3, oy + sh // 2 + 3)
+                    pt2 = CGPoint(ox + sw // 2, oy + sh // 2)
+                    ev_m1 = cg.CGEventCreateMouseEvent(src, kCGEventMouseMoved, pt1, 0)
+                    if ev_m1:
+                        cg.CGEventPost(kCGHIDEventTap, ev_m1)
+                        cg.CFRelease(ev_m1)
+                    ev_m2 = cg.CGEventCreateMouseEvent(src, kCGEventMouseMoved, pt2, 0)
+                    if ev_m2:
+                        cg.CGEventPost(kCGHIDEventTap, ev_m2)
+                        cg.CFRelease(ev_m2)
+            except Exception as e:
+                print(f"[Power] Synthetic wake event failed: {e}")
+
+        elif PLATFORM == 'win32':
+            try:
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+            except Exception:
+                pass
+
     def wake(self, token="default", reason="P2P Connect Remote Desktop Session Active"):
         """Acquire display assertion idempotently for a given session token."""
         is_first = len(self._active_tokens) == 0
@@ -721,43 +806,10 @@ class DisplayWakeManager:
                 except Exception as e:
                     print(f"[Power] Could not start caffeinate: {e}")
 
-            # 2. Declare local user activity via IOKit to wake sleeping display immediately
-            try:
-                iokit_path = ctypes.util.find_library('IOKit')
-                cf_path = ctypes.util.find_library('CoreFoundation')
-                if iokit_path and cf_path:
-                    iokit = ctypes.cdll.LoadLibrary(iokit_path)
-                    cf = ctypes.cdll.LoadLibrary(cf_path)
-                    kCFStringEncodingUTF8 = 0x08000100
-                    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
-                    cf.CFStringCreateWithCString.restype = ctypes.c_void_p
-                    cf.CFRelease.argtypes = [ctypes.c_void_p]
-                    cf.CFRelease.restype = None
+            # 2. Pulse wake (caffeinate -u -t 2, IOKit declare user activity, Shift keypress via HID event source)
+            self.pulse_wake(reason)
 
-                    name = cf.CFStringCreateWithCString(None, reason.encode('utf-8'), kCFStringEncodingUTF8)
-                    wake_aid = ctypes.c_uint32(0)
-                    iokit.IOPMAssertionDeclareUserActivity.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
-                    iokit.IOPMAssertionDeclareUserActivity.restype = ctypes.c_int
-                    iokit.IOPMAssertionDeclareUserActivity(name, 0, ctypes.byref(wake_aid))
-                    cf.CFRelease(name)
-            except Exception:
-                pass
-
-            if is_first:
-                print(f"[Power] Remote session started: Waking display & activating sleep assertion")
-                # 3. Simulate subtle mouse movement to wake macOS WindowServer
-                try:
-                    if 'cg' in globals() and 'kCGEventMouseMoved' in globals():
-                        ox, oy, sw, sh = get_screen_bounds()
-                        pt = CGPoint(ox + sw // 2, oy + sh // 2)
-                        ev = cg.CGEventCreateMouseEvent(None, kCGEventMouseMoved, pt, 0)
-                        if ev:
-                            cg.CGEventPost(kCGHIDEventTap, ev)
-                            cg.CFRelease(ev)
-                except Exception:
-                    pass
-
-            # 4. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
+            # 3. Acquire IOKit PreventUserIdleDisplaySleep assertion for the session duration
             if self.assertion_id is None:
                 try:
                     iokit_path = ctypes.util.find_library('IOKit')
@@ -800,6 +852,16 @@ class DisplayWakeManager:
         if now - self._last_tickle_time < 2.0:
             return
         self._last_tickle_time = now
+        # Re-pulse wake if screen is locked or display is asleep
+        if PLATFORM == 'darwin':
+            try:
+                is_asleep = False
+                if 'cg' in globals() and hasattr(cg, 'CGDisplayIsAsleep') and hasattr(cg, 'CGMainDisplayID'):
+                    is_asleep = bool(cg.CGDisplayIsAsleep(cg.CGMainDisplayID()))
+                if is_asleep or _global_frame_capturer.is_screen_locked():
+                    self.pulse_wake()
+            except Exception:
+                pass
         self.wake(token=token)
 
     def release(self, token=None, force=False):
@@ -1396,6 +1458,7 @@ async def handle_client(reader, writer):
             active_delay = 1.0 / max(1, min(60, capture_fps))
             idle_delay = 0.2  # Maintain at least 5 FPS heartbeat to prevent WebRTC congestion control starvation
             stream_start_time = time.monotonic()
+            _last_wake_pulse = 0.0
             while capture_active:
                 t0 = time.time()
                 now_mono = time.monotonic()
@@ -1412,6 +1475,15 @@ async def handle_client(reader, writer):
                     else:
                         jpeg_bytes, w, h = _global_frame_capturer.capture_window(capture_target_id)
                         t_code = 2
+
+                    if not jpeg_bytes or len(jpeg_bytes) == 0:
+                        # Display is likely asleep or blank under DPMS; re-pulse wake periodically
+                        if (now_mono - _last_wake_pulse) >= 2.0:
+                            _last_wake_pulse = now_mono
+                            print("[Power] Empty display capture detected (display may be asleep); pulsing display wake...")
+                            _global_wake_manager.pulse_wake()
+                        await asyncio.sleep(0.1)
+                        continue
 
                     if jpeg_bytes and len(jpeg_bytes) > 0:
                         # Instant bounds sync fallback: if frame dimensions changed mid-stream, refresh cached bounds
@@ -1651,6 +1723,13 @@ async def handle_client(reader, writer):
                 capture_task = asyncio.create_task(stream_frames_loop())
                 print(f"[+] Started native capture: target={capture_target_type}, id={capture_target_id}, fps={capture_fps}")
                 writer.write(make_ws_frame(json.dumps({'t': 'capture_started', 'target': capture_target_type, 'id': capture_target_id})))
+                await writer.drain()
+
+            elif evt_type in ('wake_display', 'wake_screen'):
+                _global_wake_manager.wake(session_token)
+                _global_wake_manager.pulse_wake()
+                print("[Power] wake_display command received from host client; pulsed display wake")
+                writer.write(make_ws_frame(json.dumps({'t': 'display_woken'})))
                 await writer.drain()
 
             elif evt_type in ('stop_capture', 'action') or data.get('action') == 'stop_capture':

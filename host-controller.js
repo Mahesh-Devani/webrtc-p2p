@@ -1878,9 +1878,10 @@ async function initSignaling() {
               bridgeActive: bridgeConnected
             });
 
-            // If in native bridge mode, query targets immediately so client gets displays & windows
+            // If in native bridge mode, query targets and ensure display is awake immediately
             if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
               try { bridgeWs.send(JSON.stringify({ t: 'get_targets' })); } catch {}
+              try { bridgeWs.send(JSON.stringify({ t: 'wake_display' })); } catch {}
             }
 
             // If screen capture is not active, alert the controller
