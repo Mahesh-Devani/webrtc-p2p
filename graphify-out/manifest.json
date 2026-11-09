@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1793908457.935132,
-    "seen": 1793908960.906552,
-    "ast_hash": "f96bae19483a41dfc93e29d2e03bf283",
+    "mtime": 1794223455.0567627,
+    "seen": 1794223501.5297348,
+    "ast_hash": "4fe2f2da6c584ab469abddc8dc73e1cd",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1793908471.3470564,
-    "seen": 1793908960.906559,
-    "ast_hash": "7261247d56e3859e26ae132e8ae63c59",
+    "mtime": 1794223494.65913,
+    "seen": 1794223501.5297432,
+    "ast_hash": "bafdff699006fbe944d1c6e1095bd65e",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "tests/test_coordinate_mapping.py": {
-    "mtime": 1793908505.3381996,
-    "seen": 1793908960.9065459,
-    "ast_hash": "7ad43c36ef18a5181acee63472faffcb",
+    "mtime": 1794223475.4605453,
+    "seen": 1794223501.5297291,
+    "ast_hash": "b8ed72e72d5ac3f276ad3bb9296fd55d",
     "semantic_hash": ""
   }
 }

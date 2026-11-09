@@ -118,6 +118,71 @@ class TestCoordinateMappingAndPreemption(unittest.TestCase):
         self.assertIn("addEventListener('online'", content,
                       "ui-controller.js must listen for online event to recover from network roaming")
 
+    def test_zoomed_and_panned_video_coordinate_mapping(self):
+        """Zoomed & panned coordinate mapping must be mathematically linear and reversible."""
+        ui_path = PROJECT_ROOT / "ui-controller.js"
+        content = ui_path.read_text(encoding='utf-8')
+        # Ensure redundant double-transform logic is NOT present in getNormalizedVideoCoordinates
+        self.assertNotIn("(clientX - centerX - rdPanX) / rdZoomScale", content,
+                         "getNormalizedVideoCoordinates must not apply redundant double-transform over getBoundingClientRect")
+        self.assertNotIn("(pixelX - centerX) * rdZoomScale + rdPanX", content,
+                         "renderVirtualCursor must not apply redundant double-transform over getBoundingClientRect")
+
+        # Mathematical simulation of browser layout with 32:9 ultrawide (5120x1440) zoomed to 1.33x
+        p_w, p_h = 1920, 1080
+        video_ratio = 5120 / 1440  # ~3.555
+        zoom_scale = 1.333333
+        pan_x = 150.0
+
+        # Transformed element rect in browser viewport coordinates
+        rect_w = p_w * zoom_scale
+        rect_h = p_h * zoom_scale
+        rect_left = (p_w - rect_w) / 2 + pan_x
+        rect_top = (p_h - rect_h) / 2
+
+        # Active video letterbox dimensions
+        actual_w = rect_w
+        actual_h = rect_w / video_ratio
+        offset_x = 0
+        offset_y = (rect_h - actual_h) / 2
+
+        video_left = rect_left + offset_x
+        video_top = rect_top + offset_y
+
+        def client_to_norm(cx, cy):
+            click_x = cx - video_left
+            click_y = cy - video_top
+            clamped_x = max(0.0, min(actual_w, click_x))
+            clamped_y = max(0.0, min(actual_h, click_y))
+            return clamped_x / actual_w, clamped_y / actual_h
+
+        def norm_to_pixel(nx, ny):
+            return video_left + nx * actual_w, video_top + ny * actual_h
+
+        # 1. Left edge check
+        nx, ny = client_to_norm(video_left, video_top)
+        self.assertAlmostEqual(nx, 0.0, places=5)
+        self.assertAlmostEqual(ny, 0.0, places=5)
+
+        # 2. Right edge check
+        nx, ny = client_to_norm(video_left + actual_w, video_top + actual_h)
+        self.assertAlmostEqual(nx, 1.0, places=5)
+        self.assertAlmostEqual(ny, 1.0, places=5)
+
+        # 3. Center check
+        cx = video_left + actual_w / 2
+        cy = video_top + actual_h / 2
+        nx, ny = client_to_norm(cx, cy)
+        self.assertAlmostEqual(nx, 0.5, places=5)
+        self.assertAlmostEqual(ny, 0.5, places=5)
+
+        # 4. Perfect round-trip reversibility between click and reticle
+        for test_norm in [0.0, 0.123, 0.25, 0.5, 0.789, 1.0]:
+            px, py = norm_to_pixel(test_norm, test_norm)
+            back_x, back_y = client_to_norm(px, py)
+            self.assertAlmostEqual(back_x, test_norm, places=5)
+            self.assertAlmostEqual(back_y, test_norm, places=5)
+
 
 if __name__ == '__main__':
     unittest.main()

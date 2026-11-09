@@ -2607,7 +2607,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       dom.remoteVideo.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1)';
       setTimeout(() => {
         if (dom.remoteVideo) dom.remoteVideo.style.transition = '';
-      }, 200);
+        if (rdMode === 'control' || rdMode === 'pointer') renderVirtualCursor();
+      }, 205);
     } else {
       dom.remoteVideo.style.transition = '';
     }
@@ -2840,35 +2841,34 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   function getNormalizedVideoCoordinates(e, videoEl) {
     if (!videoEl) return null;
     const { actualWidth, actualHeight, offsetX, offsetY, rect } = getVideoActualDimensions(videoEl);
-    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    if (!rect || rect.width <= 0 || rect.height <= 0 || actualWidth <= 0 || actualHeight <= 0) return null;
 
     const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
-    let clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
-    let clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
+    const clientX = pt.clientX !== undefined ? pt.clientX : e.clientX;
+    const clientY = pt.clientY !== undefined ? pt.clientY : e.clientY;
 
-    if (rdZoomScale > 1.02) {
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      clientX = centerX + (clientX - centerX - rdPanX) / rdZoomScale;
-      clientY = centerY + (clientY - centerY - rdPanY) / rdZoomScale;
-    }
+    // The active video content starts at (rect.left + offsetX, rect.top + offsetY) on screen,
+    // which already incorporates CSS translate(rdPanX, rdPanY) and scale(rdZoomScale) via getBoundingClientRect().
+    const videoLeft = rect.left + offsetX;
+    const videoTop = rect.top + offsetY;
 
-    // Discard only if event occurred far outside the video container
-    if (clientX < rect.left - 40 || clientX > rect.right + 40 || clientY < rect.top - 40 || clientY > rect.bottom + 40) {
+    // Discard only if event occurred far outside the visible active video region
+    if (clientX < videoLeft - 60 || clientX > videoLeft + actualWidth + 60 ||
+        clientY < videoTop - 60 || clientY > videoTop + actualHeight + 60) {
       return null;
     }
 
-    const clickX = clientX - rect.left - offsetX;
-    const clickY = clientY - rect.top - offsetY;
+    const clickX = clientX - videoLeft;
+    const clickY = clientY - videoTop;
 
     // Clamping to [0, actualWidth] and [0, actualHeight] guarantees that reaching the top
-    // letterbox margin or container border reaches exactly y = 0.0 (top edge of remote desktop)
+    // letterbox margin or container border reaches exactly 0.0 or 1.0 (edges of remote desktop)
     const clampedX = Math.max(0, Math.min(actualWidth, clickX));
     const clampedY = Math.max(0, Math.min(actualHeight, clickY));
 
     return {
-      x: actualWidth > 0 ? Math.max(0, Math.min(1, clampedX / actualWidth)) : 0,
-      y: actualHeight > 0 ? Math.max(0, Math.min(1, clampedY / actualHeight)) : 0,
+      x: Math.max(0, Math.min(1, clampedX / actualWidth)),
+      y: Math.max(0, Math.min(1, clampedY / actualHeight)),
     };
   }
 
@@ -3448,15 +3448,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       return;
     }
 
-    let pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
-    let pixelY = rect.top + offsetY + (virtualCursor.y * actualHeight);
-
-    if (rdZoomScale > 1.02) {
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      pixelX = centerX + (pixelX - centerX) * rdZoomScale + rdPanX;
-      pixelY = centerY + (pixelY - centerY) * rdZoomScale + rdPanY;
-    }
+    // Since rect is the post-transform bounding box from getBoundingClientRect(),
+    // (rect.left + offsetX, rect.top + offsetY) is already the exact top-left corner
+    // of the active video in viewport coordinates, correctly scaled and panned.
+    const pixelX = rect.left + offsetX + (virtualCursor.x * actualWidth);
+    const pixelY = rect.top + offsetY + (virtualCursor.y * actualHeight);
 
     show(dom.rdVirtualCursor);
     dom.rdVirtualCursor.style.left = `${pixelX}px`;
