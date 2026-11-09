@@ -110,6 +110,8 @@ if PLATFORM == 'darwin':
     cg.CGEventSourceCreate.restype = ctypes.c_void_p
     cg.CGDisplayIsAsleep.argtypes = [ctypes.c_uint32]
     cg.CGDisplayIsAsleep.restype = ctypes.c_bool
+    cg.CGRestorePermanentDisplayConfiguration.argtypes = []
+    cg.CGRestorePermanentDisplayConfiguration.restype = None
 
     # Pre-allocate shared hardware HID event source to ensure all synthetic inputs
     # are recognized by WindowServer as real hardware HID activity (waking display/lock screen)
@@ -778,6 +780,13 @@ class DisplayWakeManager:
             except Exception as e:
                 print(f"[Power] Synthetic wake event failed: {e}")
 
+            # 4. Command WindowServer to re-assert permanent display configuration (software display bus re-sync)
+            try:
+                if 'cg' in globals() and hasattr(cg, 'CGRestorePermanentDisplayConfiguration'):
+                    cg.CGRestorePermanentDisplayConfiguration()
+            except Exception:
+                pass
+
         elif PLATFORM == 'win32':
             try:
                 ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
@@ -944,12 +953,10 @@ def lock_host_screen():
             except Exception as e:
                 print(f"[Power] osascript lock failed: {e}")
 
-        # Always trigger display sleep as well to ensure display turns off / enters low power
-        try:
-            subprocess.run(['pmset', 'displaysleepnow'], check=False, timeout=2.0)
-            print("[Power] Display sleep triggered via pmset displaysleepnow")
-        except Exception as e:
-            print(f"[Power] pmset displaysleepnow failed: {e}")
+        # Note: We intentionally avoid forcing 'pmset displaysleepnow' on session end.
+        # SACLockScreenImmediate already securely locks the session. Allowing macOS to manage
+        # natural display dimming/sleep prevents deep DPMS/DSC handshake freezes on ultrawide monitors.
+        print("[Power] Screen locked securely; allowing natural OS display sleep to prevent DPMS freeze")
 
     elif PLATFORM == 'win32':
         try:

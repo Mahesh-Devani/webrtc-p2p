@@ -39,6 +39,7 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('def tickle(', self.bridge_content)
         self.assertIn('def pulse_wake(', self.bridge_content)
         self.assertIn('kCGEventSourceStateHIDSystemState', self.bridge_content)
+        self.assertIn('CGRestorePermanentDisplayConfiguration', self.bridge_content)
         self.assertIn('PreventUserIdleDisplaySleep', self.bridge_content)
         self.assertIn('IOPMAssertionDeclareUserActivity', self.bridge_content)
         self.assertIn('caffeinate', self.bridge_content)
