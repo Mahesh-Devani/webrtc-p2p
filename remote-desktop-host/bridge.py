@@ -36,6 +36,7 @@ import ssl
 import ctypes
 import ctypes.util
 import subprocess
+import threading
 import zlib
 
 # ── Timestamped Logging Wrapper ───────────────────────────────────────────────
@@ -85,6 +86,20 @@ if PLATFORM == 'darwin':
 
     cg.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
     cg.CGEventPost.restype = None
+
+    if hasattr(cg, 'CGEventPostToPid'):
+        cg.CGEventPostToPid.argtypes = [ctypes.c_int32, ctypes.c_void_p]
+        cg.CGEventPostToPid.restype = None
+
+    def _post_cg_event(evt, target_pid=None):
+        if not evt:
+            return
+        if target_pid and int(target_pid) > 0 and hasattr(cg, 'CGEventPostToPid'):
+            try:
+                cg.CGEventPostToPid(int(target_pid), evt)
+            except Exception:
+                pass
+        cg.CGEventPost(kCGHIDEventTap, evt)
 
     cg.CGEventCreateKeyboardEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint16, ctypes.c_bool]
     cg.CGEventCreateKeyboardEvent.restype = ctypes.c_void_p
@@ -177,7 +192,7 @@ if PLATFORM == 'darwin':
 
     _mouse_down_state = {0: False, 1: False, 2: False}
 
-    def native_mouse_move(x, y):
+    def native_mouse_move(x, y, target_pid=None):
         pt = CGPoint(float(x), float(y))
         if _mouse_down_state[0]:
             evt_type = kCGEventLeftMouseDragged
@@ -187,10 +202,10 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventMouseMoved
         evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, 0)
         if evt:
-            cg.CGEventPost(kCGHIDEventTap, evt)
+            _post_cg_event(evt, target_pid)
             cg.CFRelease(evt)
 
-    def native_mouse_down(btn, x, y):
+    def native_mouse_down(btn, x, y, target_pid=None):
         pt = CGPoint(float(x), float(y))
         _mouse_down_state[btn] = True
         if btn == 2:
@@ -201,10 +216,10 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventLeftMouseDown
         evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, btn)
         if evt:
-            cg.CGEventPost(kCGHIDEventTap, evt)
+            _post_cg_event(evt, target_pid)
             cg.CFRelease(evt)
 
-    def native_mouse_up(btn, x, y):
+    def native_mouse_up(btn, x, y, target_pid=None):
         pt = CGPoint(float(x), float(y))
         _mouse_down_state[btn] = False
         if btn == 2:
@@ -215,10 +230,10 @@ if PLATFORM == 'darwin':
             evt_type = kCGEventLeftMouseUp
         evt = cg.CGEventCreateMouseEvent(_hid_event_source, evt_type, pt, btn)
         if evt:
-            cg.CGEventPost(kCGHIDEventTap, evt)
+            _post_cg_event(evt, target_pid)
             cg.CFRelease(evt)
 
-    def native_mouse_click(btn, clicks, x, y):
+    def native_mouse_click(btn, clicks, x, y, target_pid=None):
         pt = CGPoint(float(x), float(y))
         down_type = kCGEventRightMouseDown if btn == 2 else kCGEventLeftMouseDown
         up_type = kCGEventRightMouseUp if btn == 2 else kCGEventLeftMouseUp
@@ -227,32 +242,32 @@ if PLATFORM == 'darwin':
             evt_down = cg.CGEventCreateMouseEvent(_hid_event_source, down_type, pt, btn)
             if evt_down:
                 cg.CGEventSetIntegerValueField(evt_down, kCGMouseEventClickState, i)
-                cg.CGEventPost(kCGHIDEventTap, evt_down)
+                _post_cg_event(evt_down, target_pid)
                 cg.CFRelease(evt_down)
 
             evt_up = cg.CGEventCreateMouseEvent(_hid_event_source, up_type, pt, btn)
             if evt_up:
                 cg.CGEventSetIntegerValueField(evt_up, kCGMouseEventClickState, i)
-                cg.CGEventPost(kCGHIDEventTap, evt_up)
+                _post_cg_event(evt_up, target_pid)
                 cg.CFRelease(evt_up)
 
-    def native_scroll(units):
+    def native_scroll(units, target_pid=None):
         evt = cg.CGEventCreateScrollWheelEvent(_hid_event_source, 0, 1, int(units))
         if evt:
-            cg.CGEventPost(kCGHIDEventTap, evt)
+            _post_cg_event(evt, target_pid)
             cg.CFRelease(evt)
 
-    def release_all_modifiers():
+    def release_all_modifiers(target_pid=None):
         # Release modifier keycodes: LeftShift (56), RightShift (60), LeftAlt (58), RightAlt (61),
         # LeftCtrl (59), RightCtrl (62), Command (55)
         for code in (56, 60, 58, 61, 59, 62, 55):
             evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, code, False)
             if evt:
                 cg.CGEventSetFlags(evt, 0)
-                cg.CGEventPost(kCGHIDEventTap, evt)
+                _post_cg_event(evt, target_pid)
                 cg.CFRelease(evt)
 
-    def native_key(key, is_down, modifiers=None):
+    def native_key(key, is_down, modifiers=None, target_pid=None):
         mods = modifiers or {}
         shift_pressed = bool(mods.get('shift', False))
         ctrl_pressed = bool(mods.get('ctrl', False))
@@ -292,7 +307,7 @@ if PLATFORM == 'darwin':
                 # UNCONDITIONALLY set flags to explicitly clear modifiers when flags == 0
                 cg.CGEventSetFlags(evt, flags)
 
-                cg.CGEventPost(kCGHIDEventTap, evt)
+                _post_cg_event(evt, target_pid)
                 cg.CFRelease(evt)
 
                 # If this was an auto-shifted character (e.g. 'A' or '!') and shift key is NOT physically held down:
@@ -301,7 +316,7 @@ if PLATFORM == 'darwin':
                     clr_evt = cg.CGEventCreateKeyboardEvent(_hid_event_source, 56, False)
                     if clr_evt:
                         cg.CGEventSetFlags(clr_evt, 0)
-                        cg.CGEventPost(kCGHIDEventTap, clr_evt)
+                        _post_cg_event(clr_evt, target_pid)
                         cg.CFRelease(clr_evt)
 
         elif len(key) == 1:
@@ -313,14 +328,14 @@ if PLATFORM == 'darwin':
                     flags |= kCGEventFlagMaskShift
                 cg.CGEventSetFlags(evt, flags)
                 cg.CGEventKeyboardSetUnicodeString(evt, 1, key)
-                cg.CGEventPost(kCGHIDEventTap, evt)
+                _post_cg_event(evt, target_pid)
                 cg.CFRelease(evt)
 
-    def native_type_text(text):
+    def native_type_text(text, target_pid=None):
         for char in text:
-            native_key(char, True)
-            native_key(char, False)
-        release_all_modifiers()
+            native_key(char, True, target_pid=target_pid)
+            native_key(char, False, target_pid=target_pid)
+        release_all_modifiers(target_pid=target_pid)
 
 elif PLATFORM == 'win32':
     # Native Win32 user32 input driver (Zero external dependencies, pure Python standard library)
@@ -347,20 +362,20 @@ elif PLATFORM == 'win32':
     MOUSEEVENTF_MIDDLEUP = 0x0040
     MOUSEEVENTF_WHEEL = 0x0800
 
-    def native_mouse_move(x, y):
+    def native_mouse_move(x, y, target_pid=None):
         user32.SetCursorPos(int(round(x)), int(round(y)))
 
-    def native_mouse_down(btn, x, y):
+    def native_mouse_down(btn, x, y, target_pid=None):
         user32.SetCursorPos(int(round(x)), int(round(y)))
         flags = MOUSEEVENTF_RIGHTDOWN if btn == 2 else (MOUSEEVENTF_MIDDLEDOWN if btn == 1 else MOUSEEVENTF_LEFTDOWN)
         user32.mouse_event(flags, 0, 0, 0, 0)
 
-    def native_mouse_up(btn, x, y):
+    def native_mouse_up(btn, x, y, target_pid=None):
         user32.SetCursorPos(int(round(x)), int(round(y)))
         flags = MOUSEEVENTF_RIGHTUP if btn == 2 else (MOUSEEVENTF_MIDDLEUP if btn == 1 else MOUSEEVENTF_LEFTUP)
         user32.mouse_event(flags, 0, 0, 0, 0)
 
-    def native_mouse_click(btn, clicks, x, y):
+    def native_mouse_click(btn, clicks, x, y, target_pid=None):
         user32.SetCursorPos(int(round(x)), int(round(y)))
         down_flag = MOUSEEVENTF_RIGHTDOWN if btn == 2 else (MOUSEEVENTF_MIDDLEDOWN if btn == 1 else MOUSEEVENTF_LEFTDOWN)
         up_flag = MOUSEEVENTF_RIGHTUP if btn == 2 else (MOUSEEVENTF_MIDDLEUP if btn == 1 else MOUSEEVENTF_LEFTUP)
@@ -368,7 +383,7 @@ elif PLATFORM == 'win32':
             user32.mouse_event(down_flag, 0, 0, 0, 0)
             user32.mouse_event(up_flag, 0, 0, 0, 0)
 
-    def native_scroll(units):
+    def native_scroll(units, target_pid=None):
         delta = int(units * 120)
         user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, 0)
 
@@ -393,7 +408,7 @@ elif PLATFORM == 'win32':
     KEYEVENTF_KEYUP = 0x0002
     KEYEVENTF_UNICODE = 0x0004
 
-    def native_key(key, is_down, modifiers=None):
+    def native_key(key, is_down, modifiers=None, target_pid=None):
         k_lower = key.lower() if isinstance(key, str) else str(key).lower()
         flags = KEYEVENTF_KEYUP if not is_down else 0
         if k_lower in WIN_VK_MAP:
@@ -412,13 +427,13 @@ elif PLATFORM == 'win32':
             except Exception:
                 pass
 
-    def native_type_text(text):
+    def native_type_text(text, target_pid=None):
         for ch in text:
             char_code = ord(ch)
             user32.keybd_event(0, char_code, KEYEVENTF_UNICODE, 0)
             user32.keybd_event(0, char_code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0)
 
-    def release_all_modifiers():
+    def release_all_modifiers(target_pid=None):
         for vk in (0x10, 0x11, 0x12, 0x5B):  # Shift, Ctrl, Alt, Win
             user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
 
@@ -430,20 +445,32 @@ else:
         pyautogui.FAILSAFE = False  # Disabled so moving mouse to screen corners (menus/buttons) does not crash bridge
         SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
-        def native_mouse_move(x, y):
+        def native_mouse_move(x, y, target_pid=None):
             pyautogui.moveTo(x, y)
 
-        def native_mouse_down(btn, x, y):
+        def native_mouse_down(btn, x, y, target_pid=None):
             b = 'right' if btn == 2 else ('middle' if btn == 1 else 'left')
             pyautogui.mouseDown(button=b)
 
-        def native_mouse_up(btn, x, y):
+        def native_mouse_up(btn, x, y, target_pid=None):
             b = 'right' if btn == 2 else ('middle' if btn == 1 else 'left')
             pyautogui.mouseUp(button=b)
 
-        def native_mouse_click(btn, clicks, x, y):
+        def native_mouse_click(btn, clicks, x, y, target_pid=None):
             b = 'right' if btn == 2 else ('middle' if btn == 1 else 'left')
             pyautogui.click(button=b, clicks=clicks)
+
+        def native_scroll(units, target_pid=None):
+            pyautogui.scroll(units)
+
+        def native_key(key, is_down, modifiers=None, target_pid=None):
+            pass
+
+        def native_type_text(text, target_pid=None):
+            pyautogui.typewrite(text)
+
+        def release_all_modifiers(target_pid=None):
+            pass
 
         def native_scroll(units):
             pyautogui.scroll(units)
@@ -1214,8 +1241,26 @@ class NativeFrameCapturer:
             self.k_owner = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerName', kCFStringEncodingUTF8)
             self.k_name = self.cf.CFStringCreateWithCString(None, b'kCGWindowName', kCFStringEncodingUTF8)
             self.k_layer = self.cf.CFStringCreateWithCString(None, b'kCGWindowLayer', kCFStringEncodingUTF8)
+            self.k_pid = self.cf.CFStringCreateWithCString(None, b'kCGWindowOwnerPID', kCFStringEncodingUTF8)
             self.k_locked = self.cf.CFStringCreateWithCString(None, b'CGSSessionScreenIsLocked', kCFStringEncodingUTF8)
             self.null_rect = CGRect(CGPoint(float('inf'), float('inf')), CGSize(0, 0))
+
+            # Native AppKit Cocoa bindings for instant, zero-dependency window activation & focus
+            try:
+                ctypes.cdll.LoadLibrary('/System/Library/Frameworks/AppKit.framework/AppKit')
+                objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('objc'))
+                objc.objc_getClass.restype = ctypes.c_void_p
+                objc.objc_getClass.argtypes = [ctypes.c_char_p]
+                objc.sel_registerName.restype = ctypes.c_void_p
+                objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+                self._NSRunningApplication = objc.objc_getClass(b'NSRunningApplication')
+                self._sel_appWithPID = objc.sel_registerName(b'runningApplicationWithProcessIdentifier:')
+                self._sel_activate = objc.sel_registerName(b'activateWithOptions:')
+                self._msgSend_pid = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32))
+                self._msgSend_act = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong))
+            except Exception:
+                self._NSRunningApplication = None
 
             self.cg.CGSessionCopyCurrentDictionary.argtypes = []
             self.cg.CGSessionCopyCurrentDictionary.restype = ctypes.c_void_p
@@ -1735,30 +1780,72 @@ class NativeFrameCapturer:
 
         return {'displays': displays, 'windows': windows}
 
-    def get_window_bounds(self, window_id, force=False):
-        now = time.monotonic()
-        if not force and hasattr(self, '_bounds_cache'):
-            cached_wid, cached_b, cached_t = self._bounds_cache
-            if cached_wid == int(window_id) and cached_b and (now - cached_t < 0.5):
-                return cached_b
+    def ns_app_activate(self, pid):
+        if not getattr(self, '_NSRunningApplication', None) or not pid:
+            return False
+        try:
+            app = self._msgSend_pid(self._NSRunningApplication, self._sel_appWithPID, int(pid))
+            if app:
+                # 3 = NSApplicationActivateAllWindows (1) | NSApplicationActivateIgnoringOtherApps (2)
+                return bool(self._msgSend_act(app, self._sel_activate, 3))
+        except Exception:
+            pass
+        return False
 
-        if PLATFORM == 'darwin' and window_id > 0:
+    def get_window_info(self, window_id):
+        if not window_id:
+            return None
+        try:
+            wid = int(window_id)
+        except Exception:
+            return None
+        if wid <= 0:
+            return None
+
+        now = time.monotonic()
+        if hasattr(self, '_window_info_cache') and wid in self._window_info_cache:
+            cached_data, cached_t = self._window_info_cache[wid]
+            if (now - cached_t) < 1.0:
+                return cached_data
+
+        if PLATFORM == 'darwin':
             try:
-                kCGWindowListOptionOnScreenOnly = 1
-                kCGWindowListExcludeDesktopElements = 16
-                arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
+                # kCGWindowListOptionAll = 0: find window across all states (even background, minimized or obscured)
+                arr = self.cg.CGWindowListCopyWindowInfo(0, 0)
                 if arr:
                     count = self.cf.CFArrayGetCount(arr)
-                    target_bounds = None
-                    wid = ctypes.c_uint32(0)
+                    k_pid = getattr(self, 'k_pid', None) or self.cf.CFStringCreateWithCString(None, b"kCGWindowOwnerPID", 0x08000100)
+                    wid_c = ctypes.c_uint32(0)
+                    pid_c = ctypes.c_int32(0)
+                    buf = ctypes.create_string_buffer(256)
+                    info = None
                     for i in range(count):
                         d = self.cf.CFArrayGetValueAtIndex(arr, i)
                         num_ref = self.cf.CFDictionaryGetValue(d, self.k_num)
                         if num_ref:
-                            wid.value = 0
-                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid))
-                            if wid.value == int(window_id):
+                            wid_c.value = 0
+                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid_c))
+                            if wid_c.value == wid:
+                                target_pid = None
+                                pid_ref = self.cf.CFDictionaryGetValue(d, k_pid)
+                                if pid_ref:
+                                    self.cf.CFNumberGetValue(pid_ref, 3, ctypes.byref(pid_c))
+                                    target_pid = pid_c.value
+
+                                owner_str = ''
+                                owner_ref = self.cf.CFDictionaryGetValue(d, self.k_owner)
+                                if owner_ref:
+                                    self.cf.CFStringGetCString(owner_ref, buf, 256, 0x08000100)
+                                    owner_str = buf.value.decode('utf-8', 'replace')
+
+                                name_str = ''
+                                name_ref = self.cf.CFDictionaryGetValue(d, self.k_name)
+                                if name_ref:
+                                    self.cf.CFStringGetCString(name_ref, buf, 256, 0x08000100)
+                                    name_str = buf.value.decode('utf-8', 'replace')
+
                                 bounds_ref = self.cf.CFDictionaryGetValue(d, self.k_bounds)
+                                target_bounds = None
                                 if bounds_ref:
                                     def _get_val(k):
                                         ref = self.cf.CFDictionaryGetValue(bounds_ref, k)
@@ -1772,13 +1859,41 @@ class NativeFrameCapturer:
                                     h = int(_get_val(self.k_h))
                                     if w > 0 and h > 0:
                                         target_bounds = (x, y, w, h)
+
+                                info = {
+                                    'pid': target_pid,
+                                    'owner': owner_str,
+                                    'name': name_str,
+                                    'bounds': target_bounds
+                                }
                                 break
                     self.cf.CFRelease(arr)
-                    if target_bounds:
-                        self._bounds_cache = (int(window_id), target_bounds, now)
-                        return target_bounds
+                    if info:
+                        if not hasattr(self, '_window_info_cache'):
+                            self._window_info_cache = {}
+                        self._window_info_cache[wid] = (info, now)
+                        return info
             except Exception:
                 pass
+        return None
+
+    def get_window_pid(self, window_id):
+        info = self.get_window_info(window_id)
+        return info.get('pid') if info else None
+
+    def get_window_bounds(self, window_id, force=False):
+        now = time.monotonic()
+        if not force and hasattr(self, '_bounds_cache'):
+            cached_wid, cached_b, cached_t = self._bounds_cache
+            if cached_wid == int(window_id) and cached_b and (now - cached_t < 0.5):
+                return cached_b
+
+        if PLATFORM == 'darwin' and window_id > 0:
+            info = self.get_window_info(window_id)
+            if info and info.get('bounds'):
+                self._bounds_cache = (int(window_id), info['bounds'], now)
+                return info['bounds']
+            return None
         elif PLATFORM == 'win32' and window_id > 0:
             try:
                 from ctypes import wintypes
@@ -1858,38 +1973,68 @@ class NativeFrameCapturer:
 
         elif PLATFORM == 'darwin':
             try:
-                kCGWindowListOptionOnScreenOnly = 1
-                kCGWindowListExcludeDesktopElements = 16
-                arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
-                target_pid = None
-                if arr:
-                    count = self.cf.CFArrayGetCount(arr)
-                    k_pid = self.cf.CFStringCreateWithCString(None, b"kCGWindowOwnerPID", 0x08000100)
-                    wid_c = ctypes.c_uint32(0)
-                    pid_c = ctypes.c_int32(0)
-                    for i in range(count):
-                        d = self.cf.CFArrayGetValueAtIndex(arr, i)
-                        num_ref = self.cf.CFDictionaryGetValue(d, self.k_num)
-                        if num_ref:
-                            wid_c.value = 0
-                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid_c))
-                            if wid_c.value == wid:
-                                pid_ref = self.cf.CFDictionaryGetValue(d, k_pid)
-                                if pid_ref:
-                                    self.cf.CFNumberGetValue(pid_ref, 3, ctypes.byref(pid_c))
-                                    target_pid = pid_c.value
-                                break
-                    self.cf.CFRelease(arr)
-                    self.cf.CFRelease(k_pid)
+                info = self.get_window_info(wid)
+                if not info:
+                    return False
+                target_pid = info.get('pid')
+                target_owner = info.get('owner')
+                target_name = info.get('name')
 
+                # 1. Native Cocoa NSRunningApplication activate (instantaneous, ignores focus-stealing limits)
                 if target_pid and target_pid > 0:
-                    subprocess.run(
-                        ['osascript', '-e', f'tell application "System Events" to set frontmost of the first process whose unix id is {target_pid} to true'],
-                        check=False,
-                        timeout=1.0,
-                        capture_output=True
-                    )
-                    return True
+                    self.ns_app_activate(target_pid)
+
+                # 2. Non-blocking LaunchServices activation via 'open -a'
+                if target_owner:
+                    try:
+                        subprocess.Popen(['open', '-a', target_owner], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception:
+                        pass
+
+                # 3. Non-blocking AppleScript window unminimize, index 1 & AXRaise
+                if target_owner or (target_pid and target_pid > 0):
+                    safe_owner = target_owner.replace('"', '\\"') if target_owner else ""
+                    safe_name = target_name.replace('"', '\\"') if target_name else ""
+                    def _bg_raise():
+                        try:
+                            as_parts = []
+                            if safe_owner:
+                                as_parts.append(f'''
+                                try
+                                    tell application "{safe_owner}"
+                                        reopen
+                                        activate
+                                        try
+                                            set miniaturized of (every window whose id is {wid}) to false
+                                        end try
+                                        try
+                                            set index of (every window whose id is {wid}) to 1
+                                        end try
+                                    end tell
+                                end try
+                                ''')
+                            if target_pid:
+                                as_parts.append(f'''
+                                try
+                                    tell application "System Events"
+                                        set p to first process whose unix id is {target_pid}
+                                        set frontmost of p to true
+                                        tell p
+                                            repeat with w in (every window)
+                                                try
+                                                    perform action "AXRaise" of w
+                                                end try
+                                            end repeat
+                                        end tell
+                                    end tell
+                                end try
+                                ''')
+                            script = '\n'.join(as_parts)
+                            subprocess.run(['osascript', '-e', script], check=False, timeout=1.5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except Exception:
+                            pass
+                    threading.Thread(target=_bg_raise, daemon=True).start()
+                return True
             except Exception:
                 pass
         return False
@@ -2175,6 +2320,7 @@ async def handle_client(reader, writer):
                 _global_wake_manager.tickle(session_token)
 
             is_win = (capture_target_type == 'window' and int(capture_target_id or 0) > 0)
+            win_pid = _global_frame_capturer.get_window_pid(capture_target_id) if is_win else None
 
             if evt_type == 'mouse_move':
                 nx = float(data.get('x', 0))
@@ -2192,7 +2338,7 @@ async def handle_client(reader, writer):
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
                     execute_mouse_move(target_x, target_y, capture_target_id, is_win)
-                native_mouse_down(btn, current_x, current_y)
+                native_mouse_down(btn, current_x, current_y, win_pid)
 
             elif evt_type == 'mouse_up':
                 btn = int(data.get('btn', 0))
@@ -2201,7 +2347,7 @@ async def handle_client(reader, writer):
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
                     execute_mouse_move(target_x, target_y, capture_target_id, is_win)
-                native_mouse_up(btn, current_x, current_y)
+                native_mouse_up(btn, current_x, current_y, win_pid)
 
             elif evt_type in ('mouse_click', 'click'):
                 btn = int(data.get('btn', 0))
@@ -2213,7 +2359,7 @@ async def handle_client(reader, writer):
                     ny = float(data.get('y', 0))
                     target_x, target_y = map_client_coords(nx, ny)
                     execute_mouse_move(target_x, target_y, capture_target_id, is_win)
-                native_mouse_click(btn, clicks, current_x, current_y)
+                native_mouse_click(btn, clicks, current_x, current_y, win_pid)
 
             elif evt_type in ('select_display', 'switch_display'):
                 selected_display_id = data.get('id') if data.get('id') is not None else data.get('displayId')
@@ -2240,7 +2386,7 @@ async def handle_client(reader, writer):
                     units_y = -int(_accumulated_scroll_y / SCROLL_THRESHOLD)
                     _accumulated_scroll_y += units_y * SCROLL_THRESHOLD
                     if units_y != 0:
-                        native_scroll(units_y)
+                        native_scroll(units_y, win_pid)
 
             elif evt_type == 'key_down':
                 raw_key = data.get('key', '')
@@ -2252,7 +2398,7 @@ async def handle_client(reader, writer):
                 }
                 if is_win:
                     ensure_window_active(capture_target_id)
-                if raw_key: native_key(raw_key, True, mods)
+                if raw_key: native_key(raw_key, True, mods, win_pid)
 
             elif evt_type == 'key_up':
                 raw_key = data.get('key', '')
@@ -2262,30 +2408,30 @@ async def handle_client(reader, writer):
                     'alt': bool(data.get('alt', False)),
                     'meta': bool(data.get('meta', False))
                 }
-                if raw_key: native_key(raw_key, False, mods)
+                if raw_key: native_key(raw_key, False, mods, win_pid)
 
             elif evt_type == 'special_key':
                 if is_win:
                     ensure_window_active(capture_target_id)
                 action = data.get('key')
                 if action == 'win':
-                    native_key('command' if PLATFORM == 'darwin' else 'win', True)
-                    native_key('command' if PLATFORM == 'darwin' else 'win', False)
+                    native_key('command' if PLATFORM == 'darwin' else 'win', True, target_pid=win_pid)
+                    native_key('command' if PLATFORM == 'darwin' else 'win', False, target_pid=win_pid)
                 elif action == 'esc':
-                    native_key('escape', True)
-                    native_key('escape', False)
+                    native_key('escape', True, target_pid=win_pid)
+                    native_key('escape', False, target_pid=win_pid)
                 elif action == 'enter':
-                    native_key('return', True)
-                    native_key('return', False)
+                    native_key('return', True, target_pid=win_pid)
+                    native_key('return', False, target_pid=win_pid)
                 elif action == 'capslock':
-                    native_key('capslock', True)
-                    native_key('capslock', False)
+                    native_key('capslock', True, target_pid=win_pid)
+                    native_key('capslock', False, target_pid=win_pid)
 
             elif evt_type == 'type_text':
                 if is_win:
                     ensure_window_active(capture_target_id)
                 t_str = data.get('text', '')
-                if t_str: native_type_text(t_str)
+                if t_str: native_type_text(t_str, win_pid)
 
             elif evt_type == 'clipboard':
                 clip_text = data.get('text', '')

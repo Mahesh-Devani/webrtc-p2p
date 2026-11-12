@@ -1,17 +1,17 @@
 # Graph Report - webrtc-p2p  (2026-11-13)
 
 ## Corpus Check
-- 60 files · ~151,583 words
+- 60 files · ~152,045 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
 ## Summary
-- 1476 nodes · 2833 edges · 103 communities (62 shown, 41 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 121 edges (avg confidence: 0.88)
+- 1481 nodes · 2850 edges · 101 communities (62 shown, 39 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 122 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5d41b1da`
+- Built from commit: `30bcbf9b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -24,7 +24,7 @@
 - nostr.bundle.js
 - MockHostBridge
 - decode
-- P2P Connect — Concepts Guide
+- NostrRelay
 - package.json
 - encode
 - remote-desktop-host/package.json
@@ -39,7 +39,7 @@
 - CdpTab
 - decrypt3
 - TestOnDemandScreenCapture
-- TestMockNostrRelay
+- TestTwoPeerHandshakeE2E
 - AGENTS.md — Developer & AI Agent Guide for P2P Connect
 - format_remediation_box
 - hide
@@ -60,7 +60,8 @@
 - ThreadedMockBridge
 - P2P Connect — High-Level Design
 - TestWebRtcContracts
-- serve-https.py
+- run-regressions.py
+- AGENTS.md
 - DevHandler
 - DisplayWakeManager
 - 2. Triage Procedure
@@ -76,7 +77,6 @@
 - P2P Connect — System Design
 - run.sh
 - P2P Connect — Architecture
-- pathlib
 - 4. `nostr-transport.js` — NostrTransport
 - test_token_codec.py
 - loadRemoteDevices
@@ -91,13 +91,12 @@
 - 🔐 P2P Connect
 - ColoredTextTestResult
 - QuietHTTPHandler
-- mock_relay.py
+- ._handle_client
 - ai-diagnostic-agent.py
-- get_screen_bounds
+- .enumerate_targets
 - 3. `nostr-relay.js` — NostrRelay
 - 7. `ui-controller.js` — UI Controller
 - DiagnosticServer
-- Category B: WebRTC Signaling, Transport & Lifecycle Stability
 - 5. Security Model
 
 ## God Nodes (most connected - your core abstractions)
@@ -115,19 +114,19 @@
 ## Surprising Connections (you probably didn't know these)
 - `4. Architectural Invariants Enforced in Code` --references--> `isHostStreamLive()`  [INFERRED]
   docs/remote-desktop-knowledge-base.md → host-controller.js
-- `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
-  docs/concepts-guide.md → nostr-relay.js
 - `1. Dirty-Frame Detection & Adaptive FPS (Near-Term)` --references--> `stream_frames_loop()`  [INFERRED]
   docs/remote-desktop-knowledge-base.md → remote-desktop-host/bridge.py
 - `11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams` --references--> `getVideoActualDimensions()`  [INFERRED]
   docs/remote-desktop-knowledge-base.md → ui-controller.js
+- `13. Singleton & Factory Patterns` --references--> `NostrRelay`  [INFERRED]
+  docs/concepts-guide.md → nostr-relay.js
 - `2. Where We Stand vs. Initial Plan` --references--> `DisplayWakeManager`  [INFERRED]
   docs/remote-desktop-knowledge-base.md → remote-desktop-host/bridge.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (103 total, 41 thin omitted)
+## Communities (101 total, 39 thin omitted)
 
 ### Community 0 - "ui-controller.js"
 Cohesion: 0.10
@@ -143,11 +142,11 @@ Nodes (29): computeTag(), computeTag2(), constructor(), digest(), digestInto(), 
 
 ### Community 3 - "bridge.py"
 Cohesion: 0.10
-Nodes (23): CGPoint, EncoderParameter, execute_mouse_move(), GUID, handle_client(), is_origin_allowed(), load_host_config(), load_or_create_token() (+15 more)
+Nodes (24): CGPoint, EncoderParameter, execute_mouse_move(), GUID, handle_client(), is_origin_allowed(), load_host_config(), load_or_create_token() (+16 more)
 
 ### Community 4 - "host-controller.js"
-Cohesion: 0.06
-Nodes (61): DiagnosticLogger, acquireScreenWakeLock(), addAuthorizedClient(), applyHostConfigFromBridge(), broadcastBridgeStatus(), btnToggleServiceCard, clearBridgeReconnectTimer(), compressSignal() (+53 more)
+Cohesion: 0.09
+Nodes (52): DiagnosticLogger, acquireScreenWakeLock(), addAuthorizedClient(), applyHostConfigFromBridge(), broadcastBridgeStatus(), btnToggleServiceCard, clearBridgeReconnectTimer(), compressSignal() (+44 more)
 
 ### Community 5 - "nostr.bundle.js"
 Cohesion: 0.04
@@ -157,9 +156,9 @@ Nodes (43): binarySearch(), bytes2(), chachaCore(), concatBytes(), createCurve()
 Cohesion: 0.15
 Nodes (19): bytesToHex2(), createRumor(), createSeal(), createWrap(), encrypt2(), fastEventHash(), finalizeEvent(), finishReactionEvent() (+11 more)
 
-### Community 8 - "P2P Connect — Concepts Guide"
-Cohesion: 0.13
-Nodes (14): 10. Relay Management & Resilience, 11. Session Lifecycle, 12. Media Handling, 13. Singleton & Factory Patterns, 1. WebRTC Fundamentals, 2. DataChannels, 3. Perfect Negotiation Pattern, 4. Nostr Protocol Primer (+6 more)
+### Community 8 - "NostrRelay"
+Cohesion: 0.07
+Nodes (25): 8. Signaling Idempotency & Re-subscription Shielding (INV-10), 10. Relay Management & Resilience, 11. Session Lifecycle, 12. Media Handling, 13. Singleton & Factory Patterns, 1. WebRTC Fundamentals, 2. DataChannels, 3. Perfect Negotiation Pattern (+17 more)
 
 ### Community 9 - "package.json"
 Cohesion: 0.09
@@ -182,8 +181,8 @@ Cohesion: 0.18
 Nodes (11): 7. Local Development & Verification, Running the Application Locally, Verifying Changes, 5. `nostr-signaling.js` — NostrSignaling, Compression, Connection State Badge, ICE Candidate Batching, Session Cleanup (+3 more)
 
 ### Community 16 - "test_remote_desktop_capture_e2e.py"
-Cohesion: 0.07
-Nodes (10): find_chrome_binary(), HeadlessChromeSession, make_ws_frame(), QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ThreadedMockRelay, TestRemoteDesktopLifecycleE2E (+2 more)
+Cohesion: 0.09
+Nodes (6): find_chrome_binary(), HeadlessChromeSession, make_ws_frame(), make_close_frame(), make_pong_frame(), make_ws_frame()
 
 ### Community 18 - "assertNumber"
 Cohesion: 0.21
@@ -210,8 +209,8 @@ Cohesion: 0.26
 Nodes (22): buildIceServers(), buildNostrSessionConfig(), copyText(), disableChat(), disconnectRemoteDesktop(), enableChat(), endMediaCall(), exitRemoteDesktopMode() (+14 more)
 
 ### Community 27 - "6. Critical Invariants for AI Agents (MUST FOLLOW)"
-Cohesion: 0.20
-Nodes (10): 10. Remote Desktop Aspect Ratio & Stream Quality Encoding (INV-12), 11. Remote Desktop Hosting Modes & macOS TCC Boundaries, 1. ES Module Singleton Integrity (DO NOT BREAK), 2. Zero-Build Philosophy, 3. Media Track Replacement vs Renegotiation, 4. Storage Usage & Separation, 5. Mobile Background Suspensions & Auto-Reconnection, 6. Critical Invariants for AI Agents (MUST FOLLOW) (+2 more)
+Cohesion: 0.14
+Nodes (16): 10. Remote Desktop Aspect Ratio & Stream Quality Encoding (INV-12), 11. Remote Desktop Hosting Modes & macOS TCC Boundaries, 1. ES Module Singleton Integrity (DO NOT BREAK), 2. Zero-Build Philosophy, 3. Media Track Replacement vs Renegotiation, 4. Storage Usage & Separation, 5. Mobile Background Suspensions & Auto-Reconnection, 6. Critical Invariants for AI Agents (MUST FOLLOW) (+8 more)
 
 ### Community 29 - "check-invariants.py"
 Cohesion: 0.06
@@ -229,6 +228,10 @@ Nodes (3): cleanup_stale_chrome_lock(), start-host.sh script, switch-to-interact
 Cohesion: 0.12
 Nodes (16): 1. Dual-Tier Architecture, 2. Why Does the Support Agent Run When the Python Script Is Not Started?, 3. Developer + Antigravity Triage Workflow, 4. CLI Reference for `ai-diagnostic-agent.py`, 5. Client Authorization Whitelist & Anti-Flooding Shield, 🤖 AI Support Agent & Developer Triage System, CLI Whitelist Commands, Dual-Layer Defense Architecture (+8 more)
 
+### Community 37 - "MockNostrRelay"
+Cohesion: 0.06
+Nodes (4): ThreadedMockRelay, MockNostrRelay, _run_cli(), TestMockNostrRelay
+
 ### Community 38 - "toast"
 Cohesion: 0.21
 Nodes (20): acceptIncomingCall(), attachDisplaysMenuListeners(), connectLocalBridge(), disconnectLocalBridge(), getVideoConstraints(), handleIncomingInputEvent(), initMobileTouchAndSoftKeys(), populateDeviceSelectors() (+12 more)
@@ -242,16 +245,24 @@ Cohesion: 0.13
 Nodes (14): Architecture Overview, Connection Flow, Long-term (production infrastructure), Medium-term (minimal server), Module Responsibilities, P2P Connect — Architecture & Production Notes, Real-World Limitations of No-Signaling-Server Design, Risks of Manual Signaling (+6 more)
 
 ### Community 41 - "NativeFrameCapturer"
-Cohesion: 0.16
+Cohesion: 0.14
 Nodes (5): CGRect, CGSize, EncoderParameters, GdiplusStartupInput, NativeFrameCapturer
+
+### Community 42 - "ThreadedMockBridge"
+Cohesion: 0.07
+Nodes (7): QuietHTTPHandler, ReusableTCPServer, TestRemoteDesktopCaptureE2E, ThreadedMockBridge, _run(), ThreadedMockRelay, TestRemoteDesktopLifecycleE2E
 
 ### Community 43 - "P2P Connect — High-Level Design"
 Cohesion: 0.14
 Nodes (13): 1. What It Is, 2. Architecture Overview, 3. Two Connection Modes, 4. Feature Set, 5. Security Model, 6. Technology Stack, 7. File Map, Key Properties (+5 more)
 
-### Community 45 - "serve-https.py"
-Cohesion: 0.29
-Nodes (3): ensure_certificate(), get_local_ip_addresses(), main()
+### Community 45 - "run-regressions.py"
+Cohesion: 0.16
+Nodes (7): get_modified_files(), main(), run_tests(), select_test_modules(), ensure_certificate(), get_local_ip_addresses(), main()
+
+### Community 46 - "AGENTS.md"
+Cohesion: 0.20
+Nodes (4): 1. Executive Summary & Evolution, 4. Architectural Invariants Enforced in Code, 6. Guide for AI Agents Working on This Codebase, Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap
 
 ### Community 49 - "2. Triage Procedure"
 Cohesion: 0.22
@@ -267,7 +278,7 @@ Nodes (29): 1. Install & Start Service, 1. Install & Start Service, 1. Install v
 
 ### Community 53 - "Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap"
 Cohesion: 0.22
-Nodes (9): 10. Ultrawide Aspect Ratio (32:9) Stream Downscaling Distortion (INV-12), 11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams, 12. macOS Spaces (Virtual Desktops) WindowServer Limitation, 1. Executive Summary & Evolution, 3. Deep-Dive: Root Causes & Lessons Learned, 4. Architectural Invariants Enforced in Code, 6. Guide for AI Agents Working on This Codebase, Category C: Aspect Ratio, Input Mapping & Mobile UX (+1 more)
+Nodes (9): 10. Ultrawide Aspect Ratio (32:9) Stream Downscaling Distortion (INV-12), 11. Virtual Trackpad Vertical Movement Skew on Ultrawide Streams, 12. macOS Spaces (Virtual Desktops) WindowServer Limitation, 3. Deep-Dive: Root Causes & Lessons Learned, 7. Unshielded `visibilitychange` Forcing Transport Reconnects, 8. Video Track Churn and Bitrate Reset on Canvas Resize, 9. Cryptographic Identity Glare (`p2p-host-*` vs `nostr-*`), Category B: WebRTC Signaling, Transport & Lifecycle Stability (+1 more)
 
 ### Community 54 - "🚀 1. Recommended Triage Prompts"
 Cohesion: 0.25
@@ -297,17 +308,13 @@ Nodes (7): 2. `nostr-crypto.js` — NostrCrypto, 6. `token-codec.js` — TokenCo
 Cohesion: 0.17
 Nodes (12): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs, 8. Module Dependency Graph (+4 more)
 
-### Community 62 - "pathlib"
-Cohesion: 0.12
-Nodes (4): get_modified_files(), main(), run_tests(), select_test_modules()
-
 ### Community 63 - "4. `nostr-transport.js` — NostrTransport"
 Cohesion: 0.25
 Nodes (8): 4. `nostr-transport.js` — NostrTransport, Constants, Encrypted Payload Schema, Inbound Event Processing Pipeline, Nostr Event Format, Public API, Publish Failover Flow, Storage Keys
 
 ### Community 64 - "test_token_codec.py"
-Cohesion: 0.15
-Nodes (4): analyze_file(), python_compress_token(), python_decompress_token(), TestTokenCodec
+Cohesion: 0.17
+Nodes (3): python_compress_token(), python_decompress_token(), TestTokenCodec
 
 ### Community 65 - "loadRemoteDevices"
 Cohesion: 0.26
@@ -349,17 +356,13 @@ Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
 Cohesion: 0.18
 Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Background Hosting & Unattended Access (Roadmap), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
 
-### Community 82 - "mock_relay.py"
-Cohesion: 0.10
-Nodes (7): event_matches_any_filter(), event_matches_filter(), make_close_frame(), make_pong_frame(), make_ws_frame(), read_ws_frame(), _run_cli()
+### Community 82 - "._handle_client"
+Cohesion: 0.16
+Nodes (3): event_matches_any_filter(), event_matches_filter(), read_ws_frame()
 
 ### Community 85 - "ai-diagnostic-agent.py"
-Cohesion: 0.18
-Nodes (11): add_authorized_client(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox(), print_whitelist() (+3 more)
-
-### Community 86 - "get_screen_bounds"
-Cohesion: 0.20
-Nodes (8): 7. Native Host Bridge & OS Subsystem Invariants (`bridge.py`), 9. Zero Unthrottled OS IPC in Capture/Input Loops (INV-11), 1. 64-bit Pointer Truncation on ARM64 Apple Silicon (INV-11 / Bridge Stability), get_screen_bounds(), map_client_coords(), stream_frames_loop(), make_ws_frame(), _on_display_reconfiguration()
+Cohesion: 0.16
+Nodes (12): add_authorized_client(), analyze_file(), find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ### Community 87 - "3. `nostr-relay.js` — NostrRelay"
 Cohesion: 0.50
@@ -369,33 +372,29 @@ Nodes (4): 3. `nostr-relay.js` — NostrRelay, Key Behaviors, Protocol Messages,
 Cohesion: 0.50
 Nodes (4): 7. `ui-controller.js` — UI Controller, Chat Message Protocol, localStorage Keys Used, Responsibilities
 
-### Community 101 - "Category B: WebRTC Signaling, Transport & Lifecycle Stability"
-Cohesion: 0.40
-Nodes (5): 6. Destructive Replayed Offer Acceptance on Nostr Relay Reconnection, 7. Unshielded `visibilitychange` Forcing Transport Reconnects, 8. Video Track Churn and Bitrate Reset on Canvas Resize, 9. Cryptographic Identity Glare (`p2p-host-*` vs `nostr-*`), Category B: WebRTC Signaling, Transport & Lifecycle Stability
-
 ### Community 102 - "5. Security Model"
 Cohesion: 0.50
 Nodes (4): 5. Security Model, Key Properties, Risks & Mitigations, What's Encrypted
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `serve`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 553 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **41 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 554 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **39 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `2. Where We Stand vs. Initial Plan` connect `initNostr` to `DisplayWakeManager`, `NativeFrameCapturer`, `Remote Desktop Engineering Compendium: Architecture, Learnings, Issues & Roadmap`, `attachRemoteVideoInputListeners`?**
-  _High betweenness centrality (0.418) - this node is a cross-community bridge._
+- **Why does `2. Where We Stand vs. Initial Plan` connect `initNostr` to `DisplayWakeManager`, `NativeFrameCapturer`, `AGENTS.md`, `attachRemoteVideoInputListeners`?**
+  _High betweenness centrality (0.416) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `initNostr()` (e.g. with `buildIceServers()` and `buildNostrSessionConfig()`) actually correct?**
   _`initNostr()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `serve` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ui-controller.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09803921568627451 - nodes in this community are weakly interconnected._
-- **Why does `NativeFrameCapturer` connect `NativeFrameCapturer` to `initNostr`, `bridge.py`, `get_screen_bounds`?**
-  _High betweenness centrality (0.208) - this node is a cross-community bridge._
+- **Why does `NativeFrameCapturer` connect `NativeFrameCapturer` to `initNostr`, `bridge.py`, `.enumerate_targets`?**
+  _High betweenness centrality (0.212) - this node is a cross-community bridge._
 - **Should `weierstrass` be split into smaller, more focused modules?**
   _Cohesion score 0.08078431372549019 - nodes in this community are weakly interconnected._
 - **Why does `DisplayWakeManager` connect `DisplayWakeManager` to `initNostr`, `bridge.py`?**
-  _High betweenness centrality (0.208) - this node is a cross-community bridge._
+  _High betweenness centrality (0.209) - this node is a cross-community bridge._
