@@ -1381,17 +1381,52 @@ ${clarification}
       const menuBtn = div.querySelector('.contact-item__menu-btn');
       if (menuBtn) {
         menuBtn.addEventListener('click', (e) => {
+          e.preventDefault();
           e.stopPropagation();
           showContactContextMenu(c.pubkey, menuBtn);
         });
+        menuBtn.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+        }, { passive: true });
       }
+
+      // Mobile long-press to open contact options
+      let longPressTimer = null;
+      let didLongPress = false;
+      div.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.contact-item__menu-btn')) return;
+        didLongPress = false;
+        longPressTimer = setTimeout(() => {
+          didLongPress = true;
+          if (!isBot) {
+            showContactContextMenu(c.pubkey, null, e.touches?.[0]?.clientX, e.touches?.[0]?.clientY);
+          }
+          longPressTimer = null;
+        }, 550);
+      }, { passive: true });
+      div.addEventListener('touchmove', () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      }, { passive: true });
+      div.addEventListener('touchend', () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      });
+
       div.addEventListener('contextmenu', (e) => {
         if (!isBot) {
           e.preventDefault();
           showContactContextMenu(c.pubkey, null, e.clientX, e.clientY);
         }
       });
-      div.addEventListener('click', () => openChat(c.pubkey));
+      div.addEventListener('click', (e) => {
+        if (didLongPress) {
+          didLongPress = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (e.target.closest('.contact-item__menu-btn')) return;
+        openChat(c.pubkey);
+      });
       dom.contactList.appendChild(div);
     }
   }
@@ -5175,29 +5210,57 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
   let contextMenuPubkey = null;
   const contactCtxMenu = document.getElementById('contact-context-menu');
+  const contactCtxBackdrop = document.getElementById('contact-context-backdrop');
 
   function showContactContextMenu(pubkey, targetEl, clientX, clientY) {
     if (!contactCtxMenu) return;
     contextMenuPubkey = pubkey;
 
-    if (targetEl) {
-      const rect = targetEl.getBoundingClientRect();
-      let top = rect.bottom + 4;
-      let left = rect.right - 180;
-      if (left < 10) left = 10;
-      if (top + 160 > window.innerHeight) top = rect.top - 150;
-      contactCtxMenu.style.top = `${top}px`;
-      contactCtxMenu.style.left = `${left}px`;
-    } else if (clientX !== undefined && clientY !== undefined) {
-      let top = clientY;
-      let left = clientX;
-      if (left + 190 > window.innerWidth) left = window.innerWidth - 190;
-      if (top + 160 > window.innerHeight) top = window.innerHeight - 150;
-      contactCtxMenu.style.top = `${top}px`;
-      contactCtxMenu.style.left = `${left}px`;
+    const name = getContactDisplayName(pubkey);
+    const titleEl = document.getElementById('contact-ctx-name');
+    const pubEl = document.getElementById('contact-ctx-pubkey');
+    if (titleEl) titleEl.textContent = name;
+    if (pubEl) pubEl.textContent = pubkey ? (pubkey.slice(0, 10) + '…' + pubkey.slice(-8)) : '';
+
+    const isMobileView = window.innerWidth <= 600;
+
+    if (!isMobileView) {
+      if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        let top = rect.bottom + 4;
+        let left = rect.right - 220;
+        if (left < 10) left = 10;
+        if (left + 230 > window.innerWidth) left = window.innerWidth - 230;
+        if (top + 180 > window.innerHeight) top = Math.max(10, rect.top - 180);
+        contactCtxMenu.style.top = `${top}px`;
+        contactCtxMenu.style.left = `${left}px`;
+        contactCtxMenu.style.right = 'auto';
+        contactCtxMenu.style.bottom = 'auto';
+      } else if (clientX !== undefined && clientY !== undefined) {
+        let top = clientY;
+        let left = clientX;
+        if (left + 230 > window.innerWidth) left = window.innerWidth - 230;
+        if (top + 180 > window.innerHeight) top = Math.max(10, window.innerHeight - 190);
+        contactCtxMenu.style.top = `${top}px`;
+        contactCtxMenu.style.left = `${left}px`;
+        contactCtxMenu.style.right = 'auto';
+        contactCtxMenu.style.bottom = 'auto';
+      }
+    } else {
+      contactCtxMenu.style.top = '';
+      contactCtxMenu.style.left = '';
+      contactCtxMenu.style.right = '';
+      contactCtxMenu.style.bottom = '';
     }
 
+    if (contactCtxBackdrop) show(contactCtxBackdrop);
     show(contactCtxMenu);
+  }
+
+  function hideContactContextMenu() {
+    if (contactCtxMenu) hide(contactCtxMenu);
+    if (contactCtxBackdrop) hide(contactCtxBackdrop);
+    contextMenuPubkey = null;
   }
 
   // ── Manual Signaling ──
@@ -5722,24 +5785,38 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     if (activeContactPubkey) handleDeleteContact(activeContactPubkey);
   });
 
-  // Context menu item listeners for sidebar contact list
+  // Context menu & action sheet listeners for sidebar contact list
+  contactCtxBackdrop?.addEventListener('click', hideContactContextMenu);
+  document.getElementById('btn-ctx-cancel')?.addEventListener('click', hideContactContextMenu);
+
   document.addEventListener('click', (e) => {
-    if (contactCtxMenu && !e.target.closest('#contact-context-menu') && !e.target.closest('.contact-item__menu-btn')) {
-      hide(contactCtxMenu);
+    if (contactCtxMenu && !contactCtxMenu.classList.contains('hidden')) {
+      if (!e.target.closest('#contact-context-menu') && !e.target.closest('.contact-item__menu-btn')) {
+        hideContactContextMenu();
+      }
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && contactCtxMenu && !contactCtxMenu.classList.contains('hidden')) {
+      hideContactContextMenu();
     }
   });
 
   document.getElementById('btn-ctx-rename')?.addEventListener('click', () => {
-    if (contactCtxMenu) hide(contactCtxMenu);
-    if (contextMenuPubkey) handleRenameContact(contextMenuPubkey);
+    const pub = contextMenuPubkey;
+    hideContactContextMenu();
+    if (pub) handleRenameContact(pub);
   });
   document.getElementById('btn-ctx-clear-chat')?.addEventListener('click', () => {
-    if (contactCtxMenu) hide(contactCtxMenu);
-    if (contextMenuPubkey) handleDeleteConversation(contextMenuPubkey);
+    const pub = contextMenuPubkey;
+    hideContactContextMenu();
+    if (pub) handleDeleteConversation(pub);
   });
   document.getElementById('btn-ctx-delete-contact')?.addEventListener('click', () => {
-    if (contactCtxMenu) hide(contactCtxMenu);
-    if (contextMenuPubkey) handleDeleteContact(contextMenuPubkey);
+    const pub = contextMenuPubkey;
+    hideContactContextMenu();
+    if (pub) handleDeleteContact(pub);
   });
 
   // Message request — Accept

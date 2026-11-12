@@ -209,7 +209,10 @@ class TestWebRtcContracts(unittest.TestCase):
         # index.html modals and context menus
         self.assertIn('id="confirm-modal"', self.html_content)
         self.assertIn('id="rename-contact-modal"', self.html_content)
+        self.assertIn('id="contact-context-backdrop"', self.html_content)
         self.assertIn('id="contact-context-menu"', self.html_content)
+        self.assertIn('id="contact-ctx-name"', self.html_content)
+        self.assertIn('id="btn-ctx-cancel"', self.html_content)
         self.assertIn('id="btn-header-rename"', self.html_content)
         self.assertIn('id="btn-ctx-rename"', self.html_content)
         self.assertIn('id="btn-ctx-clear-chat"', self.html_content)
@@ -221,12 +224,14 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn("function handleDeleteConversation", self.ui_content)
         self.assertIn("function handleDeleteContact", self.ui_content)
         self.assertIn("function showContactContextMenu", self.ui_content)
+        self.assertIn("function hideContactContextMenu", self.ui_content)
         self.assertIn("contact-item__menu-btn", self.ui_content)
 
         # style.css actions
         css_content = (PROJECT_ROOT / 'style.css').read_text(encoding='utf-8')
         self.assertIn(".contact-item__actions", css_content)
         self.assertIn(".contact-item__menu-btn", css_content)
+        self.assertIn(".contact-context-menu", css_content)
 
 
 if __name__ == '__main__':

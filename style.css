@@ -390,9 +390,114 @@ body {
   color: var(--c-text);
 }
 
-@media (hover: none) {
+@media (hover: none), (max-width: 600px) {
   .contact-item__actions {
-    opacity: 0.75;
+    opacity: 0.85;
+  }
+  .contact-item__menu-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Contact Context Menu & Mobile Action Sheet */
+.contact-context-menu {
+  position: fixed;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  min-width: 220px;
+  overflow: hidden;
+  animation: fadeIn .15s ease;
+}
+
+.contact-context-menu__header {
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contact-context-menu__title {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--c-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contact-context-menu__subtitle {
+  font-size: .68rem;
+  font-family: var(--mono);
+  color: var(--c-text-dim);
+}
+
+.contact-context-menu__body {
+  padding: 4px 0;
+}
+
+.contact-context-menu .dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: .86rem;
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--c-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.contact-context-menu .dropdown-menu__item:hover {
+  background: var(--c-hover);
+}
+
+.contact-context-menu__cancel {
+  display: none;
+  margin: 8px 12px 12px;
+  width: calc(100% - 24px);
+}
+
+/* Mobile Responsive Action Sheet */
+@media (max-width: 600px) {
+  .contact-context-menu {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
+    animation: slideUp .2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .contact-context-menu__header {
+    padding: 14px 18px 10px;
+    text-align: center;
+    align-items: center;
+  }
+
+  .contact-context-menu .dropdown-menu__item {
+    padding: 14px 20px;
+    font-size: .95rem;
+  }
+
+  .contact-context-menu__cancel {
+    display: block;
+    padding: 12px;
+    font-size: .9rem;
   }
 }
 
