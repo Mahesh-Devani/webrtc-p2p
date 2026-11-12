@@ -322,8 +322,108 @@ if PLATFORM == 'darwin':
             native_key(char, False)
         release_all_modifiers()
 
+elif PLATFORM == 'win32':
+    # Native Win32 user32 input driver (Zero external dependencies, pure Python standard library)
+    user32 = ctypes.windll.user32
+
+    # Enable process DPI awareness so pixel coordinates match physical display resolution
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+    except Exception:
+        try:
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+    SCREEN_WIDTH = user32.GetSystemMetrics(0)
+    SCREEN_HEIGHT = user32.GetSystemMetrics(1)
+
+    MOUSEEVENTF_MOVE = 0x0001
+    MOUSEEVENTF_LEFTDOWN = 0x0002
+    MOUSEEVENTF_LEFTUP = 0x0004
+    MOUSEEVENTF_RIGHTDOWN = 0x0008
+    MOUSEEVENTF_RIGHTUP = 0x0010
+    MOUSEEVENTF_MIDDLEDOWN = 0x0020
+    MOUSEEVENTF_MIDDLEUP = 0x0040
+    MOUSEEVENTF_WHEEL = 0x0800
+
+    def native_mouse_move(x, y):
+        user32.SetCursorPos(int(round(x)), int(round(y)))
+
+    def native_mouse_down(btn, x, y):
+        user32.SetCursorPos(int(round(x)), int(round(y)))
+        flags = MOUSEEVENTF_RIGHTDOWN if btn == 2 else (MOUSEEVENTF_MIDDLEDOWN if btn == 1 else MOUSEEVENTF_LEFTDOWN)
+        user32.mouse_event(flags, 0, 0, 0, 0)
+
+    def native_mouse_up(btn, x, y):
+        user32.SetCursorPos(int(round(x)), int(round(y)))
+        flags = MOUSEEVENTF_RIGHTUP if btn == 2 else (MOUSEEVENTF_MIDDLEUP if btn == 1 else MOUSEEVENTF_LEFTUP)
+        user32.mouse_event(flags, 0, 0, 0, 0)
+
+    def native_mouse_click(btn, clicks, x, y):
+        user32.SetCursorPos(int(round(x)), int(round(y)))
+        down_flag = MOUSEEVENTF_RIGHTDOWN if btn == 2 else (MOUSEEVENTF_MIDDLEDOWN if btn == 1 else MOUSEEVENTF_LEFTDOWN)
+        up_flag = MOUSEEVENTF_RIGHTUP if btn == 2 else (MOUSEEVENTF_MIDDLEUP if btn == 1 else MOUSEEVENTF_LEFTUP)
+        for _ in range(clicks):
+            user32.mouse_event(down_flag, 0, 0, 0, 0)
+            user32.mouse_event(up_flag, 0, 0, 0, 0)
+
+    def native_scroll(units):
+        delta = int(units * 120)
+        user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, 0)
+
+    WIN_VK_MAP = {
+        'backspace': 0x08, 'tab': 0x09, 'clear': 0x0C, 'return': 0x0D, 'enter': 0x0D,
+        'shift': 0x10, 'ctrl': 0x11, 'control': 0x11, 'alt': 0x12, 'pause': 0x13,
+        'capslock': 0x14, 'escape': 0x1B, 'esc': 0x1B, 'space': 0x20, ' ': 0x20,
+        'pageup': 0x21, 'pagedown': 0x22, 'end': 0x23, 'home': 0x24,
+        'left': 0x25, 'up': 0x26, 'right': 0x27, 'down': 0x28,
+        'select': 0x29, 'print': 0x2A, 'execute': 0x2B, 'printscreen': 0x2C, 'prtsc': 0x2C,
+        'insert': 0x2D, 'delete': 0x2E, 'help': 0x2F,
+        'win': 0x5B, 'windows': 0x5B, 'meta': 0x5B, 'command': 0x5B, 'cmd': 0x5B,
+        'numpad0': 0x60, 'numpad1': 0x61, 'numpad2': 0x62, 'numpad3': 0x63, 'numpad4': 0x64,
+        'numpad5': 0x65, 'numpad6': 0x66, 'numpad7': 0x67, 'numpad8': 0x68, 'numpad9': 0x69,
+        'multiply': 0x6A, 'add': 0x6B, 'separator': 0x6C, 'subtract': 0x6D, 'decimal': 0x6E, 'divide': 0x6F,
+        'f1': 0x70, 'f2': 0x71, 'f3': 0x72, 'f4': 0x73, 'f5': 0x74, 'f6': 0x75,
+        'f7': 0x76, 'f8': 0x77, 'f9': 0x78, 'f10': 0x79, 'f11': 0x7A, 'f12': 0x7B,
+        'numlock': 0x90, 'scrolllock': 0x91,
+    }
+
+    KEYEVENTF_EXTENDEDKEY = 0x0001
+    KEYEVENTF_KEYUP = 0x0002
+    KEYEVENTF_UNICODE = 0x0004
+
+    def native_key(key, is_down, modifiers=None):
+        k_lower = key.lower() if isinstance(key, str) else str(key).lower()
+        flags = KEYEVENTF_KEYUP if not is_down else 0
+        if k_lower in WIN_VK_MAP:
+            vk = WIN_VK_MAP[k_lower]
+            if vk in (0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E, 0x5B, 0x6F):
+                flags |= KEYEVENTF_EXTENDEDKEY
+            user32.keybd_event(vk, 0, flags, 0)
+        elif len(key) == 1:
+            char_code = ord(key)
+            user32.keybd_event(0, char_code, flags | KEYEVENTF_UNICODE, 0)
+        else:
+            try:
+                vk = user32.VkKeyScanW(ord(key[0])) & 0xFF
+                if vk > 0:
+                    user32.keybd_event(vk, 0, flags, 0)
+            except Exception:
+                pass
+
+    def native_type_text(text):
+        for ch in text:
+            char_code = ord(ch)
+            user32.keybd_event(0, char_code, KEYEVENTF_UNICODE, 0)
+            user32.keybd_event(0, char_code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0)
+
+    def release_all_modifiers():
+        for vk in (0x10, 0x11, 0x12, 0x5B):  # Shift, Ctrl, Alt, Win
+            user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+
 else:
-    # Windows / Linux fallback via PyAutoGUI if available
+    # Linux / other OS fallback via PyAutoGUI if available
     try:
         import pyautogui
         pyautogui.PAUSE = 0.0
@@ -362,7 +462,7 @@ else:
                 except Exception: pass
 
     except Exception:
-        print("[!] Warning: Non-macOS OS detected and PyAutoGUI not installed.")
+        print("[!] Warning: PyAutoGUI not installed on Linux/fallback OS.")
         def native_mouse_move(x, y): pass
         def native_mouse_down(btn, x, y): pass
         def native_mouse_up(btn, x, y): pass
@@ -404,8 +504,8 @@ def get_screen_bounds(display_id=None, force=False):
         _bounds = cg.CGDisplayBounds(target_display)
         w = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(target_display))
         h = int(_bounds.size.height) if _bounds.size.height > 0 else int(cg.CGDisplayPixelsHigh(target_display))
-        # If the target display returned 0x0 (e.g. display detached or powered down), fallback to CGMainDisplayID()
-        if (w <= 0 or h <= 0) and target_display != cg.CGMainDisplayID():
+        # If the target display returned 0x0 or 1x1 (invalid/detached display), fallback to CGMainDisplayID()
+        if (w <= 1 or h <= 1) and target_display != cg.CGMainDisplayID():
             target_display = cg.CGMainDisplayID()
             _bounds = cg.CGDisplayBounds(target_display)
             w = int(_bounds.size.width) if _bounds.size.width > 0 else int(cg.CGDisplayPixelsWide(target_display))
@@ -499,7 +599,7 @@ def native_set_clipboard(text):
             return True
         except Exception:
             pass
-    elif PLATFORM == 'windows':
+    elif PLATFORM in ('win32', 'windows'):
         try:
             p = subprocess.Popen(['clip'], stdin=subprocess.PIPE, shell=True)
             p.communicate(text.encode('utf-8'))
@@ -529,7 +629,7 @@ def native_get_clipboard():
             return res.stdout
         except Exception:
             pass
-    elif PLATFORM == 'windows':
+    elif PLATFORM in ('win32', 'windows'):
         try:
             res = subprocess.run(['powershell', '-NoProfile', '-Command', 'Get-Clipboard'], capture_output=True, text=True, check=False, timeout=1)
             return res.stdout.rstrip('\r\n')
@@ -790,6 +890,10 @@ class DisplayWakeManager:
         elif PLATFORM == 'win32':
             try:
                 ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000002 | 0x00000001)
+                # Send synthetic mouse move and modifier key to wake monitor from DPMS sleep
+                ctypes.windll.user32.mouse_event(0x0001, 0, 0, 0, 0)  # MOUSEEVENTF_MOVE relative (0,0)
+                ctypes.windll.user32.keybd_event(0x10, 0, 0, 0)       # VK_SHIFT down
+                ctypes.windll.user32.keybd_event(0x10, 0, 0x0002, 0)  # VK_SHIFT up (KEYEVENTF_KEYUP)
             except Exception:
                 pass
 
@@ -976,6 +1080,48 @@ def lock_host_screen():
                 print(f"[!] Linux lock error: {err}")
 
 
+# ── Win32 GDI+ & System Structures (Zero external dependencies) ─────────────
+class GdiplusStartupInput(ctypes.Structure):
+    _fields_ = [
+        ("GdiplusVersion", ctypes.c_uint32),
+        ("DebugEventCallback", ctypes.c_void_p),
+        ("SuppressBackgroundThread", ctypes.c_bool),
+        ("SuppressExternalCodecs", ctypes.c_bool)
+    ]
+
+class GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.c_uint32),
+        ("Data2", ctypes.c_uint16),
+        ("Data3", ctypes.c_uint16),
+        ("Data4", ctypes.c_uint8 * 8)
+    ]
+
+class EncoderParameter(ctypes.Structure):
+    _fields_ = [
+        ("Guid", GUID),
+        ("NumberOfValues", ctypes.c_uint32),
+        ("Type", ctypes.c_uint32),
+        ("Value", ctypes.c_void_p)
+    ]
+
+class EncoderParameters(ctypes.Structure):
+    _fields_ = [
+        ("Count", ctypes.c_uint32),
+        ("Parameter", EncoderParameter * 1)
+    ]
+
+CLSID_JPEG = GUID(
+    0x557cf401, 0x1a04, 0x11d3,
+    (ctypes.c_uint8 * 8)(0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e)
+)
+
+GUID_ENCODER_QUALITY = GUID(
+    0x1d5be473, 0xaa72, 0x4b35,
+    (ctypes.c_uint8 * 8)(0x83, 0x91, 0x61, 0x69, 0x3f, 0x43, 0x41, 0x7f)
+)
+
+
 # ── 6. Native Frame Capture Engine (Display, Window & Hardware JPEG) ─────────
 class NativeFrameCapturer:
     """
@@ -999,6 +1145,8 @@ class NativeFrameCapturer:
             # CoreGraphics prototypes
             self.cg.CGMainDisplayID.argtypes = []
             self.cg.CGMainDisplayID.restype = ctypes.c_uint32
+            self.cg.CGDisplayBounds.argtypes = [ctypes.c_uint32]
+            self.cg.CGDisplayBounds.restype = CGRect
             self.cg.CGDisplayPixelsWide.argtypes = [ctypes.c_uint32]
             self.cg.CGDisplayPixelsWide.restype = ctypes.c_size_t
             self.cg.CGDisplayPixelsHigh.argtypes = [ctypes.c_uint32]
@@ -1100,8 +1248,57 @@ class NativeFrameCapturer:
             except Exception:
                 self.jpeg_opts = None
 
+        elif PLATFORM == 'win32':
+            self._has_pillow = False
+            try:
+                from PIL import ImageGrab
+                import io
+                self._pillow_imagegrab = ImageGrab
+                self._io = io
+                self._has_pillow = True
+            except Exception:
+                pass
+
+            self._has_gdiplus = False
+            try:
+                self.user32 = ctypes.windll.user32
+                self.gdi32 = ctypes.windll.gdi32
+                self.ole32 = ctypes.windll.ole32
+                self.kernel32 = ctypes.windll.kernel32
+                self.gdiplus = ctypes.windll.gdiplus
+
+                try:
+                    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                except Exception:
+                    try:
+                        self.user32.SetProcessDPIAware()
+                    except Exception:
+                        pass
+
+                self.gdiplus_token = ctypes.c_ulong()
+                startup_in = GdiplusStartupInput(1, None, False, False)
+                if self.gdiplus.GdiplusStartup(ctypes.byref(self.gdiplus_token), ctypes.byref(startup_in), None) == 0:
+                    self._has_gdiplus = True
+
+                self.quality_val = ctypes.c_uint32(85)
+                self.enc_params = EncoderParameters()
+                self.enc_params.Count = 1
+                self.enc_params.Parameter[0].Guid = GUID_ENCODER_QUALITY
+                self.enc_params.Parameter[0].NumberOfValues = 1
+                self.enc_params.Parameter[0].Type = 4  # EncoderParameterValueTypeLong
+                self.enc_params.Parameter[0].Value = ctypes.cast(ctypes.byref(self.quality_val), ctypes.c_void_p)
+
+                self.kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+                self.kernel32.GlobalLock.restype = ctypes.c_void_p
+                self.kernel32.GlobalSize.argtypes = [ctypes.c_void_p]
+                self.kernel32.GlobalSize.restype = ctypes.c_size_t
+                self.kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+                self.kernel32.GlobalUnlock.restype = ctypes.c_bool
+            except Exception as e:
+                print(f"[!] Win32 GDI+ initialization warning: {e}")
+
     def is_screen_locked(self, max_age=1.0):
-        """Check if macOS user session is currently locked (cached with max_age to prevent WindowServer IPC flooding)."""
+        """Check if OS user session is currently locked (cached with max_age to prevent IPC flooding)."""
         now = time.monotonic()
         if (now - self._last_locked_check) < max_age:
             return self._cached_is_locked
@@ -1120,16 +1317,36 @@ class NativeFrameCapturer:
             except Exception:
                 self._cached_is_locked = False
                 return False
+        elif PLATFORM == 'win32':
+            try:
+                # On Windows, when locked, user desktop switches to Winlogon/secure desktop.
+                # OpenInputDesktop fails with ERROR_ACCESS_DENIED (5) when locked.
+                hdesk = ctypes.windll.user32.OpenInputDesktop(0, False, 0x0001)  # DESKTOP_READOBJECTS
+                if hdesk:
+                    ctypes.windll.user32.CloseDesktop(hdesk)
+                    self._cached_is_locked = False
+                    return False
+                else:
+                    self._cached_is_locked = True
+                    return True
+            except Exception:
+                self._cached_is_locked = False
+                return False
         self._cached_is_locked = False
         return False
 
     def capture_display(self, display_id=None):
         if PLATFORM == 'darwin':
             d_id = int(display_id) if (display_id and int(display_id) > 0) else self.cg.CGMainDisplayID()
+            b = self.cg.CGDisplayBounds(d_id)
+            if (b.size.width <= 1 or b.size.height <= 1) and d_id != self.cg.CGMainDisplayID():
+                d_id = self.cg.CGMainDisplayID()
             img = self.cg.CGDisplayCreateImage(d_id)
             if not img and d_id != self.cg.CGMainDisplayID():
                 img = self.cg.CGDisplayCreateImage(self.cg.CGMainDisplayID())
             return self._compress_cg_image(img)
+        elif PLATFORM == 'win32':
+            return self._capture_display_win32(display_id)
         return None, 0, 0
 
     def capture_window(self, window_id):
@@ -1148,7 +1365,173 @@ class NativeFrameCapturer:
                 # Fallback to single-window capture if above-window capture returns None
                 img = self.cg.CGWindowListCreateImage(win_rect, 8, int(window_id), 1)
             return self._compress_cg_image(img)
+        elif PLATFORM == 'win32' and int(window_id or 0) > 0:
+            return self._capture_window_win32(window_id)
         return None, 0, 0
+
+    def _capture_display_win32(self, display_id=None):
+        ox, oy, w, h = get_screen_bounds(display_id)
+        if w <= 0 or h <= 0:
+            return None, 0, 0
+
+        # Fast path: Pillow if available
+        if getattr(self, '_has_pillow', False):
+            try:
+                img = self._pillow_imagegrab.grab(bbox=(ox, oy, ox + w, oy + h), all_screens=True)
+                buf = self._io.BytesIO()
+                img.save(buf, format='JPEG', quality=85)
+                return buf.getvalue(), img.width, img.height
+            except Exception:
+                pass
+
+        # Native Zero-Dependency GDI+ path
+        if not getattr(self, '_has_gdiplus', False):
+            return None, 0, 0
+
+        hdc_screen = None
+        hdc_mem = None
+        hbm = None
+        old_hbm = None
+        p_bitmap = None
+        p_stream = None
+
+        try:
+            hdc_screen = self.user32.GetDC(0)
+            if not hdc_screen:
+                return None, 0, 0
+
+            hdc_mem = self.gdi32.CreateCompatibleDC(hdc_screen)
+            hbm = self.gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
+            old_hbm = self.gdi32.SelectObject(hdc_mem, hbm)
+
+            # SRCCOPY (0x00CC0020) | CAPTUREBLT (0x40000000) captures layered windows/menus
+            self.gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, ox, oy, 0x00CC0020 | 0x40000000)
+
+            p_bitmap = ctypes.c_void_p()
+            if self.gdiplus.GdipCreateBitmapFromHBITMAP(hbm, 0, ctypes.byref(p_bitmap)) != 0 or not p_bitmap:
+                return None, 0, 0
+
+            p_stream = ctypes.c_void_p()
+            if self.ole32.CreateStreamOnHGlobal(0, True, ctypes.byref(p_stream)) != 0 or not p_stream:
+                return None, 0, 0
+
+            if self.gdiplus.GdipSaveImageToStream(p_bitmap, p_stream, ctypes.byref(CLSID_JPEG), ctypes.byref(self.enc_params)) != 0:
+                return None, 0, 0
+
+            hglobal = ctypes.c_void_p()
+            if self.ole32.GetHGlobalFromStream(p_stream, ctypes.byref(hglobal)) != 0 or not hglobal:
+                return None, 0, 0
+
+            ptr = self.kernel32.GlobalLock(hglobal)
+            length = self.kernel32.GlobalSize(hglobal)
+            jpeg_bytes = ctypes.string_at(ptr, length) if (ptr and length > 0) else None
+            self.kernel32.GlobalUnlock(hglobal)
+
+            return jpeg_bytes, w, h
+        except Exception:
+            return None, 0, 0
+        finally:
+            if p_bitmap:
+                try: self.gdiplus.GdipDisposeImage(p_bitmap)
+                except Exception: pass
+            if p_stream:
+                try:
+                    vtable = ctypes.cast(p_stream, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                    release_fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+                    release_fn(p_stream)
+                except Exception: pass
+            if old_hbm and hdc_mem:
+                try: self.gdi32.SelectObject(hdc_mem, old_hbm)
+                except Exception: pass
+            if hbm:
+                try: self.gdi32.DeleteObject(hbm)
+                except Exception: pass
+            if hdc_mem:
+                try: self.gdi32.DeleteDC(hdc_mem)
+                except Exception: pass
+            if hdc_screen:
+                try: self.user32.ReleaseDC(0, hdc_screen)
+                except Exception: pass
+
+    def _capture_window_win32(self, window_id):
+        b = self.get_window_bounds(window_id)
+        if not b:
+            return self.capture_display()
+        wx, wy, ww, wh = b
+        if ww <= 0 or wh <= 0:
+            return self.capture_display()
+
+        hwnd = int(window_id)
+        if not getattr(self, '_has_gdiplus', False):
+            return None, 0, 0
+
+        hdc_win = None
+        hdc_mem = None
+        hbm = None
+        old_hbm = None
+        p_bitmap = None
+        p_stream = None
+
+        try:
+            hdc_win = self.user32.GetWindowDC(hwnd)
+            if not hdc_win:
+                hdc_win = self.user32.GetDC(0)
+            hdc_mem = self.gdi32.CreateCompatibleDC(hdc_win)
+            hbm = self.gdi32.CreateCompatibleBitmap(hdc_win, ww, wh)
+            old_hbm = self.gdi32.SelectObject(hdc_mem, hbm)
+
+            # PW_RENDERFULLCONTENT = 2 on Windows 8.1+
+            ret = self.user32.PrintWindow(hwnd, hdc_mem, 2)
+            if not ret:
+                hdc_screen = self.user32.GetDC(0)
+                self.gdi32.BitBlt(hdc_mem, 0, 0, ww, wh, hdc_screen, wx, wy, 0x00CC0020 | 0x40000000)
+                self.user32.ReleaseDC(0, hdc_screen)
+
+            p_bitmap = ctypes.c_void_p()
+            if self.gdiplus.GdipCreateBitmapFromHBITMAP(hbm, 0, ctypes.byref(p_bitmap)) != 0 or not p_bitmap:
+                return None, 0, 0
+
+            p_stream = ctypes.c_void_p()
+            if self.ole32.CreateStreamOnHGlobal(0, True, ctypes.byref(p_stream)) != 0 or not p_stream:
+                return None, 0, 0
+
+            if self.gdiplus.GdipSaveImageToStream(p_bitmap, p_stream, ctypes.byref(CLSID_JPEG), ctypes.byref(self.enc_params)) != 0:
+                return None, 0, 0
+
+            hglobal = ctypes.c_void_p()
+            if self.ole32.GetHGlobalFromStream(p_stream, ctypes.byref(hglobal)) != 0 or not hglobal:
+                return None, 0, 0
+
+            ptr = self.kernel32.GlobalLock(hglobal)
+            length = self.kernel32.GlobalSize(hglobal)
+            jpeg_bytes = ctypes.string_at(ptr, length) if (ptr and length > 0) else None
+            self.kernel32.GlobalUnlock(hglobal)
+
+            return jpeg_bytes, ww, wh
+        except Exception:
+            return None, 0, 0
+        finally:
+            if p_bitmap:
+                try: self.gdiplus.GdipDisposeImage(p_bitmap)
+                except Exception: pass
+            if p_stream:
+                try:
+                    vtable = ctypes.cast(p_stream, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                    release_fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+                    release_fn(p_stream)
+                except Exception: pass
+            if old_hbm and hdc_mem:
+                try: self.gdi32.SelectObject(hdc_mem, old_hbm)
+                except Exception: pass
+            if hbm:
+                try: self.gdi32.DeleteObject(hbm)
+                except Exception: pass
+            if hdc_mem:
+                try: self.gdi32.DeleteDC(hdc_mem)
+                except Exception: pass
+            if hdc_win:
+                try: self.user32.ReleaseDC(hwnd, hdc_win)
+                except Exception: pass
 
     def _compress_cg_image(self, img):
         if not img:
@@ -1183,18 +1566,27 @@ class NativeFrameCapturer:
                 max_displays = 16
                 active_displays = (ctypes.c_uint32 * max_displays)()
                 display_count = ctypes.c_uint32()
-                if self.cg.CGGetActiveDisplayList(max_displays, active_displays, ctypes.byref(display_count)) == 0:
+                # Use CGGetOnlineDisplayList so all attached and active hardware displays are discovered
+                # even when bridge is running inside an interactive terminal, SSH, or headless service
+                res = self.cg.CGGetOnlineDisplayList(max_displays, active_displays, ctypes.byref(display_count))
+                if res != 0 or display_count.value == 0:
+                    res = self.cg.CGGetActiveDisplayList(max_displays, active_displays, ctypes.byref(display_count))
+                if res == 0 and display_count.value > 0:
                     for i in range(display_count.value):
                         d_id = active_displays[i]
-                        w = int(self.cg.CGDisplayPixelsWide(d_id))
-                        h = int(self.cg.CGDisplayPixelsHigh(d_id))
+                        b = self.cg.CGDisplayBounds(d_id)
+                        w = int(b.size.width) if b.size.width > 0 else int(self.cg.CGDisplayPixelsWide(d_id))
+                        h = int(b.size.height) if b.size.height > 0 else int(self.cg.CGDisplayPixelsHigh(d_id))
+                        if w <= 1 or h <= 1:
+                            continue
+                        is_main = (d_id == self.cg.CGMainDisplayID())
                         displays.append({
                             'id': int(d_id),
                             'index': i + 1,
-                            'name': f"Display {i + 1} ({w}x{h})",
+                            'name': f"Display {i + 1} ({w}x{h})" if not is_main else f"Main Display ({w}x{h})",
                             'width': w,
                             'height': h,
-                            'is_main': (d_id == self.cg.CGMainDisplayID())
+                            'is_main': is_main
                         })
             except Exception:
                 pass
@@ -1242,9 +1634,74 @@ class NativeFrameCapturer:
             except Exception:
                 pass
 
+        elif PLATFORM == 'win32':
+            # 1. Displays via EnumDisplayMonitors
+            try:
+                from ctypes import wintypes
+                monitors = []
+                def monitor_enum_proc(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                    monitors.append(hMonitor)
+                    return 1
+
+                MONITORENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+                ctypes.windll.user32.EnumDisplayMonitors(0, 0, MONITORENUMPROC(monitor_enum_proc), 0)
+
+                class MONITORINFOEXW(ctypes.Structure):
+                    _fields_ = [
+                        ('cbSize', ctypes.c_uint32),
+                        ('rcMonitor', wintypes.RECT),
+                        ('rcWork', wintypes.RECT),
+                        ('dwFlags', ctypes.c_uint32),
+                        ('szDevice', ctypes.c_wchar * 32)
+                    ]
+
+                for idx, hMon in enumerate(monitors):
+                    info = MONITORINFOEXW()
+                    info.cbSize = ctypes.sizeof(MONITORINFOEXW)
+                    if ctypes.windll.user32.GetMonitorInfoW(hMon, ctypes.byref(info)):
+                        r = info.rcMonitor
+                        mw = r.right - r.left
+                        mh = r.bottom - r.top
+                        is_primary = bool(info.dwFlags & 1)
+                        dev_name = info.szDevice or f"Display {idx + 1}"
+                        displays.append({
+                            'id': idx + 1,
+                            'index': idx + 1,
+                            'name': f"{dev_name} ({mw}x{mh})" + (" [Primary]" if is_primary else ""),
+                            'width': mw,
+                            'height': mh,
+                            'is_main': is_primary
+                        })
+            except Exception:
+                pass
+
+            # 2. Windows via EnumWindows
+            try:
+                def enum_win_proc(hwnd, lParam):
+                    if ctypes.windll.user32.IsWindowVisible(hwnd):
+                        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buf = ctypes.create_unicode_buffer(length + 1)
+                            ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+                            title = buf.value.strip()
+                            if title and title not in ('Program Manager', 'Settings', 'Windows Shell Experience Host'):
+                                windows.append({
+                                    'id': int(hwnd),
+                                    'owner': title.split(' - ')[-1] if ' - ' in title else title,
+                                    'name': title,
+                                    'title': title
+                                })
+                    return 1
+
+                WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+                ctypes.windll.user32.EnumWindows(WNDENUMPROC(enum_win_proc), 0)
+            except Exception:
+                pass
+
         if not displays:
+            main_id = int(self.cg.CGMainDisplayID()) if PLATFORM == 'darwin' else 1
             displays.append({
-                'id': 1,
+                'id': main_id,
                 'index': 1,
                 'name': f"Main Display ({SCREEN_WIDTH}x{SCREEN_HEIGHT})",
                 'width': SCREEN_WIDTH,
@@ -1619,11 +2076,11 @@ async def handle_client(reader, writer):
                     execute_mouse_move(target_x, target_y, capture_target_id, is_win)
                 native_mouse_click(btn, clicks, current_x, current_y)
 
-            elif evt_type == 'select_display':
-                selected_display_id = data.get('id')
+            elif evt_type in ('select_display', 'switch_display'):
+                selected_display_id = data.get('id') if data.get('id') is not None else data.get('displayId')
                 _cached_win_bounds = None
                 _cached_win_target_id = None
-                ox, oy, sw, sh = get_screen_bounds(force=True)
+                ox, oy, sw, sh = get_screen_bounds(selected_display_id, force=True)
                 writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
                 await writer.drain()
 
@@ -1770,6 +2227,13 @@ async def handle_client(reader, writer):
                 _cached_win_bounds = None
                 _cached_win_time = 0.0
                 _cached_win_target_id = None
+                if capture_target_type == 'display':
+                    selected_display_id = capture_target_id
+                    ox, oy, sw, sh = get_screen_bounds(capture_target_id, force=True)
+                    try:
+                        writer.write(make_ws_frame(json.dumps({'t': 'screen_bounds', 'w': sw, 'h': sh, 'ox': ox, 'oy': oy})))
+                    except Exception:
+                        pass
                 if not capture_active:
                     _global_wake_manager.wake(session_token)
                     capture_active = True

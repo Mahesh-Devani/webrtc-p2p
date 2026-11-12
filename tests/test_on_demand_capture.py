@@ -262,6 +262,30 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn('daemon_standby', self.bridge_content)
         self.assertIn('daemon_resume', self.bridge_content)
 
+    def test_bridge_win32_native_engine(self):
+        """bridge.py must include zero-dependency native Win32 input, GDI+ capture, and wake pulse."""
+        # 1. Native Win32 input driver
+        self.assertIn("elif PLATFORM == 'win32':", self.bridge_content)
+        self.assertIn("user32.SetCursorPos", self.bridge_content)
+        self.assertIn("user32.mouse_event", self.bridge_content)
+        self.assertIn("user32.keybd_event", self.bridge_content)
+        self.assertIn("KEYEVENTF_UNICODE", self.bridge_content)
+        self.assertIn("WIN_VK_MAP", self.bridge_content)
+
+        # 2. Native Win32 GDI+ screen capturer
+        self.assertIn("class GdiplusStartupInput", self.bridge_content)
+        self.assertIn("CLSID_JPEG", self.bridge_content)
+        self.assertIn("GUID_ENCODER_QUALITY", self.bridge_content)
+        self.assertIn("def _capture_display_win32(self", self.bridge_content)
+        self.assertIn("def _capture_window_win32(self", self.bridge_content)
+        self.assertIn("GdipSaveImageToStream", self.bridge_content)
+        self.assertIn("CreateStreamOnHGlobal", self.bridge_content)
+
+        # 3. Native Win32 wake pulse and clipboard
+        self.assertIn("elif PLATFORM in ('win32', 'windows'):", self.bridge_content)
+        self.assertIn("user32.mouse_event(0x0001, 0, 0, 0, 0)", self.bridge_content)
+
+
 
 if __name__ == '__main__':
     unittest.main()

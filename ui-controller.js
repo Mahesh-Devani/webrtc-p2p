@@ -2816,7 +2816,27 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     const elRatio = elWidth / elHeight;
 
     let actualWidth, actualHeight, offsetX, offsetY;
-    if (elRatio > videoRatio) {
+    const isFitFill = videoEl.classList.contains('rd-fit-fill');
+    const isFitCover = videoEl.classList.contains('rd-fit-cover');
+
+    if (isFitFill) {
+      actualWidth = elWidth;
+      actualHeight = elHeight;
+      offsetX = 0;
+      offsetY = 0;
+    } else if (isFitCover) {
+      if (elRatio > videoRatio) {
+        actualWidth = elWidth;
+        actualHeight = elWidth / videoRatio;
+        offsetX = 0;
+        offsetY = (elHeight - actualHeight) / 2;
+      } else {
+        actualHeight = elHeight;
+        actualWidth = elHeight * videoRatio;
+        offsetX = (elWidth - actualWidth) / 2;
+        offsetY = 0;
+      }
+    } else if (elRatio > videoRatio) {
       actualHeight = elHeight;
       actualWidth = elHeight * videoRatio;
       offsetX = (elWidth - actualWidth) / 2;
