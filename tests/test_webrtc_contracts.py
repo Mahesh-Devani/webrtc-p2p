@@ -189,6 +189,45 @@ class TestWebRtcContracts(unittest.TestCase):
         self.assertIn(".rd-dragging", css_content)
         self.assertIn(".rd-zoom-pill-btn", css_content)
 
+    def test_chat_store_and_message_deletion_contracts(self):
+        """chat-store.js must export deleteMessage and ui-controller.js must wire bubble deletion."""
+        chat_store_content = (PROJECT_ROOT / 'chat-store.js').read_text(encoding='utf-8')
+        self.assertIn("function deleteMessage(pubkey, messageId)", chat_store_content)
+        self.assertIn("deleteMessage,", chat_store_content)
+
+        # ui-controller.js individual message deletion
+        self.assertIn("chat-msg__delete", self.ui_content)
+        self.assertIn("ChatStore.deleteMessage(", self.ui_content)
+        self.assertIn("confirmAction({", self.ui_content)
+
+        # style.css message delete styling
+        css_content = (PROJECT_ROOT / 'style.css').read_text(encoding='utf-8')
+        self.assertIn(".chat-msg__delete", css_content)
+
+    def test_contact_rename_and_conversation_deletion_ui(self):
+        """Must support in-app contact renaming and conversation deletion via sidebar & header."""
+        # index.html modals and context menus
+        self.assertIn('id="confirm-modal"', self.html_content)
+        self.assertIn('id="rename-contact-modal"', self.html_content)
+        self.assertIn('id="contact-context-menu"', self.html_content)
+        self.assertIn('id="btn-header-rename"', self.html_content)
+        self.assertIn('id="btn-ctx-rename"', self.html_content)
+        self.assertIn('id="btn-ctx-clear-chat"', self.html_content)
+        self.assertIn('id="btn-ctx-delete-contact"', self.html_content)
+
+        # ui-controller.js handlers
+        self.assertIn("function promptRenameContact", self.ui_content)
+        self.assertIn("function handleRenameContact", self.ui_content)
+        self.assertIn("function handleDeleteConversation", self.ui_content)
+        self.assertIn("function handleDeleteContact", self.ui_content)
+        self.assertIn("function showContactContextMenu", self.ui_content)
+        self.assertIn("contact-item__menu-btn", self.ui_content)
+
+        # style.css actions
+        css_content = (PROJECT_ROOT / 'style.css').read_text(encoding='utf-8')
+        self.assertIn(".contact-item__actions", css_content)
+        self.assertIn(".contact-item__menu-btn", css_content)
+
 
 if __name__ == '__main__':
     unittest.main()

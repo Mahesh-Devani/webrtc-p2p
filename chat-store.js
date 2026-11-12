@@ -97,6 +97,23 @@ export const ChatStore = (() => {
     }
 
     /**
+     * Delete a single message from a contact's chat history.
+     * @param {string} pubkey
+     * @param {string} messageId
+     * @returns {boolean} Whether the message was found and deleted
+     */
+    function deleteMessage(pubkey, messageId) {
+        if (!pubkey || !messageId) return false;
+        const messages = getMessages(pubkey);
+        const filtered = messages.filter(m => m.id !== messageId);
+        if (filtered.length !== messages.length) {
+            _saveMessages(pubkey, filtered);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Get all pubkeys that have stored chats.
      * @returns {string[]}
      */
@@ -178,6 +195,7 @@ export const ChatStore = (() => {
     return {
         getMessages,
         addMessage,
+        deleteMessage,
         updateMessageStatus,
         getLastMessage,
         clearChat,

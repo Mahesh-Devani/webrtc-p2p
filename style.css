@@ -356,6 +356,46 @@ body {
   bottom: 12px;
 }
 
+.contact-item__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 6px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.contact-item:hover .contact-item__actions,
+.contact-item:focus-within .contact-item__actions {
+  opacity: 1;
+}
+
+.contact-item__menu-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--c-text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.contact-item__menu-btn:hover {
+  background: var(--c-hover);
+  color: var(--c-text);
+}
+
+@media (hover: none) {
+  .contact-item__actions {
+    opacity: 0.75;
+  }
+}
+
 .contact-list__empty {
   text-align: center;
   padding: 40px 20px;
@@ -804,13 +844,60 @@ body {
 /* Chat bubbles */
 .chat-msg {
   max-width: 65%;
-  padding: 6px 10px 4px;
+  padding: 6px 14px 4px 10px;
   border-radius: var(--radius-msg);
   font-size: .9rem;
   line-height: 1.35;
   word-break: break-word;
   position: relative;
   animation: msgIn .2s ease;
+}
+
+.chat-msg__delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: var(--c-text-dim);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease, background .15s ease, color .15s ease;
+  z-index: 10;
+}
+
+.chat-msg:hover .chat-msg__delete,
+.chat-msg:focus-within .chat-msg__delete {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+.chat-msg__delete:hover {
+  opacity: 1 !important;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+@media (hover: none) {
+  .chat-msg__delete {
+    opacity: 0.55;
+    pointer-events: auto;
+  }
+}
+
+.icon-btn--mini {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
 }
 
 @keyframes msgIn {

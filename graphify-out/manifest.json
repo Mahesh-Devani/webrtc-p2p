@@ -1,9 +1,9 @@
 {
   "chat-store.js": {
-    "mtime": 1791973427.8610823,
-    "seen": 1792181220.542253,
-    "ast_hash": "2ba99877809b7a87004629a7961e3a66",
-    "semantic_hash": "2ba99877809b7a87004629a7961e3a66"
+    "mtime": 1794483821.8543017,
+    "seen": 1794484231.067769,
+    "ast_hash": "5370bdbfa2f72144c2ea207f8b17d2ff",
+    "semantic_hash": ""
   },
   "check-invariants.py": {
     "mtime": 1793205920.1105845,
@@ -114,9 +114,9 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1794468434.920182,
-    "seen": 1794468503.623969,
-    "ast_hash": "20aaf96751a8504386501bfa0884bfdf",
+    "mtime": 1794484181.5203328,
+    "seen": 1794484231.0678122,
+    "ast_hash": "90be0d2836a3708a5d4f55b9ccc87930",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1794468445.1311085,
-    "seen": 1794468503.623977,
-    "ast_hash": "bed27ee9bb99a614bac30efcc1347d2d",
+    "mtime": 1794483890.9919398,
+    "seen": 1794484231.067821,
+    "ast_hash": "c769cb1b584ee15fe46e4070efe27417",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -228,9 +228,9 @@
     "semantic_hash": ""
   },
   "tests/test_webrtc_contracts.py": {
-    "mtime": 1793459741.1745923,
-    "seen": 1793459782.48897,
-    "ast_hash": "3cbb5d61efe0279e95bc6e53fcf03993",
+    "mtime": 1794484208.8610694,
+    "seen": 1794484231.067811,
+    "ast_hash": "832cf6901dd0c27a59b73c27f7b8fede",
     "semantic_hash": ""
   },
   ".agents/skills/regression-testing/SKILL.md": {

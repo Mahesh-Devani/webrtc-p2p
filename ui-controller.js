@@ -1370,7 +1370,27 @@ ${clarification}
           </div>
           <div class="contact-item__preview">${escapeHtml(preview)}</div>
           <div class="contact-item__pubkey" title="${escapeHtml(c.pubkey)}">${pubShort}</div>
-        </div>`;
+        </div>
+        ${!isBot ? `
+        <div class="contact-item__actions">
+          <button class="contact-item__menu-btn icon-btn" title="Contact options" aria-label="Contact options">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
+        </div>` : ''}`;
+
+      const menuBtn = div.querySelector('.contact-item__menu-btn');
+      if (menuBtn) {
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showContactContextMenu(c.pubkey, menuBtn);
+        });
+      }
+      div.addEventListener('contextmenu', (e) => {
+        if (!isBot) {
+          e.preventDefault();
+          showContactContextMenu(c.pubkey, null, e.clientX, e.clientY);
+        }
+      });
       div.addEventListener('click', () => openChat(c.pubkey));
       dom.contactList.appendChild(div);
     }
@@ -1600,35 +1620,57 @@ ${clarification}
           <span>🔒 Pruned &amp; Encrypted via NIP-44 (&lt; 2 KB)</span>
           <div class="chat-msg__meta"><span>${formatTime(msg.ts)}</span>${ticks}</div>
         </div>`;
-      dom.chatMessages.appendChild(div);
-      dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
-      return div;
-    }
-
-    // Check if message is an AI Support Agent report or clarification
-    if (msg.text && (msg.text.startsWith('🤖 [AI Diagnostic Analysis]') || msg.text.startsWith('🤖 [AI Support Agent'))) {
+    } else if (msg.text && (msg.text.startsWith('🤖 [AI Diagnostic Analysis]') || msg.text.startsWith('🤖 [AI Support Agent'))) {
       div.className = `chat-msg chat-msg--${msg.sender} chat-msg--diag-card`;
       div.innerHTML = formatDiagnosticBubbleHtml(msg.text, msg.ts, ticks);
-      dom.chatMessages.appendChild(div);
-      dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
-      return div;
-    }
-
-    let content = escapeHtml(msg.text);
-    if (msg.type === 'file' && msg.fileName) {
-      const isScreenshot = msg.fileName.toLowerCase().includes('screenshot') || (msg.text && msg.text.includes('📷 Screenshot'));
-      const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
-      if (isScreenshot) {
-        const previewImg = msg.previewUrl ? `<div style="margin-top:6px;"><img src="${escapeHtml(msg.previewUrl)}" style="max-width:220px;max-height:220px;border-radius:6px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);" alt="Screenshot preview" /></div>` : '';
-        const tag = activeContactPubkey === SUPPORT_AGENT_PUBKEY ? 'Diagnostic Upload' : 'Direct P2P Transfer (Zero Nostr Quota)';
-        content = `📷 <strong>Screenshot</strong>${sizeStr}${previewImg}<div style="font-size:0.72rem; color:var(--c-primary); margin-top:3px;">⚡ ${tag}</div>`;
-      } else {
-        content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
+    } else {
+      let content = escapeHtml(msg.text);
+      if (msg.type === 'file' && msg.fileName) {
+        const isScreenshot = msg.fileName.toLowerCase().includes('screenshot') || (msg.text && msg.text.includes('📷 Screenshot'));
+        const sizeStr = msg.fileSize ? ` <span style="opacity:0.75;font-size:0.85em;">(${formatFileSize(msg.fileSize)})</span>` : '';
+        if (isScreenshot) {
+          const previewImg = msg.previewUrl ? `<div style="margin-top:6px;"><img src="${escapeHtml(msg.previewUrl)}" style="max-width:220px;max-height:220px;border-radius:6px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);" alt="Screenshot preview" /></div>` : '';
+          const tag = activeContactPubkey === SUPPORT_AGENT_PUBKEY ? 'Diagnostic Upload' : 'Direct P2P Transfer (Zero Nostr Quota)';
+          content = `📷 <strong>Screenshot</strong>${sizeStr}${previewImg}<div style="font-size:0.72rem; color:var(--c-primary); margin-top:3px;">⚡ ${tag}</div>`;
+        } else {
+          content = `📎 ${escapeHtml(msg.fileName)}${sizeStr}`;
+        }
       }
+
+      div.innerHTML = `<div class="chat-msg__text">${content}</div>
+        <div class="chat-msg__meta"><span>${formatTime(msg.ts)}</span>${ticks}</div>`;
     }
 
-    div.innerHTML = `<div class="chat-msg__text">${content}</div>
-      <div class="chat-msg__meta"><span>${formatTime(msg.ts)}</span>${ticks}</div>`;
+    // Add individual message delete action
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'chat-msg__delete';
+    deleteBtn.title = 'Delete message';
+    deleteBtn.setAttribute('aria-label', 'Delete message');
+    deleteBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ok = await confirmAction({
+        title: 'Delete Message',
+        message: 'Delete this message from chat history?',
+        confirmText: 'Delete',
+        danger: true
+      });
+      if (!ok) return;
+
+      if (activeContactPubkey && msg.id) {
+        ChatStore.deleteMessage(activeContactPubkey, msg.id);
+      }
+      div.style.transition = 'opacity 0.2s, transform 0.2s';
+      div.style.opacity = '0';
+      div.style.transform = 'scale(0.9)';
+      setTimeout(() => {
+        div.remove();
+        renderContacts(dom.contactSearch?.value);
+      }, 200);
+      toast('Message deleted');
+    });
+    div.appendChild(deleteBtn);
+
     dom.chatMessages.appendChild(div);
     dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
     return div;
@@ -4994,6 +5036,170 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     });
   }
 
+  // ── In-App Modal Dialog Helpers (Zero-CDP Freeze, replaces window.confirm / window.prompt) ──
+  function confirmAction({ title = 'Confirm', message = 'Are you sure?', confirmText = 'Delete', danger = true } = {}) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('confirm-modal');
+      const titleEl = document.getElementById('confirm-modal-title');
+      const msgEl = document.getElementById('confirm-modal-message');
+      const okBtn = document.getElementById('btn-confirm-ok');
+      const cancelBtn = document.getElementById('btn-confirm-cancel');
+      const closeBtn = document.getElementById('btn-close-confirm-modal');
+
+      if (!modal || !okBtn || !cancelBtn) {
+        resolve(window.confirm ? window.confirm(message) : true);
+        return;
+      }
+
+      if (titleEl) titleEl.textContent = title;
+      if (msgEl) msgEl.textContent = message;
+      okBtn.textContent = confirmText;
+      okBtn.className = danger ? 'btn btn--danger' : 'btn btn--primary';
+
+      const cleanup = (result) => {
+        hide(modal);
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        if (closeBtn) closeBtn.onclick = null;
+        resolve(result);
+      };
+
+      okBtn.onclick = () => cleanup(true);
+      cancelBtn.onclick = () => cleanup(false);
+      if (closeBtn) closeBtn.onclick = () => cleanup(false);
+      show(modal);
+    });
+  }
+
+  function promptRenameContact(pubkey) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('rename-contact-modal');
+      const input = document.getElementById('rename-contact-input');
+      const saveBtn = document.getElementById('btn-rename-contact-save');
+      const cancelBtn = document.getElementById('btn-rename-contact-cancel');
+      const closeBtn = document.getElementById('btn-close-rename-contact');
+
+      const current = getContactNickname(pubkey) || '';
+      if (!modal || !input || !saveBtn) {
+        const res = window.prompt ? window.prompt('Enter new nickname:', current) : current;
+        resolve(res !== null && res.trim() ? res.trim() : null);
+        return;
+      }
+
+      input.value = current;
+      const cleanup = (val) => {
+        hide(modal);
+        saveBtn.onclick = null;
+        if (cancelBtn) cancelBtn.onclick = null;
+        if (closeBtn) closeBtn.onclick = null;
+        input.onkeydown = null;
+        resolve(val);
+      };
+
+      saveBtn.onclick = () => {
+        const val = input.value.trim();
+        cleanup(val || null);
+      };
+      if (cancelBtn) cancelBtn.onclick = () => cleanup(null);
+      if (closeBtn) closeBtn.onclick = () => cleanup(null);
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          const val = input.value.trim();
+          cleanup(val || null);
+        } else if (e.key === 'Escape') {
+          cleanup(null);
+        }
+      };
+      show(modal);
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 50);
+    });
+  }
+
+  async function handleRenameContact(pubkey) {
+    if (!pubkey) return;
+    const newName = await promptRenameContact(pubkey);
+    if (newName !== null && newName.trim()) {
+      renameContact(pubkey, newName.trim());
+      if (activeContactPubkey === pubkey) {
+        dom.chatContactName.textContent = newName.trim();
+      }
+      renderContacts(dom.contactSearch?.value);
+      toast(`Contact renamed to "${newName.trim()}"`);
+    }
+  }
+
+  async function handleDeleteConversation(pubkey) {
+    if (!pubkey) return;
+    const name = getContactDisplayName(pubkey);
+    const ok = await confirmAction({
+      title: 'Delete Conversation',
+      message: `Delete all messages with "${name}"? This action cannot be undone.`,
+      confirmText: 'Delete Conversation',
+      danger: true
+    });
+    if (!ok) return;
+
+    ChatStore.clearChat(pubkey);
+    if (activeContactPubkey === pubkey) {
+      dom.chatMessages.innerHTML = '';
+    }
+    renderContacts(dom.contactSearch?.value);
+    toast('Conversation deleted');
+  }
+
+  async function handleDeleteContact(pubkey) {
+    if (!pubkey) return;
+    const name = getContactDisplayName(pubkey);
+    const ok = await confirmAction({
+      title: 'Delete Contact',
+      message: `Delete contact "${name}" and all associated messages?`,
+      confirmText: 'Delete Contact',
+      danger: true
+    });
+    if (!ok) return;
+
+    ChatStore.clearChat(pubkey);
+    removeContact(pubkey);
+    if (activeContactPubkey === pubkey) {
+      activeContactPubkey = null;
+      hide(dom.chatActive);
+      show(dom.chatEmpty);
+      showSidebar();
+    }
+    renderContacts(dom.contactSearch?.value);
+    toast('Contact deleted');
+  }
+
+  let contextMenuPubkey = null;
+  const contactCtxMenu = document.getElementById('contact-context-menu');
+
+  function showContactContextMenu(pubkey, targetEl, clientX, clientY) {
+    if (!contactCtxMenu) return;
+    contextMenuPubkey = pubkey;
+
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      let top = rect.bottom + 4;
+      let left = rect.right - 180;
+      if (left < 10) left = 10;
+      if (top + 160 > window.innerHeight) top = rect.top - 150;
+      contactCtxMenu.style.top = `${top}px`;
+      contactCtxMenu.style.left = `${left}px`;
+    } else if (clientX !== undefined && clientY !== undefined) {
+      let top = clientY;
+      let left = clientX;
+      if (left + 190 > window.innerWidth) left = window.innerWidth - 190;
+      if (top + 160 > window.innerHeight) top = window.innerHeight - 150;
+      contactCtxMenu.style.top = `${top}px`;
+      contactCtxMenu.style.left = `${left}px`;
+    }
+
+    show(contactCtxMenu);
+  }
+
   // ── Manual Signaling ──
   function showCreateSession() {
     hide(dom.chatEmpty); hide(dom.chatActive);
@@ -5479,9 +5685,13 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     }
   }
 
-  // Click contact name or pubkey in chat header to copy full pubkey
+  // Click contact name or rename button in chat header
   dom.chatContactName?.addEventListener('click', () => {
-    if (activeContactPubkey) copyText(activeContactPubkey, 'Public key');
+    if (activeContactPubkey) handleRenameContact(activeContactPubkey);
+  });
+  document.getElementById('btn-header-rename')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activeContactPubkey) handleRenameContact(activeContactPubkey);
   });
   document.getElementById('chat-contact-pubkey')?.addEventListener('click', () => {
     if (activeContactPubkey) copyText(activeContactPubkey, 'Public key');
@@ -5497,42 +5707,39 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   // Rename contact
   document.getElementById('btn-rename-contact')?.addEventListener('click', () => {
     dom.chatMenu.classList.add('hidden');
-    if (!activeContactPubkey) return;
-    const current = getContactNickname(activeContactPubkey);
-    const newName = prompt('Enter new nickname:', current);
-    if (newName !== null && newName.trim()) {
-      renameContact(activeContactPubkey, newName.trim());
-      dom.chatContactName.textContent = newName.trim();
-      renderContacts(dom.contactSearch?.value);
-      toast('Contact renamed!');
-    }
+    if (activeContactPubkey) handleRenameContact(activeContactPubkey);
   });
 
-  // Clear chat
+  // Delete conversation
   dom.btnClearChat?.addEventListener('click', () => {
     dom.chatMenu.classList.add('hidden');
-    if (!activeContactPubkey) return;
-    if (!confirm('Clear all messages with this contact?')) return;
-    ChatStore.clearChat(activeContactPubkey);
-    dom.chatMessages.innerHTML = '';
-    renderContacts(dom.contactSearch?.value);
-    toast('Chat cleared');
+    if (activeContactPubkey) handleDeleteConversation(activeContactPubkey);
   });
 
   // Delete contact
   dom.btnDeleteContact?.addEventListener('click', () => {
     dom.chatMenu.classList.add('hidden');
-    if (!activeContactPubkey) return;
-    const name = getContactDisplayName(activeContactPubkey);
-    if (!confirm(`Delete contact "${name}" and all messages?`)) return;
-    ChatStore.clearChat(activeContactPubkey);
-    removeContact(activeContactPubkey);
-    activeContactPubkey = null;
-    hide(dom.chatActive);
-    show(dom.chatEmpty);
-    showSidebar();
-    renderContacts();
-    toast('Contact deleted');
+    if (activeContactPubkey) handleDeleteContact(activeContactPubkey);
+  });
+
+  // Context menu item listeners for sidebar contact list
+  document.addEventListener('click', (e) => {
+    if (contactCtxMenu && !e.target.closest('#contact-context-menu') && !e.target.closest('.contact-item__menu-btn')) {
+      hide(contactCtxMenu);
+    }
+  });
+
+  document.getElementById('btn-ctx-rename')?.addEventListener('click', () => {
+    if (contactCtxMenu) hide(contactCtxMenu);
+    if (contextMenuPubkey) handleRenameContact(contextMenuPubkey);
+  });
+  document.getElementById('btn-ctx-clear-chat')?.addEventListener('click', () => {
+    if (contactCtxMenu) hide(contactCtxMenu);
+    if (contextMenuPubkey) handleDeleteConversation(contextMenuPubkey);
+  });
+  document.getElementById('btn-ctx-delete-contact')?.addEventListener('click', () => {
+    if (contactCtxMenu) hide(contactCtxMenu);
+    if (contextMenuPubkey) handleDeleteContact(contextMenuPubkey);
   });
 
   // Message request — Accept
@@ -5631,27 +5838,6 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     if (dt && dt.files && dt.files.length > 0) {
       await sendSelectedFiles(dt.files);
     }
-  });
-
-  // Chat menu
-  dom.btnChatMenu?.addEventListener('click', (e) => { e.stopPropagation(); dom.chatMenu.classList.toggle('hidden'); });
-  document.addEventListener('click', () => hide(dom.chatMenu));
-  dom.btnClearChat?.addEventListener('click', () => {
-    if (!activeContactPubkey) return;
-    ChatStore.clearChat(activeContactPubkey);
-    renderChatMessages(activeContactPubkey);
-    renderContacts(dom.contactSearch.value);
-    toast('Chat cleared.');
-  });
-  dom.btnDeleteContact?.addEventListener('click', () => {
-    if (!activeContactPubkey) return;
-    removeContact(activeContactPubkey);
-    ChatStore.clearChat(activeContactPubkey);
-    activeContactPubkey = null;
-    hide(dom.chatActive); show(dom.chatEmpty);
-    renderContacts();
-    showSidebar();
-    toast('Contact deleted.');
   });
 
   // Connect P2P button
