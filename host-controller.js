@@ -452,12 +452,25 @@ function setWhitelistEnforced(enabled) {
 }
 
 function addAuthorizedClient(pubkey, name) {
-  let cleanPubkey = (pubkey || '').trim().toLowerCase();
-  if (cleanPubkey.startsWith('p2p-client:') || cleanPubkey.startsWith('p2p-host:')) {
-    const parts = cleanPubkey.split(':');
-    cleanPubkey = parts[1] || '';
+  let str = (pubkey || '').trim().replace(/^["']|["']$/g, '');
+  if (str.toLowerCase().startsWith('p2p-client:') || str.toLowerCase().startsWith('p2p-host:')) {
+    const parts = str.split(':');
+    str = parts[1] || '';
     if (!name && parts[2]) name = decodeURIComponent(parts[2]);
   }
+  if (str.toLowerCase().startsWith('nostr:')) str = str.slice(6).trim();
+  if (/^npub1[a-z0-9]{58}$/i.test(str)) {
+    try {
+      if (window.NostrTools?.nip19?.decode) {
+        const dec = window.NostrTools.nip19.decode(str);
+        if (dec?.type === 'npub' && dec.data) str = dec.data;
+      }
+    } catch {}
+  }
+  let cleanPubkey = str.toLowerCase();
+  const hexMatch = cleanPubkey.match(/\b([0-9a-f]{64})\b/);
+  if (hexMatch) cleanPubkey = hexMatch[1];
+
   if (!/^[0-9a-f]{64}$/.test(cleanPubkey)) {
     alert('Invalid public key. Must be 64 hexadecimal characters.');
     return false;

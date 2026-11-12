@@ -5118,13 +5118,41 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
 
   // ═══ EVENT BINDINGS ═══
 
+  // Contact Key Parser (Supports 64-hex, npub1..., nostr:npub1...)
+  function parseContactKey(val) {
+    if (!val) return '';
+    let str = String(val).trim().replace(/^["']|["']$/g, '');
+    if (str.toLowerCase().startsWith('nostr:')) str = str.slice(6).trim();
+    if (/^npub1[a-z0-9]{58}$/i.test(str)) {
+      try {
+        if (window.NostrTools?.nip19?.decode) {
+          const dec = window.NostrTools.nip19.decode(str);
+          if (dec?.type === 'npub' && dec.data) return dec.data.toLowerCase();
+        }
+      } catch {}
+    }
+    const hexMatch = str.match(/\b([0-9a-fA-F]{64})\b/);
+    if (hexMatch) return hexMatch[1].toLowerCase();
+    return str;
+  }
+
   // Sidebar
   dom.contactSearch?.addEventListener('input', (e) => renderContacts(e.target.value));
   dom.btnNewContact?.addEventListener('click', () => show(dom.addContactModal));
   dom.btnCloseAddContact?.addEventListener('click', () => hide(dom.addContactModal));
-  dom.btnScanContactQr?.addEventListener('click', () => openQrScanner((t) => { dom.newContactPubkey.value = t.trim(); toast('Key scanned!'); }));
+  dom.btnScanContactQr?.addEventListener('click', () => openQrScanner((t) => {
+    const clean = parseContactKey(t);
+    if (dom.newContactPubkey) dom.newContactPubkey.value = clean || t.trim();
+    toast('Key scanned!');
+  }));
+  dom.newContactPubkey?.addEventListener('input', (e) => {
+    const clean = parseContactKey(e.target.value);
+    if (clean && clean !== e.target.value && /^[0-9a-f]{64}$/.test(clean)) {
+      dom.newContactPubkey.value = clean;
+    }
+  });
   dom.btnAddContactConfirm?.addEventListener('click', () => {
-    const pk = dom.newContactPubkey?.value.trim();
+    const pk = parseContactKey(dom.newContactPubkey?.value);
     const nick = dom.newContactNickname?.value.trim();
     if (!pk || !/^[0-9a-f]{64}$/i.test(pk)) { toast('Invalid pubkey (64 hex chars).'); return; }
     if (pk === nostrIdentity?.publicKey) { toast('Cannot add yourself!'); return; }
@@ -5162,28 +5190,131 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   });
 
   function parseRemoteDeviceToken(val) {
-    if (!val) return;
-    const trimmed = val.trim();
-    if (trimmed.startsWith('P2P-HOST:')) {
-      const parts = trimmed.split(':');
-      const pubkey = parts[1] || '';
-      const name = parts[2] ? decodeURIComponent(parts[2]) : '';
-      if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = pubkey;
-      if (name && dom.remoteDeviceNickname && !dom.remoteDeviceNickname.value) {
-        dom.remoteDeviceNickname.value = name;
+    if (!val) return null;
+    let str = String(val).trim().replace(/^["']|["']$/g, '');
+    if (!str) return null;
+
+    let pubkey = '';
+    let name = '';
+    let pin = '';
+    let icon = '';
+
+    // 1. Try URL parsing (e.g. 1-Click Connect link or web URL: ?remoteHost=...#pin=...)
+    if (str.includes('remoteHost=') || str.includes('host=') || str.startsWith('http://') || str.startsWith('https://')) {
+      try {
+        const urlObj = new URL(str, window.location.origin);
+        const hostParam = urlObj.searchParams.get('remoteHost') || urlObj.searchParams.get('host');
+        if (hostParam) {
+          pubkey = hostParam.trim();
+          name = urlObj.searchParams.get('name') || urlObj.searchParams.get('nickname') || '';
+          icon = urlObj.searchParams.get('icon') || '';
+          const pinParam = urlObj.searchParams.get('pin');
+          if (pinParam) {
+            pin = pinParam;
+          } else if (urlObj.hash && urlObj.hash.includes('pin=')) {
+            const match = urlObj.hash.match(/pin=([^&]+)/);
+            if (match) pin = decodeURIComponent(match[1]);
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Try JSON format: {"pubkey":"...", "name":"...", "pin":"..."}
+    if (!pubkey && str.startsWith('{') && str.endsWith('}')) {
+      try {
+        const json = JSON.parse(str);
+        pubkey = json.pubkey || json.publicKey || json.host || json.id || '';
+        name = json.name || json.nickname || '';
+        pin = json.pin || json.password || '';
+        icon = json.icon || '';
+      } catch {}
+    }
+
+    // 3. Try P2P-HOST or P2P-CLIENT token format (case-insensitive)
+    // E.g. P2P-HOST:<pubkey>:<name>:<pin>:<icon>
+    if (!pubkey && /^p2p-(host|client):/i.test(str)) {
+      const parts = str.split(':');
+      pubkey = parts[1] || '';
+      if (parts[2]) name = decodeURIComponent(parts[2]);
+      if (parts[3]) pin = decodeURIComponent(parts[3]);
+      if (parts[4]) icon = decodeURIComponent(parts[4]);
+    }
+
+    // 4. Try Nostr Bech32 format (npub1... or nostr:npub1...)
+    if (!pubkey) {
+      let npubCandidate = str;
+      if (npubCandidate.toLowerCase().startsWith('nostr:')) {
+        npubCandidate = npubCandidate.slice(6).trim();
+      }
+      if (/^npub1[a-z0-9]{58}$/i.test(npubCandidate)) {
+        try {
+          if (window.NostrTools?.nip19?.decode) {
+            const decoded = window.NostrTools.nip19.decode(npubCandidate);
+            if (decoded && decoded.type === 'npub' && decoded.data) {
+              pubkey = decoded.data;
+            }
+          }
+        } catch (err) {
+          console.warn('[parseRemoteDeviceToken] npub decode error:', err);
+        }
       }
     }
+
+    // 5. Try direct 64-hex public key (with optional 0x prefix)
+    if (!pubkey) {
+      let clean = str;
+      if (clean.toLowerCase().startsWith('0x')) clean = clean.slice(2);
+      if (/^[0-9a-fA-F]{64}$/.test(clean)) {
+        pubkey = clean;
+      }
+    }
+
+    // 6. Loose match: any 64-character hex sequence in the input
+    if (!pubkey) {
+      const hexMatch = str.match(/\b([0-9a-fA-F]{64})\b/);
+      if (hexMatch) {
+        pubkey = hexMatch[1];
+      }
+    }
+
+    // If a valid 64-hex public key was resolved, populate the modal inputs!
+    if (pubkey && /^[0-9a-fA-F]{64}$/.test(pubkey.trim())) {
+      const cleanPubkey = pubkey.trim().toLowerCase();
+      if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = cleanPubkey;
+      if (name && dom.remoteDeviceNickname && (!dom.remoteDeviceNickname.value || dom.remoteDeviceNickname.value.startsWith('Host-'))) {
+        dom.remoteDeviceNickname.value = name;
+      }
+      if (pin && dom.remoteDevicePin && !dom.remoteDevicePin.value) {
+        dom.remoteDevicePin.value = pin;
+      }
+      if (icon && dom.remoteDeviceIcon && !dom.remoteDeviceIcon.value) {
+        dom.remoteDeviceIcon.value = icon;
+      }
+      return { success: true, pubkey: cleanPubkey, name, pin, icon };
+    }
+
+    return null;
   }
 
-  dom.remoteDeviceToken?.addEventListener('input', (e) => parseRemoteDeviceToken(e.target.value));
+  dom.remoteDeviceToken?.addEventListener('input', (e) => {
+    const val = (e.target.value || '').trim();
+    if (val.length >= 64 || val.includes(':') || val.includes('?') || val.startsWith('{')) {
+      parseRemoteDeviceToken(val);
+    }
+  });
   dom.remoteDeviceToken?.addEventListener('paste', () => {
     setTimeout(() => parseRemoteDeviceToken(dom.remoteDeviceToken?.value || ''), 50);
   });
 
   dom.btnScanRemoteQr?.addEventListener('click', () => {
     openQrScanner((token) => {
-      parseRemoteDeviceToken(token);
-      toast('Host QR scanned!');
+      const result = parseRemoteDeviceToken(token);
+      if (result) {
+        toast('Host details filled from QR!');
+      } else {
+        if (dom.remoteDeviceToken) dom.remoteDeviceToken.value = (token || '').trim();
+        toast('QR scanned, but no valid host key recognized.');
+      }
     });
   });
 
@@ -5191,7 +5322,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     parseRemoteDeviceToken(dom.remoteDeviceToken?.value || '');
     const pubkey = dom.remoteDeviceToken?.value.trim().toLowerCase();
     if (!pubkey || !/^[0-9a-f]{64}$/.test(pubkey)) {
-      toast('Invalid public key (must be 64-character hex or P2P-HOST token).');
+      toast('Invalid public key (must be 64-character hex, URL, or P2P-HOST token).');
       return;
     }
     const name = dom.remoteDeviceNickname?.value.trim() || `Host-${pubkey.slice(0, 6)}`;
@@ -5296,15 +5427,17 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   function checkUrlRemoteHostParam() {
     try {
       const params = new URLSearchParams(window.location.search);
-      const remoteHost = params.get('remoteHost');
+      const remoteHost = params.get('remoteHost') || params.get('host');
       if (remoteHost && /^[0-9a-f]{64}$/i.test(remoteHost.trim())) {
         const pk = remoteHost.trim().toLowerCase();
-        let pin = '';
-        if (window.location.hash && window.location.hash.includes('pin=')) {
+        let pin = params.get('pin') || '';
+        if (!pin && window.location.hash && window.location.hash.includes('pin=')) {
           const match = window.location.hash.match(/pin=([^&]+)/);
           if (match) pin = decodeURIComponent(match[1]);
         }
-        addOrUpdateRemoteDevice(pk, `Host-${pk.slice(0, 6)}`, pin);
+        const name = params.get('name') || params.get('nickname') || `Host-${pk.slice(0, 6)}`;
+        const icon = params.get('icon') || '🖥️';
+        addOrUpdateRemoteDevice(pk, name, pin, icon);
         toast(`Configured remote computer from link!`, 'info');
         const dev = loadRemoteDevices().find(d => d.pubkey === pk);
         if (dev) {
@@ -5312,6 +5445,11 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
         }
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete('remoteHost');
+        cleanUrl.searchParams.delete('host');
+        cleanUrl.searchParams.delete('name');
+        cleanUrl.searchParams.delete('nickname');
+        cleanUrl.searchParams.delete('pin');
+        cleanUrl.searchParams.delete('icon');
         cleanUrl.hash = '';
         const searchStr = cleanUrl.searchParams.toString();
         window.history.replaceState({}, document.title, cleanUrl.pathname + (searchStr ? '?' + searchStr : ''));

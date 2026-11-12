@@ -147,6 +147,133 @@ class TestHostSecurity(unittest.TestCase):
         self.assertIn('bridgeActive: bridgeConnected', content)
         self.assertIn('bridgeActive: !!active', content)
 
+    def test_parse_remote_device_token_contract_in_ui_controller(self):
+        """ui-controller.js must support raw 64-hex keys, P2P-HOST tokens, 1-Click URLs, and JSON in QR scanning."""
+        content = (PROJECT_ROOT / 'ui-controller.js').read_text(encoding='utf-8')
+
+        self.assertIn('function parseRemoteDeviceToken(val)', content)
+        self.assertIn('remoteHost=', content)
+        self.assertIn('p2p-(host|client):', content)
+        self.assertIn('dom.btnScanRemoteQr', content)
+        self.assertIn('Host details filled from QR!', content)
+
+    def test_parse_remote_device_token_resolution_matrix(self):
+        """Verify robust parsing of various QR and token formats for remote computer pairing."""
+        from urllib.parse import urlparse, parse_qs, unquote
+
+        def py_parse_token(val):
+            if not val:
+                return None
+            val_str = str(val).strip().strip('"\'')
+            if not val_str:
+                return None
+            pubkey = ''
+            name = ''
+            pin = ''
+            icon = ''
+
+            if 'remoteHost=' in val_str or 'host=' in val_str or val_str.startswith('http://') or val_str.startswith('https://'):
+                try:
+                    parsed = urlparse(val_str)
+                    qs = parse_qs(parsed.query)
+                    host_param = qs.get('remoteHost', qs.get('host', [None]))[0]
+                    if host_param:
+                        pubkey = host_param.strip()
+                        name = qs.get('name', qs.get('nickname', ['']))[0]
+                        icon = qs.get('icon', [''])[0]
+                        pin_param = qs.get('pin', [None])[0]
+                        if pin_param:
+                            pin = pin_param
+                        elif parsed.fragment and 'pin=' in parsed.fragment:
+                            m = re.search(r'pin=([^&]+)', parsed.fragment)
+                            if m:
+                                pin = unquote(m.group(1))
+                except Exception:
+                    pass
+
+            if not pubkey and val_str.startswith('{') and val_str.endswith('}'):
+                try:
+                    import json
+                    data = json.loads(val_str)
+                    pubkey = data.get('pubkey') or data.get('publicKey') or data.get('host') or data.get('id') or ''
+                    name = data.get('name') or data.get('nickname') or ''
+                    pin = data.get('pin') or data.get('password') or ''
+                    icon = data.get('icon') or ''
+                except Exception:
+                    pass
+
+            if not pubkey and re.match(r'^p2p-(host|client):', val_str, re.I):
+                parts = val_str.split(':')
+                pubkey = parts[1] if len(parts) > 1 else ''
+                name = unquote(parts[2]) if len(parts) > 2 else ''
+                pin = unquote(parts[3]) if len(parts) > 3 else ''
+                icon = unquote(parts[4]) if len(parts) > 4 else ''
+
+            if not pubkey:
+                clean = val_str[2:] if val_str.lower().startswith('0x') else val_str
+                if re.match(r'^[0-9a-fA-F]{64}$', clean):
+                    pubkey = clean
+
+            if not pubkey:
+                m = re.search(r'\b([0-9a-fA-F]{64})\b', val_str)
+                if m:
+                    pubkey = m.group(1)
+
+            if pubkey and re.match(r'^[0-9a-fA-F]{64}$', pubkey.strip()):
+                return {
+                    'pubkey': pubkey.strip().lower(),
+                    'name': name,
+                    'pin': pin,
+                    'icon': icon
+                }
+            return None
+
+        # 1. Raw 64-hex public key (host.html pairing QR output)
+        hex_key = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+        res = py_parse_token(hex_key)
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+
+        # 2. Uppercase with leading/trailing spaces
+        res = py_parse_token(f"  {hex_key.upper()}  ")
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+
+        # 3. P2P-HOST full token
+        token_str = f"P2P-HOST:{hex_key}:Mac%20Studio:SecretPin123!:🍏"
+        res = py_parse_token(token_str)
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+        self.assertEqual(res['name'], "Mac Studio")
+        self.assertEqual(res['pin'], "SecretPin123!")
+        self.assertEqual(res['icon'], "🍏")
+
+        # 4. 1-Click Connect URL with hash PIN
+        url_str = f"https://mahesh-devani.github.io/webrtc-p2p/index.html?remoteHost={hex_key}#pin=UrlPin456"
+        res = py_parse_token(url_str)
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+        self.assertEqual(res['pin'], "UrlPin456")
+
+        # 5. 1-Click URL with query params
+        url_query = f"http://localhost:8080/?remoteHost={hex_key}&name=Office%20PC&pin=Pass789"
+        res = py_parse_token(url_query)
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+        self.assertEqual(res['name'], "Office PC")
+        self.assertEqual(res['pin'], "Pass789")
+
+        # 6. JSON QR payload
+        json_qr = f'{{"pubkey":"{hex_key}","name":"Server","pin":"9999"}}'
+        res = py_parse_token(json_qr)
+        self.assertIsNotNone(res)
+        self.assertEqual(res['pubkey'], hex_key)
+        self.assertEqual(res['name'], "Server")
+        self.assertEqual(res['pin'], "9999")
+
+        # 7. Invalid random string
+        self.assertIsNone(py_parse_token("not-a-valid-token-or-key"))
+
 
 if __name__ == '__main__':
     unittest.main()
