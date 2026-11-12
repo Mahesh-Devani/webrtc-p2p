@@ -1294,6 +1294,30 @@ class NativeFrameCapturer:
                 self.kernel32.GlobalSize.restype = ctypes.c_size_t
                 self.kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
                 self.kernel32.GlobalUnlock.restype = ctypes.c_bool
+
+                # Explicit 64-bit function prototypes for window activation & input targeting
+                self.user32.GetForegroundWindow.argtypes = []
+                self.user32.GetForegroundWindow.restype = ctypes.c_void_p
+                self.user32.SetFocus.argtypes = [ctypes.c_void_p]
+                self.user32.SetFocus.restype = ctypes.c_void_p
+                self.user32.IsWindow.argtypes = [ctypes.c_void_p]
+                self.user32.IsWindow.restype = ctypes.c_bool
+                self.user32.IsIconic.argtypes = [ctypes.c_void_p]
+                self.user32.IsIconic.restype = ctypes.c_bool
+                self.user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+                self.user32.ShowWindow.restype = ctypes.c_bool
+                self.user32.BringWindowToTop.argtypes = [ctypes.c_void_p]
+                self.user32.BringWindowToTop.restype = ctypes.c_bool
+                self.user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+                self.user32.SetForegroundWindow.restype = ctypes.c_bool
+                self.user32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+                self.user32.SetWindowPos.restype = ctypes.c_bool
+                self.user32.AttachThreadInput.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_bool]
+                self.user32.AttachThreadInput.restype = ctypes.c_bool
+                self.kernel32.GetCurrentThreadId.argtypes = []
+                self.kernel32.GetCurrentThreadId.restype = ctypes.c_ulong
+                self.user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+                self.user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
             except Exception as e:
                 print(f"[!] Win32 GDI+ initialization warning: {e}")
 
@@ -1767,6 +1791,109 @@ class NativeFrameCapturer:
                 pass
         return None
 
+    def activate_window(self, window_id):
+        """
+        Brings the specified window to the top of the Z-order, restores it if minimized,
+        and assigns it OS foreground focus so that both mouse clicks and keyboard typing
+        are delivered directly to the target application.
+        """
+        if not window_id:
+            return False
+        try:
+            wid = int(window_id)
+        except Exception:
+            return False
+        if wid <= 0:
+            return False
+
+        if PLATFORM == 'win32':
+            try:
+                hwnd = wid
+                if not getattr(self, 'user32', None) or not self.user32.IsWindow(hwnd):
+                    return False
+
+                # 1. Restore window if minimized
+                if self.user32.IsIconic(hwnd):
+                    self.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                else:
+                    self.user32.ShowWindow(hwnd, 5)  # SW_SHOW
+
+                # 2. Attach thread input to bypass Windows focus-stealing restrictions
+                cur_thread = self.kernel32.GetCurrentThreadId()
+                fg_hwnd = self.user32.GetForegroundWindow()
+                fg_thread = self.user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+                target_thread = self.user32.GetWindowThreadProcessId(hwnd, None)
+
+                if fg_thread and fg_thread != cur_thread:
+                    self.user32.AttachThreadInput(cur_thread, fg_thread, True)
+                if target_thread and target_thread != cur_thread:
+                    self.user32.AttachThreadInput(cur_thread, target_thread, True)
+                if fg_thread and target_thread and fg_thread != target_thread:
+                    self.user32.AttachThreadInput(fg_thread, target_thread, True)
+
+                try:
+                    self.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY = -1
+                except Exception:
+                    pass
+
+                # 3. Bring to top of Z-order, set foreground and focus
+                self.user32.BringWindowToTop(hwnd)
+                self.user32.SetForegroundWindow(hwnd)
+                self.user32.SetFocus(hwnd)
+
+                # SetWindowPos HWND_TOP (0), SWP_NOSIZE (1) | SWP_NOMOVE (2) | SWP_SHOWWINDOW (0x0040)
+                self.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+
+                # 4. Detach thread input
+                if fg_thread and fg_thread != cur_thread:
+                    self.user32.AttachThreadInput(cur_thread, fg_thread, False)
+                if target_thread and target_thread != cur_thread:
+                    self.user32.AttachThreadInput(cur_thread, target_thread, False)
+                if fg_thread and target_thread and fg_thread != target_thread:
+                    self.user32.AttachThreadInput(fg_thread, target_thread, False)
+
+                return True
+            except Exception:
+                return False
+
+        elif PLATFORM == 'darwin':
+            try:
+                kCGWindowListOptionOnScreenOnly = 1
+                kCGWindowListExcludeDesktopElements = 16
+                arr = self.cg.CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, 0)
+                target_pid = None
+                if arr:
+                    count = self.cf.CFArrayGetCount(arr)
+                    k_pid = self.cf.CFStringCreateWithCString(None, b"kCGWindowOwnerPID", 0x08000100)
+                    wid_c = ctypes.c_uint32(0)
+                    pid_c = ctypes.c_int32(0)
+                    for i in range(count):
+                        d = self.cf.CFArrayGetValueAtIndex(arr, i)
+                        num_ref = self.cf.CFDictionaryGetValue(d, self.k_num)
+                        if num_ref:
+                            wid_c.value = 0
+                            self.cf.CFNumberGetValue(num_ref, 3, ctypes.byref(wid_c))
+                            if wid_c.value == wid:
+                                pid_ref = self.cf.CFDictionaryGetValue(d, k_pid)
+                                if pid_ref:
+                                    self.cf.CFNumberGetValue(pid_ref, 3, ctypes.byref(pid_c))
+                                    target_pid = pid_c.value
+                                break
+                    self.cf.CFRelease(arr)
+                    self.cf.CFRelease(k_pid)
+
+                if target_pid and target_pid > 0:
+                    subprocess.run(
+                        ['osascript', '-e', f'tell application "System Events" to set frontmost of the first process whose unix id is {target_pid} to true'],
+                        check=False,
+                        timeout=1.0,
+                        capture_output=True
+                    )
+                    return True
+            except Exception:
+                pass
+        return False
+
 _global_wake_manager = DisplayWakeManager()
 _global_frame_capturer = NativeFrameCapturer()
 
@@ -1988,6 +2115,14 @@ async def handle_client(reader, writer):
         _cached_win_bounds = None
         _cached_win_time = 0.0
         _cached_win_target_id = None
+        _last_win_activate_time = 0.0
+
+        def ensure_window_active(win_id):
+            nonlocal _last_win_activate_time
+            now = time.monotonic()
+            if (now - _last_win_activate_time) > 2.0:
+                _last_win_activate_time = now
+                _global_frame_capturer.activate_window(win_id)
 
         def map_client_coords(nx, ny):
             nonlocal _cached_win_bounds, _cached_win_time, _cached_win_target_id
@@ -2050,6 +2185,8 @@ async def handle_client(reader, writer):
 
             elif evt_type == 'mouse_down':
                 btn = int(data.get('btn', 0))
+                if is_win:
+                    ensure_window_active(capture_target_id)
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
@@ -2069,6 +2206,8 @@ async def handle_client(reader, writer):
             elif evt_type in ('mouse_click', 'click'):
                 btn = int(data.get('btn', 0))
                 clicks = 2 if data.get('dbl') else 1
+                if is_win:
+                    ensure_window_active(capture_target_id)
                 if 'x' in data and 'y' in data:
                     nx = float(data.get('x', 0))
                     ny = float(data.get('y', 0))
@@ -2111,6 +2250,8 @@ async def handle_client(reader, writer):
                     'alt': bool(data.get('alt', False)),
                     'meta': bool(data.get('meta', False))
                 }
+                if is_win:
+                    ensure_window_active(capture_target_id)
                 if raw_key: native_key(raw_key, True, mods)
 
             elif evt_type == 'key_up':
@@ -2124,6 +2265,8 @@ async def handle_client(reader, writer):
                 if raw_key: native_key(raw_key, False, mods)
 
             elif evt_type == 'special_key':
+                if is_win:
+                    ensure_window_active(capture_target_id)
                 action = data.get('key')
                 if action == 'win':
                     native_key('command' if PLATFORM == 'darwin' else 'win', True)
@@ -2139,6 +2282,8 @@ async def handle_client(reader, writer):
                     native_key('capslock', False)
 
             elif evt_type == 'type_text':
+                if is_win:
+                    ensure_window_active(capture_target_id)
                 t_str = data.get('text', '')
                 if t_str: native_type_text(t_str)
 
@@ -2180,6 +2325,8 @@ async def handle_client(reader, writer):
                 _cached_win_bounds = None
                 _cached_win_time = 0.0
                 _cached_win_target_id = None
+                if capture_target_type == 'window' and capture_target_id > 0:
+                    _global_frame_capturer.activate_window(capture_target_id)
                 _global_wake_manager.wake(session_token)
                 capture_active = True
                 if capture_task and not capture_task.done():
@@ -2227,6 +2374,8 @@ async def handle_client(reader, writer):
                 _cached_win_bounds = None
                 _cached_win_time = 0.0
                 _cached_win_target_id = None
+                if capture_target_type == 'window' and capture_target_id > 0:
+                    _global_frame_capturer.activate_window(capture_target_id)
                 if capture_target_type == 'display':
                     selected_display_id = capture_target_id
                     ox, oy, sw, sh = get_screen_bounds(capture_target_id, force=True)

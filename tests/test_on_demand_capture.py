@@ -172,6 +172,22 @@ class TestOnDemandScreenCapture(unittest.TestCase):
         self.assertIn("from ctypes import wintypes", self.bridge_content)
         self.assertNotIn("import ctypes.wintypes\n", self.bridge_content)
 
+    def test_window_activation_and_input_targeting(self):
+        """NativeFrameCapturer.activate_window must bring target window to forefront and assign foreground focus."""
+        self.assertIn('def activate_window(', self.bridge_content)
+        self.assertIn('AttachThreadInput', self.bridge_content)
+        self.assertIn('SetForegroundWindow', self.bridge_content)
+        self.assertIn('BringWindowToTop', self.bridge_content)
+        self.assertIn('ensure_window_active', self.bridge_content)
+
+        import bridge
+        capturer = bridge.NativeFrameCapturer()
+        self.assertTrue(hasattr(capturer, 'activate_window'))
+        # Should gracefully handle invalid IDs
+        self.assertFalse(capturer.activate_window(0))
+        self.assertFalse(capturer.activate_window(-1))
+        self.assertFalse(capturer.activate_window(None))
+
     def test_bridge_virtual_keycodes_and_shift_mapping(self):
         """bridge.py must map shifted symbols, modifier flags, and handle lock-screen passwords."""
         self.assertIn('SHIFT_MAP', self.bridge_content)
