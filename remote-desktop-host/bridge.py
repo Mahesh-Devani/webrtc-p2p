@@ -1259,6 +1259,20 @@ class NativeFrameCapturer:
                 self._sel_activate = objc.sel_registerName(b'activateWithOptions:')
                 self._msgSend_pid = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32))
                 self._msgSend_act = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong))
+
+                # Ensure process runs as background accessory (hides Python rocket icon from Dock and prevents bounce)
+                try:
+                    NSApplication = objc.objc_getClass(b'NSApplication')
+                    sel_shared = objc.sel_registerName(b'sharedApplication')
+                    sel_setPolicy = objc.sel_registerName(b'setActivationPolicy:')
+                    msgSend_noargs = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p))
+                    msgSend_policy = ctypes.cast(objc.objc_msgSend, ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long))
+                    ns_app = msgSend_noargs(NSApplication, sel_shared)
+                    if ns_app:
+                        # 2 = NSApplicationActivationPolicyProhibited (completely hidden from Dock & App Switcher)
+                        msgSend_policy(ns_app, sel_setPolicy, 2)
+                except Exception:
+                    pass
             except Exception:
                 self._NSRunningApplication = None
 

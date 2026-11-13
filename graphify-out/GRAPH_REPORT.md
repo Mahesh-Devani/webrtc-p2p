@@ -1,7 +1,7 @@
 # Graph Report - webrtc-p2p  (2026-11-13)
 
 ## Corpus Check
-- 60 files · ~152,111 words
+- 60 files · ~152,173 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 2, .bat 2, .zip 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8e569b29`
+- Built from commit: `7143c050`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -46,7 +46,7 @@
 - 6. Critical Invariants for AI Agents (MUST FOLLOW)
 - TestHostSecurity
 - check-invariants.py
-- P2P Connect — Native OS Remote Desktop Host Agent
+- Linux (systemd User Service)
 - install-linux-service.sh
 - install-macos-agent.sh
 - install-service.sh script
@@ -67,17 +67,17 @@
 - 2. Triage Procedure
 - TestMobileLifecycle
 - P2P Connect — Roadmap
-- Linux (systemd User Service)
+- ai-diagnostic-agent.py
 - 5. Future Roadmap & Proposed Improvements
 - 🚀 1. Recommended Triage Prompts
 - appendChatBubble
-- How to Download & Run the Host Agent
+- P2P Connect — Native OS Remote Desktop Host Agent
 - validateEvent2
 - initNostr
 - P2P Connect — System Design
 - run.sh
 - P2P Connect — Architecture
-- Windows (Task Scheduler & pythonw)
+- How to Download & Run the Host Agent
 - 4. `nostr-transport.js` — NostrTransport
 - test_token_codec.py
 - loadRemoteDevices
@@ -93,7 +93,7 @@
 - ColoredTextTestResult
 - QuietHTTPHandler
 - TestMockNostrRelay
-- ai-diagnostic-agent.py
+- Windows (Task Scheduler & pythonw)
 - 3. `nostr-relay.js` — NostrRelay
 - 7. `ui-controller.js` — UI Controller
 
@@ -222,9 +222,9 @@ Nodes (3): is_client_authorized(), TestHostSecurity, validate_password_complexit
 Cohesion: 0.15
 Nodes (15): check_cache_busters(), check_file_transfer_protocol(), check_host_rejects_inactive_capture(), check_js_syntax_balance(), check_no_duplicate_singleton_imports(), check_no_import_query_params(), check_os_ipc_throttling_in_capture_loops(), check_rd_aspect_ratio_and_bitrate() (+7 more)
 
-### Community 30 - "P2P Connect — Native OS Remote Desktop Host Agent"
+### Community 30 - "Linux (systemd User Service)"
 Cohesion: 0.22
-Nodes (9): Architecture Overview, Linux, macOS, Operating System Permissions (First Run), P2P Connect — Native OS Remote Desktop Host Agent, Pairing & Unattended Remote Control, Recommended Operational Workflow & Background Hosting Roadmap, Security & Defense-in-Depth (+1 more)
+Nodes (9): 1. Install & Start Service, 1. Install & Start Service, 2. Manage the Service, 2. Useful systemd Commands, 3. Uninstall, 3. Uninstall, Linux (systemd User Service), macOS (LaunchAgent — Approach A Experimental) (+1 more)
 
 ### Community 34 - "start-host.sh"
 Cohesion: 0.40
@@ -274,9 +274,9 @@ Nodes (8): 1. When to Use This Skill, 2. Triage Procedure, Step 1: List and Insp
 Cohesion: 0.18
 Nodes (10): 💡 Backlog / Ideas, 📱 Mobile & Desktop Client Applications, P2P Connect — Roadmap, ✅ Phase 0: Foundation (Complete), 🔜 Phase 1: Group Chat, 📞 Phase 2: Group Calling, 📱 Phase 3: Native Applications & Unattended Host Companions, 🔒 Phase 4: Enhanced Security & Privacy (+2 more)
 
-### Community 52 - "Linux (systemd User Service)"
-Cohesion: 0.22
-Nodes (9): 1. Install & Start Service, 1. Install & Start Service, 2. Manage the Service, 2. Useful systemd Commands, 3. Uninstall, 3. Uninstall, Linux (systemd User Service), macOS (LaunchAgent — Approach A Experimental) (+1 more)
+### Community 52 - "ai-diagnostic-agent.py"
+Cohesion: 0.13
+Nodes (12): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
 
 ### Community 53 - "5. Future Roadmap & Proposed Improvements"
 Cohesion: 0.06
@@ -290,9 +290,9 @@ Nodes (7): 🚀 1. Recommended Triage Prompts, 🛠️ 2. How the Triage Loop Op
 Cohesion: 0.13
 Nodes (30): analyzeUserSupportComment(), appendChatBubble(), confirmAction(), deliverAiSupportMessage(), ensurePeerConnected(), cleanup(), escapeHtml(), formatDate() (+22 more)
 
-### Community 56 - "How to Download & Run the Host Agent"
-Cohesion: 0.33
-Nodes (6): How to Download & Run the Host Agent, macOS & Linux:, Method 1: Download from Web UI (Fastest), Method 2: One-Liner Terminal Command (No Git Clone Needed), Method 3: From Cloned Repository or Unzipped Package (Automated Launcher), Windows (PowerShell):
+### Community 56 - "P2P Connect — Native OS Remote Desktop Host Agent"
+Cohesion: 0.22
+Nodes (9): Architecture Overview, Linux, macOS, Operating System Permissions (First Run), P2P Connect — Native OS Remote Desktop Host Agent, Pairing & Unattended Remote Control, Recommended Operational Workflow & Background Hosting Roadmap, Security & Defense-in-Depth (+1 more)
 
 ### Community 57 - "validateEvent2"
 Cohesion: 0.29
@@ -310,9 +310,9 @@ Nodes (7): 2. `nostr-crypto.js` — NostrCrypto, 6. `token-codec.js` — TokenCo
 Cohesion: 0.12
 Nodes (16): 10. External Dependencies, 1. Overview, 2. Architecture Diagram, 3. Module Map, 4. Connection Modes, 5. Security Model, 6. NAT Traversal & TURN, 7. Design Decisions & Trade-offs (+8 more)
 
-### Community 62 - "Windows (Task Scheduler & pythonw)"
-Cohesion: 0.40
-Nodes (5): 1. Install via Batch Script (Recommended), 2. Manual Setup via PowerShell / Command Prompt, 3. Manage & Check Status, 4. Uninstall, Windows (Task Scheduler & pythonw)
+### Community 62 - "How to Download & Run the Host Agent"
+Cohesion: 0.33
+Nodes (6): How to Download & Run the Host Agent, macOS & Linux:, Method 1: Download from Web UI (Fastest), Method 2: One-Liner Terminal Command (No Git Clone Needed), Method 3: From Cloned Repository or Unzipped Package (Automated Launcher), Windows (PowerShell):
 
 ### Community 63 - "4. `nostr-transport.js` — NostrTransport"
 Cohesion: 0.25
@@ -362,9 +362,9 @@ Nodes (4): closeQrScanner(), openQrScanner(), scanFrame(), startCameraStream()
 Cohesion: 0.18
 Nodes (11): 1. On the Computer to Control (Host), 2. On Your Remote Device (Client - Phone, Tablet, or Laptop), 3. Background Hosting & Unattended Access (Roadmap), Features, License, Local Development Quick Start, 🔐 P2P Connect, Project Structure (+3 more)
 
-### Community 85 - "ai-diagnostic-agent.py"
-Cohesion: 0.13
-Nodes (12): add_authorized_client(), DiagnosticServer, find_chrome_binary(), is_client_authorized(), launch_headless_bridge(), cleanup(), load_whitelist(), print_inbox() (+4 more)
+### Community 85 - "Windows (Task Scheduler & pythonw)"
+Cohesion: 0.40
+Nodes (5): 1. Install via Batch Script (Recommended), 2. Manual Setup via PowerShell / Command Prompt, 3. Manage & Check Status, 4. Uninstall, Windows (Task Scheduler & pythonw)
 
 ### Community 87 - "3. `nostr-relay.js` — NostrRelay"
 Cohesion: 0.50
