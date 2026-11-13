@@ -2707,6 +2707,22 @@ async def main(host, port, token, extra_origins, allow_all, bounds_ttl=None):
     # Start non-blocking cursor worker
     asyncio.create_task(mouse_worker())
 
+    if PLATFORM == 'win32':
+        # On Windows, when a browser tab closes or refreshes, ProactorEventLoop raises
+        # ConnectionResetError (WinError 10054) inside _call_connection_lost callback.
+        # Silence this benign socket reset noise so terminal logs remain clean.
+        loop = asyncio.get_running_loop()
+        orig_handler = loop.get_exception_handler()
+        def _win32_exc_handler(loop, context):
+            exc = context.get('exception')
+            if isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+                return
+            if orig_handler:
+                orig_handler(loop, context)
+            else:
+                loop.default_exception_handler(context)
+        loop.set_exception_handler(_win32_exc_handler)
+
     srv_ws = await asyncio.start_server(handle_client, host, port)
     tasks = [srv_ws.serve_forever()]
 
