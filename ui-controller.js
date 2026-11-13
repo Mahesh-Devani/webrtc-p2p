@@ -2834,18 +2834,38 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
   }
 
   let rdQualityPreset = 'balanced';
+  let rdCodecPreference = (typeof localStorage !== 'undefined' ? localStorage.getItem('p2p-preferred-codec') : null) || 'auto';
+
+  function updateActiveCodecUI(codec = rdCodecPreference) {
+    dom.rdQualityMenu?.querySelectorAll('.rd-key-item[data-codec]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.codec === codec);
+    });
+  }
 
   function setRdQualityPreset(preset) {
     rdQualityPreset = preset;
-    dom.rdQualityMenu?.querySelectorAll('.rd-key-item').forEach(btn => {
+    dom.rdQualityMenu?.querySelectorAll('.rd-key-item[data-quality]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.quality === preset);
     });
     if (dom.rdQualityLabel) {
-      dom.rdQualityLabel.textContent = preset === 'crisp' ? '15M ▾' : (preset === 'low' ? '2M ▾' : '8M ▾');
+      dom.rdQualityLabel.textContent = preset === 'gaming' ? '20M ▾' : (preset === 'crisp' ? '15M ▾' : (preset === 'low' ? '3M ▾' : '12M ▾'));
     }
     sendRdInput({ t: 'set_quality', preset });
-    const desc = preset === 'crisp' ? 'Crisp Text (15 Mbps / 30 FPS)' : (preset === 'low' ? 'Data Saver (2 Mbps / 30 FPS)' : 'Balanced (8 Mbps / 60 FPS)');
+    const desc = preset === 'gaming' ? 'Ultra Gaming (20 Mbps / 60 FPS • H.264)' : (preset === 'crisp' ? 'Crisp Text (15 Mbps / 30 FPS • Detail)' : (preset === 'low' ? 'Data Saver (3 Mbps / 30 FPS)' : 'Balanced (12 Mbps / 60 FPS • Motion)'));
     toast(`Stream Quality: ${desc}`);
+  }
+
+  function setRdCodecPreference(codec) {
+    rdCodecPreference = codec;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('p2p-preferred-codec', codec);
+    }
+    updateActiveCodecUI(codec);
+    sendRdInput({ t: 'set_codec', codec });
+    if (activePeerSession?.applyVideoCodecPreferences) {
+      activePeerSession.applyVideoCodecPreferences(codec);
+    }
+    toast(`Preferred Codec: ${codec.toUpperCase()}`);
   }
 
   function setRdMode(mode) {
@@ -6106,6 +6126,7 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
     hide(dom.rdKeysMenu);
     hide(dom.rdClipboardMenu);
     hide(dom.rdDisplaysMenu);
+    updateActiveCodecUI();
     dom.rdQualityMenu?.classList.toggle('hidden');
   });
 
@@ -6115,6 +6136,8 @@ If this screenshot depicts a connection drop, blank video, or remote control iss
       hide(dom.rdQualityMenu);
       const quality = btn.dataset.quality;
       if (quality) setRdQualityPreset(quality);
+      const codec = btn.dataset.codec;
+      if (codec) setRdCodecPreference(codec);
     });
   });
 

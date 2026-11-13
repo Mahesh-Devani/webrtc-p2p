@@ -1020,7 +1020,7 @@ function initNativeCanvas() {
     nativeCanvasStream = nativeCanvas.captureStream(0);
     nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
     if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
-      nativeCanvasTrack.contentHint = 'detail';
+      nativeCanvasTrack.contentHint = 'motion';
     }
   }
   return nativeCanvasStream;
@@ -1040,7 +1040,7 @@ function ensureNativeOnDemandCapture() {
         action: 'start_capture',
         target: currentCaptureTarget.type,
         id: currentCaptureTarget.id,
-        fps: 30
+        fps: 60
       }));
       console.log(`[Host] Requested native capture start: ${currentCaptureTarget.type}:${currentCaptureTarget.id}`);
     } catch (e) {
@@ -1123,7 +1123,7 @@ async function renderNativeFrameToCanvas(blob, w, h) {
       nativeCanvasStream = nativeCanvas.captureStream(0);
       nativeCanvasTrack = nativeCanvasStream.getVideoTracks()[0];
       if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
-        nativeCanvasTrack.contentHint = 'detail';
+        nativeCanvasTrack.contentHint = 'motion';
       }
 
       if (dom.hostScreenVideo) {
@@ -1739,22 +1739,46 @@ async function initSignaling() {
             }
             if (evt.t === 'set_quality') {
               const preset = evt.preset;
-              let bitrate = 8_000_000;
+              let bitrate = 12_000_000;
               let fps = 60;
-              if (preset === 'crisp') {
+              let hint = 'motion';
+              if (preset === 'gaming' || preset === 'ultra') {
+                bitrate = 20_000_000;
+                fps = 60;
+                hint = 'motion';
+              } else if (preset === 'crisp') {
                 bitrate = 15_000_000;
                 fps = 30;
+                hint = 'detail';
               } else if (preset === 'balanced') {
-                bitrate = 8_000_000;
+                bitrate = 12_000_000;
                 fps = 60;
+                hint = 'motion';
               } else if (preset === 'low') {
-                bitrate = 2_000_000;
+                bitrate = 3_000_000;
                 fps = 30;
+                hint = 'motion';
+              }
+              if (nativeCanvasTrack && 'contentHint' in nativeCanvasTrack) {
+                nativeCanvasTrack.contentHint = hint;
               }
               if (peerSession?.setVideoQuality) {
                 peerSession.setVideoQuality(bitrate, fps);
               }
+              if (bridgeConnected && bridgeWs && bridgeWs.readyState === WebSocket.OPEN) {
+                try {
+                  bridgeWs.send(JSON.stringify({ t: 'set_fps', fps, quality: preset }));
+                } catch {}
+              }
               peerSession.sendInput({ t: 'quality_ack', preset, bitrate, fps });
+              return;
+            }
+            if (evt.t === 'set_codec') {
+              const codec = evt.codec || 'auto';
+              if (peerSession?.setCodecPreference) {
+                peerSession.setCodecPreference(codec);
+              }
+              peerSession.sendInput({ t: 'codec_ack', codec });
               return;
             }
             if (evt.t === 'clipboard') {

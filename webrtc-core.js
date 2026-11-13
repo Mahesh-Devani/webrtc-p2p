@@ -84,6 +84,7 @@ export const PeerSession = (() => {
     let makingOffer = false;
     let ignoreOffer = false;
     let initialSignalingDone = false; // true only after DC opens (initial manual exchange complete)
+    let currentCodecPreference = cfg.preferredCodec || (typeof localStorage !== 'undefined' ? localStorage.getItem('p2p-preferred-codec') : null) || 'auto';
 
     // ── ICE handling ───────────────────────────────────────────
     pc.onicecandidate = (e) => {
@@ -479,6 +480,84 @@ export const PeerSession = (() => {
           }
         }
       }
+
+      // Proactively apply video codec preferences to newly attached tracks
+      applyVideoCodecPreferences();
+    }
+
+    /**
+     * Configure codec preferences on all video transceivers.
+     * Prioritizes hardware-accelerated H.264, HEVC (if supported), AV1, and VP9 ahead of software VP8.
+     * @param {string} [preferredCodec] - 'auto', 'h264', 'hevc', 'av1', 'vp9', 'vp8'
+     */
+    function applyVideoCodecPreferences(preferredCodec) {
+      if (preferredCodec) currentCodecPreference = preferredCodec;
+      if (!pc.getTransceivers || !window.RTCRtpReceiver?.getCapabilities) return;
+      const allCodecs = RTCRtpReceiver.getCapabilities('video')?.codecs || [];
+      if (allCodecs.length === 0) return;
+
+      const norm = (currentCodecPreference || 'auto').toLowerCase();
+      let preferred = [];
+
+      if (norm === 'hevc' || norm === 'h265') {
+        preferred = allCodecs.filter(c => {
+          const m = c.mimeType.toLowerCase();
+          return m.includes('h265') || m.includes('hevc');
+        });
+        if (preferred.length === 0) {
+          // If browser does not expose H.265 in WebRTC, fallback to hardware H.264
+          preferred = allCodecs.filter(c => c.mimeType.toLowerCase() === 'video/h264');
+        }
+      } else if (norm === 'h264') {
+        preferred = allCodecs.filter(c => c.mimeType.toLowerCase() === 'video/h264');
+      } else if (norm === 'av1') {
+        preferred = allCodecs.filter(c => c.mimeType.toLowerCase() === 'video/av1');
+      } else if (norm === 'vp9') {
+        preferred = allCodecs.filter(c => c.mimeType.toLowerCase() === 'video/vp9');
+      } else if (norm === 'vp8') {
+        preferred = allCodecs.filter(c => c.mimeType.toLowerCase() === 'video/vp8');
+      } else {
+        // 'auto': Prioritize H.265 (if supported) -> Hardware H.264 -> AV1 -> VP9 -> VP8
+        preferred = allCodecs.filter(c => {
+          const m = c.mimeType.toLowerCase();
+          return m.includes('h265') || m.includes('hevc') ||
+            m === 'video/h264' ||
+            m === 'video/av1' ||
+            m === 'video/vp9';
+        });
+        preferred.sort((a, b) => {
+          const score = (c) => {
+            const m = c.mimeType.toLowerCase();
+            if (m.includes('h265') || m.includes('hevc')) return 50;
+            if (m === 'video/h264') {
+              if (c.sdpFmtpLine?.includes('packetization-mode=1') || c.sdpFmtpLine?.includes('profile-level-id=42e0')) return 40;
+              return 30;
+            }
+            if (m === 'video/av1') return 20;
+            if (m === 'video/vp9') return 10;
+            return 0;
+          };
+          return score(b) - score(a);
+        });
+      }
+
+      const others = allCodecs.filter(c => !preferred.includes(c));
+      const finalOrder = [...preferred, ...others];
+
+      for (const transceiver of pc.getTransceivers()) {
+        if (transceiver.sender?.track?.kind === 'video' || transceiver.receiver?.track?.kind === 'video') {
+          if ('setCodecPreferences' in transceiver && typeof transceiver.setCodecPreferences === 'function') {
+            try {
+              transceiver.setCodecPreferences(finalOrder);
+              if (finalOrder[0]) {
+                log(`Preferred screen codec: ${finalOrder[0].mimeType}`);
+              }
+            } catch (err) {
+              log(`setCodecPreferences warning: ${err.message}`, 'warn');
+            }
+          }
+        }
+      }
     }
 
     /**
@@ -613,25 +692,8 @@ export const PeerSession = (() => {
         }
       }
 
-      // Set codec preferences on transceiver to VP9 or H.264 High Profile (better text compression than VP8)
-      if (pc.getTransceivers && window.RTCRtpReceiver?.getCapabilities) {
-        for (const transceiver of pc.getTransceivers()) {
-          if (transceiver.sender?.track?.kind === 'video' && 'setCodecPreferences' in transceiver) {
-            try {
-              const codecs = RTCRtpReceiver.getCapabilities('video')?.codecs || [];
-              const preferred = codecs.filter(c =>
-                c.mimeType.toLowerCase() === 'video/vp9' ||
-                (c.mimeType.toLowerCase() === 'video/h264' && (c.sdpFmtpLine?.includes('profile-level-id=42e0') || c.sdpFmtpLine?.includes('packetization-mode=1')))
-              );
-              const others = codecs.filter(c => !preferred.includes(c));
-              if (preferred.length > 0) {
-                transceiver.setCodecPreferences([...preferred, ...others]);
-                log(`Preferred screen codec: ${preferred[0].mimeType}`);
-              }
-            } catch { }
-          }
-        }
-      }
+      // Set codec preferences on transceiver to preferred codecs (H.264 / HEVC / AV1 / VP9)
+      applyVideoCodecPreferences();
 
       // If screen stream includes an audio track, transmit it
       const screenAudioTrack = stream.getAudioTracks()[0];
@@ -773,6 +835,7 @@ export const PeerSession = (() => {
       const inputChannel = pc.createDataChannel('p2p-input', { negotiated: false, ordered: true });
       wireChannel(inputChannel);
 
+      applyVideoCodecPreferences();
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       log(`Local offer created (signaling state: ${pc.signalingState})`);
@@ -798,6 +861,7 @@ export const PeerSession = (() => {
         addLocalStream(streamToAttach);
       }
 
+      applyVideoCodecPreferences();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       log('Local answer created');
@@ -1185,6 +1249,13 @@ export const PeerSession = (() => {
       return false;
     }
 
+    function setCodecPreference(codec) {
+      applyVideoCodecPreferences(codec);
+      if (pc.signalingState === 'stable' && dcSig && dcSig.readyState === 'open') {
+        renegotiate().catch(() => {});
+      }
+    }
+
     return {
       createOffer,
       acceptOffer,
@@ -1218,6 +1289,8 @@ export const PeerSession = (() => {
       getRemoteStream,
       isScreenSharing,
       setVideoQuality,
+      applyVideoCodecPreferences,
+      setCodecPreference,
     };
   }
 

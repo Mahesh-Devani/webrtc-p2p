@@ -12,9 +12,9 @@
     "semantic_hash": ""
   },
   "host-controller.js": {
-    "mtime": 1794464458.4248848,
-    "seen": 1794464519.760423,
-    "ast_hash": "30dbede4583bbc57fec1b3030af6d037",
+    "mtime": 1794593646.3655334,
+    "seen": 1794593844.2274292,
+    "ast_hash": "263cd5f2feca4601b9b85e1c19a06732",
     "semantic_hash": ""
   },
   "nostr-crypto.js": {
@@ -60,9 +60,9 @@
     "semantic_hash": ""
   },
   "remote-desktop-host/bridge.py": {
-    "mtime": 1794575658.8466575,
-    "seen": 1794575681.001803,
-    "ast_hash": "a4ee65154d2d140d3a3d3cc758d9a70f",
+    "mtime": 1794593693.7899747,
+    "seen": 1794593844.227434,
+    "ast_hash": "3c45da497178aa77381661e92e0e49b1",
     "semantic_hash": ""
   },
   "remote-desktop-host/install-linux-service.sh": {
@@ -114,15 +114,15 @@
     "semantic_hash": "b42c2eaf8b8baac729e4d2a42d008d78"
   },
   "ui-controller.js": {
-    "mtime": 1794511482.2052166,
-    "seen": 1794511513.049515,
-    "ast_hash": "2588bfa63ac1f4085b43c8a52b506d1f",
+    "mtime": 1794593746.3646154,
+    "seen": 1794593844.227454,
+    "ast_hash": "76d2470cd278107ceb247e85616963b4",
     "semantic_hash": ""
   },
   "webrtc-core.js": {
-    "mtime": 1793688037.6061225,
-    "seen": 1793688133.026678,
-    "ast_hash": "f846b0dba347d7ddde57a95e7dfaa839",
+    "mtime": 1794593805.5456421,
+    "seen": 1794593844.227455,
+    "ast_hash": "c9df4c8d1f97e65ce6a8767117437e6f",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -174,15 +174,15 @@
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1794576408.4922283,
-    "seen": 1794576496.026748,
-    "ast_hash": "db33e7b62647f81ac597d1dccb21641c",
+    "mtime": 1794593765.1884935,
+    "seen": 1794593844.2274618,
+    "ast_hash": "100f1dcac38178fe2da289673e45f9d3",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1794576395.9209807,
-    "seen": 1794576496.026749,
-    "ast_hash": "22033cbb9ce0b211bbfc528f7faf7d23",
+    "mtime": 1794593760.2011032,
+    "seen": 1794593844.2274618,
+    "ast_hash": "d04f8528a19207ddc85bbb6e90c1d95c",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {

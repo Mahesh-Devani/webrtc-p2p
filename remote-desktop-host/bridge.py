@@ -1513,8 +1513,8 @@ class NativeFrameCapturer:
             hbm = self.gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
             old_hbm = self.gdi32.SelectObject(hdc_mem, hbm)
 
-            # SRCCOPY (0x00CC0020) | CAPTUREBLT (0x40000000) captures layered windows/menus
-            self.gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, ox, oy, 0x00CC0020 | 0x40000000)
+            # SRCCOPY (0x00CC0020) without CAPTUREBLT avoids DWM composition pipeline stalls in 3D DirectX games
+            self.gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, ox, oy, 0x00CC0020)
 
             p_bitmap = ctypes.c_void_p()
             if self.gdiplus.GdipCreateBitmapFromHBITMAP(hbm, 0, ctypes.byref(p_bitmap)) != 0 or not p_bitmap:
@@ -2219,11 +2219,11 @@ async def handle_client(reader, writer):
         async def stream_frames_loop():
             nonlocal capture_active, capture_target_type, capture_target_id, capture_fps
             nonlocal _last_activity_time, _last_frame_crc, _last_frame_send_time
-            active_delay = 1.0 / max(1, min(60, capture_fps))
-            idle_delay = 0.2  # Maintain at least 5 FPS heartbeat to prevent WebRTC congestion control starvation
             stream_start_time = time.monotonic()
             _last_wake_pulse = 0.0
+            idle_delay = 0.2  # Maintain at least 5 FPS heartbeat to prevent WebRTC congestion control starvation
             while capture_active:
+                active_delay = 1.0 / max(1, min(60, capture_fps))
                 t0 = time.time()
                 now_mono = time.monotonic()
                 is_idle = (now_mono - _last_activity_time) > 2.0
@@ -2515,6 +2515,13 @@ async def handle_client(reader, writer):
                 _global_wake_manager.pulse_wake()
                 print("[Power] wake_display command received from host client; pulsed display wake")
                 writer.write(make_ws_frame(json.dumps({'t': 'display_woken'})))
+                await writer.drain()
+
+            elif evt_type in ('set_fps', 'set_quality'):
+                new_fps = int(data.get('fps', 60))
+                capture_fps = max(5, min(60, new_fps))
+                print(f"[+] Updated native capture target FPS: {capture_fps}")
+                writer.write(make_ws_frame(json.dumps({'t': 'fps_updated', 'fps': capture_fps})))
                 await writer.drain()
 
             elif evt_type in ('stop_capture', 'action') or data.get('action') == 'stop_capture':

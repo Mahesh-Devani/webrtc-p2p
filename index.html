@@ -367,16 +367,26 @@
               <span>Soft Keys</span>
             </button>
 
-            <!-- Stream Quality Presets Menu -->
+            <!-- Stream Quality & Codec Presets Menu -->
             <div class="rd-dropdown-container">
-              <button id="rd-btn-quality" class="rd-icon-btn" title="Stream Quality / Bitrate">
+              <button id="rd-btn-quality" class="rd-icon-btn" title="Stream Quality / Bitrate & Codec">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                <span id="rd-quality-label">HD ▾</span>
+                <span id="rd-quality-label">12M ▾</span>
               </button>
-              <div id="rd-quality-menu" class="rd-keys-menu hidden">
-                <button class="rd-key-item" data-quality="crisp">⚡ Crisp Text (15M / 30fps)</button>
-                <button class="rd-key-item active" data-quality="balanced">⚖️ Balanced (8M / 60fps)</button>
-                <button class="rd-key-item" data-quality="low">📱 Data Saver (2M / 30fps)</button>
+              <div id="rd-quality-menu" class="rd-keys-menu hidden" style="min-width: 220px;">
+                <div style="padding:4px 10px;font-size:0.68rem;color:var(--c-text-dim);font-weight:600;letter-spacing:0.5px;">STREAM PRESET</div>
+                <button class="rd-key-item" data-quality="gaming">🏎️ Ultra Gaming (20M / 60fps • H.264)</button>
+                <button class="rd-key-item active" data-quality="balanced">⚖️ Balanced (12M / 60fps • Motion)</button>
+                <button class="rd-key-item" data-quality="crisp">⚡ Crisp Text (15M / 30fps • Detail)</button>
+                <button class="rd-key-item" data-quality="low">📱 Data Saver (3M / 30fps)</button>
+                <div style="border-top:1px solid var(--c-border);margin:4px 0;"></div>
+                <div style="padding:4px 10px;font-size:0.68rem;color:var(--c-text-dim);font-weight:600;letter-spacing:0.5px;">VIDEO CODEC</div>
+                <button class="rd-key-item" data-codec="auto">✨ Auto (Hardware H.264 / AV1)</button>
+                <button class="rd-key-item" data-codec="h264">🚀 H.264 (Low Latency Gaming)</button>
+                <button class="rd-key-item" data-codec="hevc">💎 HEVC / H.265 (If Supported)</button>
+                <button class="rd-key-item" data-codec="av1">🌟 AV1 (High Efficiency)</button>
+                <button class="rd-key-item" data-codec="vp9">🎬 VP9</button>
+                <button class="rd-key-item" data-codec="vp8">📺 VP8 (Legacy Fallback)</button>
               </div>
             </div>
 
@@ -1266,7 +1276,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <!-- App -->
-  <script type="module" src="ui-controller.js?v=73"></script>
+  <script type="module" src="ui-controller.js?v=74"></script>
 </body>
 
 </html>
