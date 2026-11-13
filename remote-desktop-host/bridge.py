@@ -1262,6 +1262,32 @@ class NativeFrameCapturer:
             except Exception:
                 self._NSRunningApplication = None
 
+            # Native Accessibility (AXUIElement) C bindings for instant window raise & unminimize without AppleEvents TCC prompts
+            try:
+                self.app_services = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices')
+                self.ax_create_app = self.app_services.AXUIElementCreateApplication
+                self.ax_create_app.argtypes = [ctypes.c_int32]
+                self.ax_create_app.restype = ctypes.c_void_p
+
+                self.ax_copy_attr = self.app_services.AXUIElementCopyAttributeValue
+                self.ax_copy_attr.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+                self.ax_copy_attr.restype = ctypes.c_int32
+
+                self.ax_set_attr = self.app_services.AXUIElementSetAttributeValue
+                self.ax_set_attr.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+                self.ax_set_attr.restype = ctypes.c_int32
+
+                self.ax_perform = self.app_services.AXUIElementPerformAction
+                self.ax_perform.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.ax_perform.restype = ctypes.c_int32
+
+                self.k_ax_windows = self.cf.CFStringCreateWithCString(None, b'AXWindows', kCFStringEncodingUTF8)
+                self.k_ax_raise = self.cf.CFStringCreateWithCString(None, b'AXRaise', kCFStringEncodingUTF8)
+                self.k_ax_min = self.cf.CFStringCreateWithCString(None, b'AXMinimized', kCFStringEncodingUTF8)
+                self.k_cf_false = ctypes.c_void_p.in_dll(self.cf, 'kCFBooleanFalse')
+            except Exception:
+                self.ax_create_app = None
+
             self.cg.CGSessionCopyCurrentDictionary.argtypes = []
             self.cg.CGSessionCopyCurrentDictionary.restype = ctypes.c_void_p
             self.cf.CFBooleanGetValue.argtypes = [ctypes.c_void_p]
@@ -1792,6 +1818,33 @@ class NativeFrameCapturer:
             pass
         return False
 
+    def ax_raise_windows(self, pid):
+        """
+        Unminimizes and raises windows of target PID using native macOS C Accessibility API (AXUIElement).
+        Inherits established Accessibility permission without triggering per-app Automation TCC prompts.
+        """
+        if not getattr(self, 'ax_create_app', None) or not pid:
+            return False
+        try:
+            app_elem = self.ax_create_app(int(pid))
+            if not app_elem:
+                return False
+            win_list = ctypes.c_void_p()
+            if self.ax_copy_attr(app_elem, self.k_ax_windows, ctypes.byref(win_list)) == 0 and win_list:
+                count = self.cf.CFArrayGetCount(win_list)
+                for i in range(count):
+                    w_elem = self.cf.CFArrayGetValueAtIndex(win_list, i)
+                    if w_elem:
+                        # Restore window if minimized
+                        self.ax_set_attr(w_elem, self.k_ax_min, self.k_cf_false)
+                        # Raise window to the front
+                        self.ax_perform(w_elem, self.k_ax_raise)
+                self.cf.CFRelease(win_list)
+            self.cf.CFRelease(app_elem)
+            return True
+        except Exception:
+            return False
+
     def get_window_info(self, window_id):
         if not window_id:
             return None
@@ -1978,62 +2031,23 @@ class NativeFrameCapturer:
                     return False
                 target_pid = info.get('pid')
                 target_owner = info.get('owner')
-                target_name = info.get('name')
 
                 # 1. Native Cocoa NSRunningApplication activate (instantaneous, ignores focus-stealing limits)
                 if target_pid and target_pid > 0:
                     self.ns_app_activate(target_pid)
 
-                # 2. Non-blocking LaunchServices activation via 'open -a'
+                # 2. Non-blocking LaunchServices activation via 'open -a' (brings app forward cleanly without AppleEvents)
                 if target_owner:
                     try:
                         subprocess.Popen(['open', '-a', target_owner], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     except Exception:
                         pass
 
-                # 3. Non-blocking AppleScript window unminimize, index 1 & AXRaise
-                if target_owner or (target_pid and target_pid > 0):
-                    safe_owner = target_owner.replace('"', '\\"') if target_owner else ""
-                    safe_name = target_name.replace('"', '\\"') if target_name else ""
-                    def _bg_raise():
-                        try:
-                            as_parts = []
-                            if safe_owner:
-                                as_parts.append(f'''
-                                try
-                                    tell application "{safe_owner}"
-                                        reopen
-                                        activate
-                                        try
-                                            set miniaturized of (every window whose id is {wid}) to false
-                                        end try
-                                        try
-                                            set index of (every window whose id is {wid}) to 1
-                                        end try
-                                    end tell
-                                end try
-                                ''')
-                            if target_pid:
-                                as_parts.append(f'''
-                                try
-                                    tell application "System Events"
-                                        set p to first process whose unix id is {target_pid}
-                                        set frontmost of p to true
-                                        tell p
-                                            repeat with w in (every window)
-                                                try
-                                                    perform action "AXRaise" of w
-                                                end try
-                                            end repeat
-                                        end tell
-                                    end tell
-                                end try
-                                ''')
-                            script = '\n'.join(as_parts)
-                            subprocess.run(['osascript', '-e', script], check=False, timeout=1.5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        except Exception:
-                            pass
-                    threading.Thread(target=_bg_raise, daemon=True).start()
+                # 3. Native Accessibility (AXUIElement) window unminimize and raise
+                # (Uses existing Accessibility permission, ZERO AppleScript, ZERO Automation TCC permission prompts)
+                if target_pid and target_pid > 0:
+                    self.ax_raise_windows(target_pid)
+
                 return True
             except Exception:
                 pass
