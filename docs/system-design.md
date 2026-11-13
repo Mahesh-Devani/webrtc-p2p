@@ -169,7 +169,7 @@ Orchestrates **multiple relay connections**, routes encrypted signaling messages
 | `MAX_PROCESSED_EVENTS` | `500` | Dedup set cap (prunes oldest 100 when exceeded) |
 | `ICE_STALE_SECONDS` | `60` | Drop ICE candidates older than 60s |
 | `MAX_ICE_PER_SESSION` | `20` | Max ICE events per session (rate limit) |
-| `DEFAULT_RELAYS` | 3 URLs | `relay.primal.net`, `nos.lol`, `offchain.pub` |
+| `DEFAULT_RELAYS` | 6 URLs | `purplerelay.com`, `nostr.mom`, `relay.snort.social`, `nos.lol`, `relay.damus.io`, `relay.primal.net` |
 
 ### Storage Keys
 

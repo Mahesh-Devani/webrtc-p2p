@@ -75,7 +75,7 @@ index.html (Entry point & UI DOM layout)
 ## 4. Dual Connection Modes & Protocols
 
 ### Mode A: Nostr Auto-Signaling (`kind: 24133`)
-- **Transport**: Encrypted events sent to relays (`wss://relay.primal.net`, `wss://nos.lol`, `wss://offchain.pub`).
+- **Transport**: Encrypted events sent to relays (`wss://purplerelay.com`, `wss://nostr.mom`, `wss://nos.lol`, `wss://relay.damus.io`).
 - **Encryption**: NIP-44 v2 (XChaCha20-Poly1305 with HKDF key derivation). Relays see only sender/receiver pubkeys.
 - **ICE Batching**: Candidates are queued and sent in batches with a 200ms debounce to prevent relay flooding.
 - **Staleness Protection**: Events older than 60 seconds are discarded to prevent replay attacks.

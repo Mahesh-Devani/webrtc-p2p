@@ -30,11 +30,26 @@ const STORAGE_LAST_SEEN_KEY = 'nostr-last-seen';
 // ── Relay config storage ─────────────────────────────────────────
 const STORAGE_RELAY_KEY = 'nostr-relays';
 const DEFAULT_RELAYS = [
+    'wss://purplerelay.com',
+    'wss://nostr.mom',
+    'wss://relay.snort.social',
+    'wss://nos.lol',
+    'wss://relay.damus.io',
+    'wss://relay.primal.net',
+];
+
+const DEFUNCT_RELAYS = new Set([
+    'wss://offchain.pub',
+    'ws://offchain.pub',
+    'wss://relay.current.fyi',
+]);
+
+const LEGACY_DEFAULT_RELAYS = new Set([
     'wss://relay.primal.net',
     'wss://nos.lol',
     'wss://offchain.pub',
     'wss://relay.damus.io',
-];
+]);
 
 export const NostrTransport = (() => {
 
@@ -56,15 +71,26 @@ export const NostrTransport = (() => {
     // ── Relay Config ──────────────────────────────────────────────
 
     /**
-     * Get the configured relay list.
+     * Get the configured relay list. Automatically purges defunct relays and
+     * upgrades legacy default relay sets with high-speed, reliable relays.
      * @returns {string[]} Array of relay URLs
      */
     function getRelayList() {
         const stored = localStorage.getItem(STORAGE_RELAY_KEY);
         if (stored) {
             try {
-                const list = JSON.parse(stored);
-                if (Array.isArray(list) && list.length > 0) return list;
+                let list = JSON.parse(stored);
+                if (Array.isArray(list) && list.length > 0) {
+                    const hasDefunct = list.some(r => DEFUNCT_RELAYS.has(r));
+                    const isLegacyDefaultSet = list.length <= 4 && list.every(r => LEGACY_DEFAULT_RELAYS.has(r));
+                    if (hasDefunct || isLegacyDefaultSet) {
+                        const filtered = list.filter(r => !DEFUNCT_RELAYS.has(r));
+                        const upgraded = [...new Set([...filtered, ...DEFAULT_RELAYS])];
+                        saveRelayList(upgraded);
+                        return upgraded;
+                    }
+                    return list;
+                }
             } catch { }
         }
         return [...DEFAULT_RELAYS];

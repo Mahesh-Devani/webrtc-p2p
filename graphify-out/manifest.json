@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "nostr-relay.js": {
-    "mtime": 1792344295.398476,
-    "seen": 1792345184.981452,
-    "ast_hash": "54690efbad83a0279d768b3ab96327fe",
+    "mtime": 1794576381.7333372,
+    "seen": 1794576496.026669,
+    "ast_hash": "a6ba2da66e91ba1af1bec01b6c168a95",
     "semantic_hash": ""
   },
   "nostr-signaling.js": {
@@ -36,9 +36,9 @@
     "semantic_hash": ""
   },
   "nostr-transport.js": {
-    "mtime": 1793655575.7738607,
-    "seen": 1793655622.433322,
-    "ast_hash": "3b4f11514ab3e93ecf17f3f597b09793",
+    "mtime": 1794576373.065162,
+    "seen": 1794576496.0266721,
+    "ast_hash": "5836c4ca1fdfae29a6e0425e6d0f5c94",
     "semantic_hash": ""
   },
   "nostr.bundle.js": {
@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1793733495.207749,
-    "seen": 1793733584.9460008,
-    "ast_hash": "5e14596c7c651baaf56fa0c07702b744",
+    "mtime": 1794576422.986869,
+    "seen": 1794576496.026735,
+    "ast_hash": "d9d48ca08f8ab5bedb4b70c3c349b71c",
     "semantic_hash": ""
   },
   "README.md": {
@@ -168,21 +168,21 @@
     "semantic_hash": ""
   },
   "docs/system-design.md": {
-    "mtime": 1791973427.8619676,
-    "seen": 1792181424.287296,
-    "ast_hash": "c7fefcf67edce32a708d309099f5dd86",
+    "mtime": 1794576433.7705917,
+    "seen": 1794576496.026747,
+    "ast_hash": "0945b98baa115db657b5da49c84ac036",
     "semantic_hash": ""
   },
   "host.html": {
-    "mtime": 1793908477.7851238,
-    "seen": 1793908960.906559,
-    "ast_hash": "154ff8957b9a07f2292f618e6514ca4a",
+    "mtime": 1794576408.4922283,
+    "seen": 1794576496.026748,
+    "ast_hash": "db33e7b62647f81ac597d1dccb21641c",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1794511125.386163,
-    "seen": 1794511513.049522,
-    "ast_hash": "8afb2cf37150f93e82f5e3b92d22dd0f",
+    "mtime": 1794576395.9209807,
+    "seen": 1794576496.026749,
+    "ast_hash": "22033cbb9ce0b211bbfc528f7faf7d23",
     "semantic_hash": ""
   },
   "remote-desktop-host/README.md": {
@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "support.html": {
-    "mtime": 1792775055.0047045,
-    "seen": 1792775176.6261451,
-    "ast_hash": "e9cbd1c0bc1b4fddaa3dd05bfdf84a8f",
+    "mtime": 1794576412.5274298,
+    "seen": 1794576496.026755,
+    "ast_hash": "8ab5b8fe6324958c1f3c72f93f0c47ba",
     "semantic_hash": ""
   },
   "test-runner.html": {
